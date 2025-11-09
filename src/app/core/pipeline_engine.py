@@ -6,6 +6,8 @@ class PipelineEngine:
 
     def run(self, context):
         for step in self.steps:
-            plugin = PluginManager.load(step["plugin"])
-            context = plugin.run(context)
+            plugin_name = step["plugin"]
+            params = step.get("params", {})
+            plugin = PluginManager.load(plugin_name)
+            context = plugin.run(context, **params)
         return context
