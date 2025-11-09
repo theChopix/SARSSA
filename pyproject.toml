@@ -1,0 +1,12 @@
+[project]
+name = "python-project-template"
+description = "python project template"
+version = "1.0"
+dependencies = [
+    "pip-tools",
+    "python-dotenv",
+    "pydantic",
+    "ipykernel",
+    "fastapi",
+    "uvicorn"
+]
