@@ -8,5 +8,11 @@ dependencies = [
     "pydantic",
     "ipykernel",
     "fastapi",
-    "uvicorn"
+    "uvicorn",
+    "torch==2.7.1",
+    "mlflow",
+    "numpy",
+    "tqdm",
+    "scipy",
+    "polars==1.31.0",
 ]
