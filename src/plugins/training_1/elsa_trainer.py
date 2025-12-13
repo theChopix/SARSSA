@@ -159,6 +159,8 @@ class Plugin(BasePlugin):
         train_csr = dataset_loader.train_csr
         valid_csr = dataset_loader.valid_csr
         test_csr = dataset_loader.test_csr
+
+        logger.info(f'Shape of training data: {train_csr.shape}, validation data: {valid_csr.shape}, test data: {test_csr.shape}')
         
         item_cnt = len(dataset_loader.items)
         model = ELSA(input_dim=item_cnt, embedding_dim=args.factors).to(device)
