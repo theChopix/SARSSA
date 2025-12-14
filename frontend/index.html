@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="generator" content="Astro v5.13.2">
+    <title>SARSSAe</title>
+    <link href="/docs/5.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB">
+    <link rel="manifest" href="/docs/5.3/assets/img/favicons/manifest.json">
+    <meta name="theme-color" content="#712cf9">
+    <link href="styles.css" rel="stylesheet">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body> 
+    <div class="container py-3">
+        <header>
+            <div class="d-flex flex-column flex-md-row align-items-center pb-3 mb-4 border-bottom"> <a href="/"
+                    class="d-flex align-items-center link-body-emphasis text-decoration-none"> <span
+                        class="fs-4">SARSSAe</span> </a>
+                <nav class="d-inline-flex mt-2 mt-md-0 ms-md-auto"> <a
+                        class="py-2 link-body-emphasis text-decoration-none" href="#">
+                        <img src="images/mlflow-logo.png" alt="MLflow logo" class="img-fluid" style="max-height:25px;">
+                        Pipeline Experiments Results
+                    </a> </nav>
+            </div>
+            <div class="pricing-header p-4 pb-md-5 mx-auto text-center my-5">
+                <h1 class="display-5 fw-normal text-body-emphasis">Run new pipeline experiment</h1>
+                <p class="fs-5 text-body-secondary">Lorem ipsum dolor sit amet, consectetur adipisici elit, sed eiusmod
+                    tempor incidunt ut labore et dolore magna aliqua.</p>
+            </div>
+        </header>
+        <main>
+            <div class="d-flex flex-row flex-nowrap overflow-auto mb-3 row-cols-md-3 gap-3">
+                
+                <div class="col">
+                    <div class="card mb-4 rounded-3 shadow-sm">
+                        <div class="card-header py-3">
+                            <h4 class="my-0 fw-normal">Training CFM</h4>
+                        </div>
+
+                        <div class="card-body">
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="trainingCFMOption" id="training-cfm-option-elsa"
+                                            checked>
+                                        <label class="form-check-label fw-semibold" for="training-cfm-option-elsa">
+                                            Elsa Trainer
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#elsaTrainerConfigurationContent">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="elsaTrainerConfigurationContent" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="epochsInput">Epochs</label>
+                                            <input type="number" id="epochsInput" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="batchSizeInput">Batch Size</label>
+                                            <input type="number" id="batchSizeInput" class="form-control" min="1" step="1" value="100">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="factorsInput">Factors</label>
+                                            <input type="number" id="factorsInput" class="form-control" min="1" step="1" value="256">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="trainingCFMOption" id="training-cfm-option-2">
+                                        <label class="form-check-label fw-semibold" for="training-cfm-option-2">
+                                            Option 2
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#option2Content">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="option2Content" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <input class="form-control" placeholder="Custom value">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="w-100 btn btn-lg btn-outline-primary">
+                                Run up to this step
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="col">
+                    <div class="card mb-4 rounded-3 shadow-sm">
+                        <div class="card-header py-3">
+                            <h4 class="my-0 fw-normal">Training SAE</h4>
+                        </div>
+
+                        <div class="card-body">
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="trainingSAEOption" id="training-sae-option-basicsae">
+                                        <label class="form-check-label fw-semibold" for="training-sae-option-basicsae">
+                                            Basic SAE
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#trainingBasicSAEConfigurationContent">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="trainingBasicSAEConfigurationContent" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="epochsInput">Epochs</label>
+                                            <input type="number" id="epochsInput" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="batchSizeInput">Batch Size</label>
+                                            <input type="number" id="batchSizeInput" class="form-control" min="1" step="1" value="100">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="factorsInput">Embedding Dimension</label>
+                                            <input type="number" id="factorsInput" class="form-control" min="1" step="1" value="1024">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="trainingSAEOption" id="training-sae-option-topk" 
+                                        checked>
+                                        <label class="form-check-label fw-semibold" for="training-sae-option-topk">
+                                            TopK SAE
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#trainingTopKSAEConfigurationContent">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="trainingTopKSAEConfigurationContent" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="epochsInput">Epochs</label>
+                                            <input type="number" id="epochsInput" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="batchSizeInput">Batch Size</label>
+                                            <input type="number" id="batchSizeInput" class="form-control" min="1" step="1" value="100">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="factorsInput">Embedding Dimension</label>
+                                            <input type="number" id="factorsInput" class="form-control" min="1" step="1" value="1024">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="trainingSAEOption" id="training-sae-option-batchtopk">
+                                        <label class="form-check-label fw-semibold" for="training-sae-option-batchtopk">
+                                            BatchTopK SAE
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#trainingBatchTopKSAEConfigurationContent">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="trainingBatchTopKSAEConfigurationContent" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="epochsInput">Epochs</label>
+                                            <input type="number" id="epochsInput" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="batchSizeInput">Batch Size</label>
+                                            <input type="number" id="batchSizeInput" class="form-control" min="1" step="1" value="100">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="factorsInput">Embedding Dimension</label>
+                                            <input type="number" id="factorsInput" class="form-control" min="1" step="1" value="1024">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="w-100 btn btn-lg btn-outline-primary">
+                                Run up to this step
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card mb-4 rounded-3 shadow-sm">
+                        <div class="card-header py-3">
+                            <h4 class="my-0 fw-normal">Neuron Labeling</h4>
+                        </div>
+                        <div class="card-body">
+
+                            <!-- OPTION 1 -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="labelingOption" id="labeling-option-tfidf"
+                                            checked>
+                                        <label class="form-check-label fw-semibold" for="labeling-option-tfidf">
+                                            TF-IDF
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#labelingTFIDFConfigurationContent">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="labelingTFIDFConfigurationContent" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="epochsInput">Param</label>
+                                            <input type="number" id="epochsInput" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- OPTION 2 -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="labelingOption" id="labeling-option-llm">
+                                        <label class="form-check-label fw-semibold" for="labeling-option-llm">
+                                            LLM
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#labelingLLMConfigurationContent">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="labelingLLMConfigurationContent" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="epochsInput">Param</label>
+                                            <input type="number" id="epochsInput" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="w-100 btn btn-lg btn-outline-primary">
+                                Run up to this step
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="card mb-4 rounded-3 shadow-sm">
+                        <div class="card-header py-3">
+                            <h4 class="my-0 fw-normal">Labeling Evaluation</h4>
+                        </div>
+
+                        <div class="card-body">
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="labelingEvaluationOption" id="labeling-evaluation-option-1"
+                                            checked>
+                                        <label class="form-check-label fw-semibold" for="labeling-evaluation-option-1">
+                                            Option 1
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#labelingEvaluationOption1Content">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="labelingEvaluationOption1Content" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="mb-2">
+                                            <label class="form-label" for="param1Input">Param 1</label>
+                                            <input type="number" id="param1Input" class="form-control" min="1" step="1" value="64">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="param2Input">Param 2</label>
+                                            <input type="number" id="param2Input" class="form-control" min="1" step="1" value="100">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label" for="param3Input">Param 3</label>
+                                            <input type="number" id="param3Input" class="form-control" min="1" step="1" value="256">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="labelingEvaluationOption" id="labeling-evaluation-option-2">
+                                        <label class="form-check-label fw-semibold" for="labeling-evaluation-option-2">
+                                            Option 2
+                                        </label>
+                                    </div>
+
+                                    <button class="btn btn-sm btn-link text-decoration-none" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#labelingEvaluationOption2Content">
+                                        Configure
+                                    </button>
+                                </div>
+
+                                <div id="labelingEvaluationOption2Content" class="collapse mt-2 ms-4">
+                                    <div class="border rounded p-3 bg-light">
+                                        <input class="form-control" placeholder="Custom value">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="w-100 btn btn-lg btn-outline-primary">
+                                Run up to this step
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="d-grid gap-2">
+                <button class="w-100 btn btn-lg btn-primary" type="button">Run full pipeline</button>
+            </div>
+
+
+        </main>
+        <footer class="pt-4 my-md-5 pt-md-5 border-top">
+            <div class="row">
+                <div class="col-12 col-md"> <img class="mb-2" src="/docs/5.3/assets/brand/bootstrap-logo.svg" alt=""
+                        width="24" height="19"> <small class="d-block mb-3 text-body-secondary">2025</small>
+                </div>
+                <div class="col-6 col-md">
+                    <h6>Documentation</h6>
+                </div>
+                <div class="col-6 col-md">
+                    <h6>Resources</h6>
+                </div>
+                <div class="col-6 col-md">
+                    <h6>About</h6>
+                </div>
+            </div>
+        </footer>
+    </div>
+</body>
+
+</html>
