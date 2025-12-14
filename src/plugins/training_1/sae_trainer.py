@@ -8,6 +8,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from utils.datasets.lastFm1k_loader import LastFm1kLoader
+from utils.datasets.movieLens_loader import MovieLensLoader
 from utils.datasets.data_loader import DataLoader
 from utils.models.elsa import ELSA
 from utils.models.sae import SAE, BasicSAE, TopKSAE, BatchTopKSAE
@@ -331,6 +332,8 @@ class Plugin(BasePlugin):
         logger.info(f'Loading {args.dataset}')
         if args.dataset == 'LastFM1k':
             dataset_loader = LastFm1kLoader()
+        elif args.dataset == 'MovieLens':
+            dataset_loader = MovieLensLoader()
         else:
             raise ValueError(f'Dataset {args.dataset} not supported. Check typos.')
         dataset_loader.prepare(args)

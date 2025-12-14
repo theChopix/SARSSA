@@ -28,46 +28,35 @@ class DatasetLoader():
     valid_idx: np.ndarray
     test_idx: np.ndarray
     
-    def __init__(self, path: str, name: str):
+    def __init__(self, name: str, ratings_file_path: str, tags_file_path: str = None):
         self.name = name
         self.logger = logging.getLogger(__name__)
-        self.path = path
+        self.ratings_file_path = ratings_file_path
+        self.tags_file_path = tags_file_path
         
         
     def prepare(self, cfg) -> None:
         '''Prepare all data for processing'''
-        if not os.path.exists(self.path):
-            raise FileNotFoundError(f'Dataset file not found: {self.path}. Download the dataset and place it in the correct path')
-        
+        if not os.path.exists(self.ratings_file_path):
+            raise FileNotFoundError(f'Ratings dataset file not found: {self.ratings_file_path}. Download the ratings dataset and place it in the correct path')
+
         self.logger.info('Preparing dataset: %s', self.name)
         start = time.time()
         
-        cached_file = '.'.join(self.path.split('.')[:-1]) + '.arrow'
-        if os.path.exists(cached_file): # load cached dataset
-            self.logger.info(f'The dataset has already been prepared. Loading cached file...')
-            self.df_interactions = pl.read_ipc(cached_file)
-            filter_end = time.time()
-            self.logger.info(f'Dataset loaded in {filter_end - start:.2f}s')
-        else: # load dataset from scratch
-            self.logger.info(f'Loading dataset...')
-            self._load(self.path)
-            load_end = time.time()
-            self.logger.info(f'Dataset loaded in {load_end - start:.2f}s')
-            
-            # check that df_interactions is correctly loaded
-            if not isinstance(self.df_interactions, pl.DataFrame) or any(col not in self.df_interactions.columns for col in ['userId', 'itemId']):
-                raise ValueError('df_interactions must be a pl.DataFrame with columns userId and itemId')
-            
-            self.logger.info(f'Filtering dataset...')
-            self._filter()
-            filter_end = time.time()
-            self.logger.info(f'Dataset filtered in {filter_end - load_end:.2f}s')
-            
-            # save df_interactions for faster loading
-            # self.df_interactions.write_ipc(cached_file)
-            self.logger.info(f'Dataset saved in {cached_file}')
-            
-            
+        self.logger.info(f'Loading dataset...')
+        self._load_ratings(self.ratings_file_path)
+        load_end = time.time()
+        self.logger.info(f'Dataset loaded in {load_end - start:.2f}s')
+        
+        # check that df_interactions is correctly loaded
+        if not isinstance(self.df_interactions, pl.DataFrame) or any(col not in self.df_interactions.columns for col in ['userId', 'itemId']):
+            raise ValueError('df_interactions must be a pl.DataFrame with columns userId and itemId')
+        
+        self.logger.info(f'Filtering dataset...')
+        self._filter()
+        filter_end = time.time()
+        self.logger.info(f'Dataset filtered in {filter_end - load_end:.2f}s')
+             
         self.logger.info("Final interactions: %d, users: %d, items: %d", len(self.df_interactions), len(self.df_interactions['userId'].unique()), len(self.df_interactions['itemId'].unique()))
         
         self.logger.info(f'Creating csr_matrix...')
@@ -79,15 +68,36 @@ class DatasetLoader():
         self._split(cfg.val_ratio, cfg.test_ratio, seed=cfg.seed)
         split_end = time.time()
         self.logger.info(f'Dataset split in {split_end - csr_end:.2f}s')
-        
+
         self.logger.info('-'*20)
         self.logger.info(f'Dataset prepared in {split_end - start:.2f}s')
+
+        if self.tags_file_path is not None:
+            if not os.path.exists(self.tags_file_path):
+                raise FileNotFoundError(f'Tags dataset file not found: {self.tags_file_path}. Download the tags dataset and place it in the correct path')
+            
+            self.logger.info(f'Loading tags...')
+            
+            tags_start = time.time()
+            self._load_tags(self.tags_file_path, self.items)
+            
+            tags_end = time.time()
+            self.logger.info(f'Tags loaded in {tags_end - tags_start:.2f}s')
         
     @abstractmethod
-    def _load(self, path: str) -> None:
+    def _load_ratings(self, path: str) -> None:
         ''' Abstract that loads a pl.DataFrame with 2 columns - userId, itemId - into variable self.df_interactions'''
         ...
-        
+
+    @abstractmethod
+    def _load_tags(self, tags_file_path: str, items: np.ndarray) -> None:
+        ''' 
+        Abstract that 
+            - loads a pl.DataFrame with 2 columns - itemId, tag - into variable self.df_tags
+            - filters self.df_tags to only include items in the provided items array
+        '''
+        ...
+
     def _filter(self) -> None:
         '''Filter users and items that has too few interactions'''        
         df = self.df_interactions
@@ -135,3 +145,16 @@ class DatasetLoader():
         self.train_users, self.train_idx, self.train_csr = self.users[train_idx], train_idx, self.csr_interactions[train_idx]
         self.valid_users, self.valid_idx, self.valid_csr = self.users[val_idx], val_idx, self.csr_interactions[val_idx]
         self.test_users, self.test_idx, self.test_csr = self.users[test_idx], test_idx, self.csr_interactions[test_idx]
+
+    
+    def has_tags(self) -> bool:
+        '''Whether this dataset provides tag metadata'''
+        return False
+    
+    def get_tag_ids(self) -> List[str]:
+        '''Return list of tag names.'''
+        raise NotImplementedError('This dataset does not provide tag metadata.')
+    
+    def get_tag_item_matrix(self) -> sp.csr_matrix:
+        '''Return a tag-item csr_matrix. Rows correspond to tags, columns to items.'''
+        raise NotImplementedError('This dataset does not provide tag metadata.')
