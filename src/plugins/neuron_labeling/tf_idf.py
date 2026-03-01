@@ -63,9 +63,8 @@ class Plugin(BasePlugin):
         base_model_run_id = sae_params["base_run_id"]
         elsa_run = mlflow.get_run(base_model_run_id)
 
-        # --------------------------------------------------
-        # Load dataset
-        # --------------------------------------------------
+
+        # load dataset
         logger.info(f"Loading dataset: {dataset}")
         if dataset == "MovieLens":
             dataset_loader = MovieLensLoader()
@@ -86,9 +85,7 @@ class Plugin(BasePlugin):
         num_items = len(dataset_loader.items)
         tag_ids = dataset_loader.tag_ids()
 
-        # --------------------------------------------------
-        # Load ELSA model
-        # --------------------------------------------------
+        # load ELSA model
         logger.info("Loading ELSA model")
         elsa = ELSA(
             input_dim=int(elsa_run.data.params["items"]),
@@ -105,9 +102,7 @@ class Plugin(BasePlugin):
         )
         elsa.to(device).eval()
 
-        # --------------------------------------------------
-        # Load SAE model
-        # --------------------------------------------------
+        # load SAE model
         logger.info("Loading SAE model")
 
         cfg = {
@@ -153,9 +148,7 @@ class Plugin(BasePlugin):
         )
         sae.to(device).eval()
 
-        # --------------------------------------------------
-        # Compute SAE activations
-        # --------------------------------------------------
+        # compute SAE activations
         item_acts = compute_sae_item_activations(
             elsa,
             sae,
@@ -164,22 +157,16 @@ class Plugin(BasePlugin):
             device=device,
         )
 
-        # --------------------------------------------------
-        # Build tag–item matrix
-        # --------------------------------------------------
+        # build tag–item matrix
         tag_item_counts = dataset_loader.tag_item_matrix()
         tag_item_prob = tag_item_counts.multiply(
             1.0 / tag_item_counts.sum(axis=1)
         )
 
-        # --------------------------------------------------
-        # Aggregate tag → neuron
-        # --------------------------------------------------
+        # aggregate tag → neuron
         tag_neuron = tag_item_prob @ item_acts.numpy()
 
-        # --------------------------------------------------
         # TF-IDF
-        # --------------------------------------------------
         tfidf = TfidfTransformer(norm=None)
         tfidf_tn = tfidf.fit_transform(tag_neuron)
         tfidf_nt = tfidf.fit_transform(tag_neuron.T).T
@@ -189,9 +176,7 @@ class Plugin(BasePlugin):
             for n in range(tfidf_nt.shape[1])
         }
 
-        # --------------------------------------------------
-        # Log artifacts
-        # --------------------------------------------------
+        # log artifacts
         with tempfile.TemporaryDirectory() as tmp:
             torch.save(item_acts, f"{tmp}/item_acts.pt")
             sp.save_npz(f"{tmp}/tag_item_prob.npz", tag_item_prob)
@@ -210,9 +195,7 @@ class Plugin(BasePlugin):
             "num_neurons": item_acts.shape[1],
         })
 
-        # --------------------------------------------------
-        # Context update
-        # --------------------------------------------------
+        # context update
         context["neuron_labeling"] = {
             "status": "completed",
             "artifact_path": "neuron_labeling",
