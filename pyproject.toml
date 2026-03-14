@@ -15,4 +15,6 @@ dependencies = [
     "tqdm",
     "scipy",
     "polars==1.31.0",
+    "langchain-openai", 
+    "langchain-core"
 ]
