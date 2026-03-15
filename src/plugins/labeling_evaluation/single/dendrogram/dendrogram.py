@@ -60,6 +60,7 @@ class Plugin(BasePlugin):
         logger.info(
             f"Creating dendrogram with {num_labels} labels (figure height={dynamic_height})"
         )
+        label_texts = [f"[neuron {nid}] {neuron_labels[nid]}" for nid in neuron_ids]
 
         fig, ax = plt.subplots(figsize=(figure_width, dynamic_height))
 
