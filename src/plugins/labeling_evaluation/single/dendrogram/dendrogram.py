@@ -14,59 +14,81 @@ logger = get_logger(__name__)
 
 
 class Plugin(BasePlugin):
-    def run(self,
-            context: dict,
-
-            embedding_model: str = "text-embedding-3-small",
-            linkage_method: str = "average",
-            figure_width: int = 20,
-            figure_height: int = 10,
-            label_rotation: int = 90,
-        ):
+    def run(
+        self,
+        context: dict,
+        embedding_model: str = "text-embedding-3-small",
+        linkage_method: str = "average",
+        figure_width: int = 20,
+        base_height: int = 10,
+        label_font_size: int = 6,
+    ):
 
         # resolve previous run ID (neuron_labeling step)
         base_run_id = context["last_plugin_run_id"]
         nl_run = mlflow.get_run(base_run_id)
 
         artifact_uri = nl_run.info.artifact_uri
-        artifact_path = './' + artifact_uri[artifact_uri.find('mlruns'):]
+        artifact_path = "./" + artifact_uri[artifact_uri.find("mlruns"):]
 
         # load neuron_labels.json produced by neuron_labeling
         labels_path = f"{artifact_path}/neuron_labeling/neuron_labels.json"
         logger.info(f"Loading neuron labels from {labels_path}")
+
         with open(labels_path, "r") as f:
             neuron_labels: dict = json.load(f)
 
-        # neuron_labels: {neuron_id (str) -> tag_id}  – values may be ints or strings
+        # neuron_labels: {neuron_id -> label}
         neuron_ids = sorted(neuron_labels.keys(), key=lambda x: int(x))
         label_texts = [str(neuron_labels[nid]) for nid in neuron_ids]
 
         logger.info(f"Embedding {len(label_texts)} neuron labels with {embedding_model}")
+
         embedder = OpenAIEmbeddingLLM(model=embedding_model)
-        embeddings = np.array([embedder.generate_embedding(t) for t in label_texts])
+        embeddings = np.array(
+            [embedder.generate_embedding(t) for t in label_texts]
+        )
 
         # pairwise cosine distance then hierarchical clustering
         distances = pdist(embeddings, metric="cosine")
         Z = linkage(distances, method=linkage_method)
 
-        # draw dendrogram
-        fig, ax = plt.subplots(figsize=(figure_width, figure_height))
+        # dynamic height so labels remain readable
+        num_labels = len(label_texts)
+        dynamic_height = max(base_height, num_labels * 0.25)
+
+        logger.info(
+            f"Creating dendrogram with {num_labels} labels (figure height={dynamic_height})"
+        )
+
+        fig, ax = plt.subplots(figsize=(figure_width, dynamic_height))
+
         dendrogram(
             Z,
             labels=label_texts,
             ax=ax,
-            leaf_rotation=label_rotation,
-            leaf_font_size=8,
+            orientation="right",
+            leaf_font_size=label_font_size,
         )
+
         ax.set_title("Neuron label dendrogram (cosine similarity of embeddings)")
-        ax.set_xlabel("Neuron label")
-        ax.set_ylabel(f"Distance ({linkage_method} linkage)")
+        ax.set_xlabel(f"Distance ({linkage_method} linkage)")
+        ax.set_ylabel("Neuron label")
+
         plt.tight_layout()
 
         with tempfile.TemporaryDirectory() as tmp:
-            fig_path = f"{tmp}/dendrogram.png"
-            fig.savefig(fig_path, dpi=150)
-            mlflow.log_artifact(fig_path, artifact_path="labeling_evaluation")
+
+            # SVG (zoomable)
+            svg_path = f"{tmp}/dendrogram.svg"
+            fig.savefig(svg_path)
+
+            # PDF (searchable text)
+            pdf_path = f"{tmp}/dendrogram.pdf"
+            fig.savefig(pdf_path)
+
+            mlflow.log_artifact(svg_path, artifact_path="labeling_evaluation")
+            mlflow.log_artifact(pdf_path, artifact_path="labeling_evaluation")
 
             linkage_path = f"{tmp}/linkage_matrix.npy"
             np.save(linkage_path, Z)
@@ -74,16 +96,21 @@ class Plugin(BasePlugin):
 
         plt.close(fig)
 
-        mlflow.log_params({
-            "embedding_model": embedding_model,
-            "linkage_method": linkage_method,
-            "num_neurons": len(neuron_ids),
-        })
+        mlflow.log_params(
+            {
+                "embedding_model": embedding_model,
+                "linkage_method": linkage_method,
+                "num_neurons": len(neuron_ids),
+            }
+        )
 
         context["labeling_evaluation"] = {
             "status": "completed",
             "artifact_path": "labeling_evaluation",
         }
 
-        logger.info("Dendrogram saved to mlflow artifacts under 'labeling_evaluation/'")
+        logger.info(
+            "Dendrogram saved to mlflow artifacts as SVG and searchable PDF under 'labeling_evaluation/'"
+        )
+
         return context
