@@ -21,8 +21,6 @@ class SAE(nn.Module):
         self.topk_aux = cfg.get("topk_aux", 512)
         self.normalize = cfg.get("normalize", False)
         
-        
-        
         self.encoder_w = nn.Parameter(nn.init.kaiming_uniform_(torch.empty([input_dim, embedding_dim])))
         self.encoder_b = nn.Parameter(torch.zeros(embedding_dim))
         self.decoder_w = nn.Parameter(nn.init.kaiming_uniform_(torch.empty([embedding_dim, input_dim])))
