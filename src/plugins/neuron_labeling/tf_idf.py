@@ -1,4 +1,3 @@
-import argparse
 import json
 import tempfile
 import numpy as np
@@ -9,8 +8,6 @@ from tqdm import tqdm
 
 from sklearn.feature_extraction.text import TfidfTransformer
 
-from utils.datasets.lastFm1k_loader import LastFm1kLoader
-from utils.datasets.movieLens_loader import MovieLensLoader
 from utils.torch.models.elsa import ELSA
 from utils.torch.models.sae import BasicSAE, TopKSAE, BatchTopKSAE
 from utils.plugin_logger import get_logger
@@ -49,7 +46,6 @@ class Plugin(BasePlugin):
     def run(self,
             context: dict,
 
-            dataset: str = "MovieLens",
             batch_size: int = 1024,
             seed: int = 42,
             sae_model: str = "TopKSAE",   # BasicSAE / TopKSAE / BatchTopKSAE
@@ -61,31 +57,28 @@ class Plugin(BasePlugin):
         sae_run = mlflow.get_run(base_run_id)
         sae_params = sae_run.data.params
 
-        # base_model_run_id = sae_params["base_run_id"]
         base_model_run_id = context['training_cfm']['run_id']  # ELSA run
         elsa_run = mlflow.get_run(base_model_run_id)
 
+        # load dataset artifacts from the dataset_loading pipeline step
+        dataset_run_id = context['dataset_loading']['run_id']
+        dataset_run = mlflow.get_run(dataset_run_id)
+        dataset_artifact_uri = dataset_run.info.artifact_uri
+        if 'mlruns' in dataset_artifact_uri:
+            dataset_artifact_uri = './' + dataset_artifact_uri[dataset_artifact_uri.find('mlruns'):]
 
-        # load dataset
-        logger.info(f"Loading dataset: {dataset}")
-        if dataset == "MovieLens":
-            dataset_loader = MovieLensLoader()
-        elif dataset == "LastFM1k":
-            dataset_loader = LastFm1kLoader()
-        else:
-            raise ValueError(f"Dataset {dataset} not supported")
+        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
 
-        dataset_loader.prepare(argparse.Namespace(
-            seed=seed,
-            val_ratio=0.0,
-            test_ratio=0.0,
-        ))
+        items = np.load(f'{dataset_artifact_uri}/items.npy', allow_pickle=True)
+        num_items = len(items)
 
-        if not dataset_loader.has_tags():
-            raise RuntimeError("Dataset does not support neuron labeling")
+        with open(f'{dataset_artifact_uri}/tag_ids.json', 'r') as f:
+            tag_ids = json.load(f)
 
-        num_items = len(dataset_loader.items)
-        tag_ids = dataset_loader.tag_ids()
+        tag_item_counts = sp.load_npz(f'{dataset_artifact_uri}/tag_item_matrix.npz')
+
+        if tag_ids is None or tag_item_counts is None:
+            raise RuntimeError("Dataset does not support neuron labeling (no tag data available)")
 
         # load ELSA model
         logger.info("Loading ELSA model")
@@ -159,8 +152,7 @@ class Plugin(BasePlugin):
             device=device,
         )
 
-        # build tag–item matrix
-        tag_item_counts = dataset_loader.tag_item_matrix()
+        # build tag–item probability matrix
         tag_item_prob = tag_item_counts.multiply(
             1.0 / tag_item_counts.sum(axis=1)
         )

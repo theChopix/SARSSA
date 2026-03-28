@@ -1,14 +1,12 @@
 import os
-import argparse
 import datetime
 import mlflow
 import torch
 import numpy as np
+import scipy.sparse as sp
 from tqdm import tqdm
 from copy import deepcopy
 
-from utils.datasets.lastFm1k_loader import LastFm1kLoader
-from utils.datasets.movieLens_loader import MovieLensLoader
 from utils.datasets.data_loader import DataLoader
 from utils.torch.models.elsa import ELSA
 from utils.torch.models.sae import SAE, BasicSAE, TopKSAE, BatchTopKSAE
@@ -23,43 +21,6 @@ from plugins.plugin_interface import BasePlugin
 logger = get_logger(__name__)
 
 
-def parse_arguments():
-    """Parse command-line arguments for SAE training.
-    
-    Returns:
-        argparse.Namespace: Parsed arguments containing all hyperparameters.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='LastFM1k', help='Dataset to use. For now, only "LastFM1k" and "MovieLens" are supported')
-    parser.add_argument('--epochs', type=int, default=4_000, help='Number of epochs to train the model')
-    parser.add_argument('--early_stop', type=int, default=250, help='Number of epochs to wait for improvement before stopping')
-    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-    parser.add_argument('--embedding_dim', type=int, default=2048, help='Number of factors for the model')
-    parser.add_argument('--top_k', type=int, default=128, help='Top k parameter for TopKSAE')
-    parser.add_argument("--base_run_id", type=str, default='4a43996d7eec489183ad0d6b0c00d935', help="Run ID of the base model")
-    parser.add_argument("--sample_users", action='store_true', default=False, help="Choose randomly 0.5 - 1.0 of the users interactions")
-    parser.add_argument('--model', type=str, default='TopKSAE', help='Model to use (BasicSAE, TopKSAE, BatchTopKSAE)')
-    parser.add_argument('--note', type=str, default='', help='Note for the experiment')
-    parser.add_argument('--target_ratio', type=float, default=0.2, help='Ratio of target interactions')
-    parser.add_argument("--normalize", action='store_true', help="Normalize the sparse embedding (BasicSAE, TopKSAE)")
-    # stable parameters
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
-    parser.add_argument('--val_ratio', type=float, default=0.1, help='Validation ratio')
-    parser.add_argument('--test_ratio', type=float, default=0.1, help='Test ratio')
-    # training parameters
-    parser.add_argument("--reconstruction_loss", type=str, default="Cosine", help="Reconstruction loss (L2 or Cosine)")
-    parser.add_argument("--auxiliary_coef", type=float, default=1/32, help="Auxiliary loss coefficient (BasicSAE, TopKSAE)")
-    parser.add_argument("--contrastive_coef", type=float, default=0.3, help="Contrastive loss coefficient (BasicSAE, TopKSAE)")
-    parser.add_argument('--lr', type=float, default=1e-5, help='Learning rate for training')
-    parser.add_argument('--beta1', type=float, default=0.9, help='Beta1 for Adam optimizer')
-    parser.add_argument('--beta2', type=float, default=0.99, help='Beta2 for Adam optimizer')
-    parser.add_argument("--l1_coef", type=float, default=3e-4, help="L1 loss coefficient (BasicSAE, TopKSAE)")
-    parser.add_argument('--evaluate_every', type=int, default=10, help='Evaluate every n epochs')
-    # auxiliary parameters
-    parser.add_argument("--n_batches_to_dead", type=int, default=5, help="Number of batches to wait before optimizing the dead neurons (BasicSAE, TopKSAE)")
-    parser.add_argument("--topk_aux", type=int, default=512, help="Top k for auxiliary loss (BasicSAE, TopKSAE)")
-    return parser.parse_args()
-
 
 def train(
     model: SAE,
@@ -69,14 +30,10 @@ def train(
     valid_csr,
     test_csr,
     device,
-    dataset: str,
     epochs: int,
     batch_size: int,
     early_stop: int,
     evaluate_every: int,
-    model_name: str,
-    embedding_dim: int,
-    top_k: int,
     contrastive_coef: float,
     sample_users: bool,
     target_ratio: float,
@@ -110,12 +67,6 @@ def train(
         target_ratio: Fraction of interactions to use as targets for evaluation.
         seed: Random seed for reproducibility.
     """
-    # Generate run name based on model configuration
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    if model_name in ['TopKSAE', 'BatchTopKSAE']:
-        run_name = f'{model_name}_{embedding_dim}_{top_k}_{timestamp}'
-    else:
-        run_name = f'{model_name}_{embedding_dim}_{timestamp}'
 
     def sampled_interactions(batch, ratio=0.8):
         """Randomly sample a fraction of interactions from a batch.
@@ -314,12 +265,13 @@ class Plugin(BasePlugin):
     Trains a sparse autoencoder on top of a pre-trained ELSA model to learn
     interpretable, sparse representations of user embeddings while maintaining
     recommendation quality.
+    
+    Expects prior dataset_loading and training_cfm steps in the pipeline context.
     """
     
     def run(
         self,
         context: dict,
-        dataset: str = 'LastFM1k',
         epochs: int = 4000,
         early_stop: int = 250,
         batch_size: int = 64,
@@ -332,8 +284,6 @@ class Plugin(BasePlugin):
         normalize: bool = False,
 
         seed: int = 42,
-        val_ratio: float = 0.1,
-        test_ratio: float = 0.1,
 
         reconstruction_loss: str = "Cosine",
         auxiliary_coef: float = 1/32,
@@ -351,7 +301,8 @@ class Plugin(BasePlugin):
         
         Args:
             context: Pipeline context containing information from previous steps.
-            dataset: Dataset to use ('LastFM1k' or 'MovieLens').
+                     Must contain context['dataset_loading']['run_id'] and
+                     context['training_cfm']['run_id'].
             epochs: Maximum number of training epochs.
             early_stop: Number of epochs without improvement before stopping.
             batch_size: Batch size for training.
@@ -363,8 +314,6 @@ class Plugin(BasePlugin):
             target_ratio: Fraction of interactions to use as targets for evaluation.
             normalize: Whether to L2-normalize sparse embeddings.
             seed: Random seed for reproducibility.
-            val_ratio: Fraction of data to use for validation.
-            test_ratio: Fraction of data to use for testing.
             reconstruction_loss: Loss function ('L2' or 'Cosine').
             auxiliary_coef: Coefficient for auxiliary loss (dead neuron reactivation).
             contrastive_coef: Coefficient for contrastive loss.
@@ -384,86 +333,57 @@ class Plugin(BasePlugin):
         logger.info(f'Using device: {device}')
         
         set_seed(seed)
-        
-        # Create args namespace for compatibility
-        args = argparse.Namespace(
-            dataset=dataset,
-            epochs=epochs,
-            batch_size=batch_size,
-            early_stop=early_stop,
-            embedding_dim=embedding_dim,
-            top_k=top_k,
-            base_run_id=context['training_cfm']['run_id'],  
-            sample_users=sample_users,
-            model=model,
-            note=note,
-            target_ratio=target_ratio,
-            normalize=normalize,
-            seed=seed,
-            val_ratio=val_ratio,
-            test_ratio=test_ratio,
-            reconstruction_loss=reconstruction_loss,
-            auxiliary_coef=auxiliary_coef,
-            contrastive_coef=contrastive_coef,
-            lr=lr,
-            beta1=beta1,
-            beta2=beta2,
-            l1_coef=l1_coef,
-            evaluate_every=evaluate_every,
-            n_batches_to_dead=n_batches_to_dead,
-            topk_aux=topk_aux,
-        )
+
+        # Load dataset artifacts from the dataset_loading pipeline step
+        dataset_run_id = context['dataset_loading']['run_id']
+        dataset_run = mlflow.get_run(dataset_run_id)
+        dataset_params = dataset_run.data.params
+        dataset_artifact_uri = dataset_run.info.artifact_uri
+        if 'mlruns' in dataset_artifact_uri:
+            dataset_artifact_uri = './' + dataset_artifact_uri[dataset_artifact_uri.find('mlruns'):]
+
+        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
+
+        train_csr = sp.load_npz(f'{dataset_artifact_uri}/train_csr.npz')
+        valid_csr = sp.load_npz(f'{dataset_artifact_uri}/valid_csr.npz')
+        test_csr = sp.load_npz(f'{dataset_artifact_uri}/test_csr.npz')
+
+        dataset = dataset_params['dataset_name']
+        num_users = int(dataset_params['num_users'])
+        num_items = int(dataset_params['num_items'])
+        min_user_interactions = int(dataset_params['min_user_interactions'])
+        min_item_interactions = int(dataset_params['min_item_interactions'])
+        val_ratio = float(dataset_params['val_ratio'])
+        test_ratio = float(dataset_params['test_ratio'])
+
+        logger.info(f'Training data: {train_csr.shape}, Validation data: {valid_csr.shape}, Test data: {test_csr.shape}')
 
         # Load base model information from previous pipeline step
-        base_model_run = mlflow.get_run(args.base_run_id)
+        base_run_id = context['training_cfm']['run_id']
+        base_model_run = mlflow.get_run(base_run_id)
         
         base_params = base_model_run.data.params
         artifact_path = base_model_run.info.artifact_uri
-        # remove all before mlruns
-        artifact_path = './' + artifact_path[artifact_path.find('mlruns'):]
+        if 'mlruns' in artifact_path:
+            artifact_path = './' + artifact_path[artifact_path.find('mlruns'):]
         
-        assert base_params['dataset'] == args.dataset, 'Base model dataset does not match current dataset'
+        base_model_name = base_params['model']
+        base_factors = int(base_params['factors'])
+        base_min_user_interactions = int(base_params['min_user_interactions'])
+        base_min_item_interactions = int(base_params['min_item_interactions'])
+        base_users = int(base_params['users'])
+        base_items = int(base_params['items'])
+        expansion_ratio = embedding_dim / base_factors
+        reconstruction_coef = 1 - (auxiliary_coef + contrastive_coef + l1_coef)
         
-        logger.info(f'Params: {vars(args)}')
+        logger.info(f'Base model: {base_model_name} with {base_factors} factors')
+        logger.info(f'Expansion ratio: {expansion_ratio:.1f}x ({base_factors} → {embedding_dim})')
         
-        args.base_model = base_params['model']
-        args.base_factors = int(base_params['factors'])
-        args.base_min_user_interactions = int(base_params['min_user_interactions'])
-        args.base_min_item_interactions = int(base_params['min_item_interactions'])
-        args.base_users = int(base_params['users'])
-        args.base_items = int(base_params['items'])
-        args.expansion_ratio = args.embedding_dim / args.base_factors
-        args.reconstruction_coef = 1 - (args.auxiliary_coef + args.contrastive_coef + args.l1_coef)
-        
-        logger.info(f'Base model: {args.base_model} with {args.base_factors} factors')
-        logger.info(f'Expansion ratio: {args.expansion_ratio:.1f}x ({args.base_factors} → {args.embedding_dim})')
-        
-        # Load and prepare dataset
-        logger.info(f'Loading {args.dataset}')
-        if args.dataset == 'LastFM1k':
-            dataset_loader = LastFm1kLoader()
-        elif args.dataset == 'MovieLens':
-            dataset_loader = MovieLensLoader()
-        else:
-            raise ValueError(f'Dataset {args.dataset} not supported. Check typos.')
-        dataset_loader.prepare(args)
-        
-        args.min_user_interactions = dataset_loader.MIN_USER_INTERACTIONS
-        args.min_item_interactions = dataset_loader.MIN_ITEM_INTERACTIONS
-        args.users = len(dataset_loader.users)
-        args.items = len(dataset_loader.items)
-        
-        assert args.items == args.base_items, 'Number of items in dataset does not match base model'
-        assert args.users == args.base_users, 'Number of users in dataset does not match base model'
-        
-        train_csr = dataset_loader.train_csr
-        valid_csr = dataset_loader.valid_csr
-        test_csr = dataset_loader.test_csr
-        
-        logger.info(f'Training data: {train_csr.shape}, Validation data: {valid_csr.shape}, Test data: {test_csr.shape}')
+        assert num_items == base_items, 'Number of items in dataset does not match base model'
+        assert num_users == base_users, 'Number of users in dataset does not match base model'
         
         # Load pre-trained ELSA model from artifacts
-        base_model = ELSA(args.base_items, args.base_factors)
+        base_model = ELSA(base_items, base_factors)
         base_optimizer = torch.optim.Adam(base_model.parameters())
         load_checkpoint(base_model, base_optimizer, f'{artifact_path}/checkpoint.ckpt', device)
         base_model.to(device)
@@ -473,108 +393,98 @@ class Plugin(BasePlugin):
         
         # Configure SAE model
         cfg = {
-            'reconstruction_loss': args.reconstruction_loss,
-            "topk_aux": args.topk_aux,
-            "n_batches_to_dead": args.n_batches_to_dead,
-            "l1_coef": args.l1_coef,
-            "k": args.top_k,
+            'reconstruction_loss': reconstruction_loss,
+            "topk_aux": topk_aux,
+            "n_batches_to_dead": n_batches_to_dead,
+            "l1_coef": l1_coef,
+            "k": top_k,
             "device": device,
-            "normalize": args.normalize,
-            "auxiliary_coef": args.auxiliary_coef,
-            "contrastive_coef": args.contrastive_coef,
-            "reconstruction_coef": args.reconstruction_coef,
+            "normalize": normalize,
+            "auxiliary_coef": auxiliary_coef,
+            "contrastive_coef": contrastive_coef,
+            "reconstruction_coef": reconstruction_coef,
         }
         
         # Initialize SAE model based on variant
-        if args.model == 'BasicSAE':
-            model = BasicSAE(args.base_factors, args.embedding_dim, cfg).to(device)
-        elif args.model == 'TopKSAE':
-            model = TopKSAE(args.base_factors, args.embedding_dim, cfg).to(device)
-        elif args.model == 'BatchTopKSAE':
-            model = BatchTopKSAE(args.base_factors, args.embedding_dim, cfg).to(device)
+        if model == 'BasicSAE':
+            sae = BasicSAE(base_factors, embedding_dim, cfg).to(device)
+        elif model == 'TopKSAE':
+            sae = TopKSAE(base_factors, embedding_dim, cfg).to(device)
+        elif model == 'BatchTopKSAE':
+            sae = BatchTopKSAE(base_factors, embedding_dim, cfg).to(device)
         else:
-            raise ValueError(f'Model {args.model} not supported. Check typos.')
+            raise ValueError(f'Model {model} not supported. Check typos.')
         
-        logger.info(f'Initialized {args.model} with {args.embedding_dim} dimensions')
+        logger.info(f'Initialized {model} with {embedding_dim} dimensions')
 
         # Initialize optimizer
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(args.beta1, args.beta2))
+        optimizer = torch.optim.Adam(sae.parameters(), lr=lr, betas=(beta1, beta2))
         
         # Log all parameters to MLflow
         mlflow.log_params({
-            'expansion_ratio': args.expansion_ratio,
-            'min_item_interactions': args.min_item_interactions,
-            'target_ratio': args.target_ratio,
-            'beta2': args.beta2,
-            'beta1': args.beta1,
-            'top_k': args.top_k,
-            'seed': args.seed,
-            'l1_coef': args.l1_coef,
-            'min_user_interactions': args.min_user_interactions,
-            'epochs': args.epochs,
-            'note': args.note,
-            'reconstruction_loss': args.reconstruction_loss,
-            'val_ratio': args.val_ratio,
-            'dataset': args.dataset,
-            'batch_size': args.batch_size,
-            'lr': args.lr,
-            'base_factors': args.base_factors,
-            'normalize': args.normalize,
-            'base_model': args.base_model,
-            'base_min_item_interactions': args.base_min_item_interactions,
-            'users': args.users,
-            'topk_aux': args.topk_aux,
-            'items': args.items,
-            'base_users': args.base_users,
-            'early_stop': args.early_stop,
-            'evaluate_every': args.evaluate_every,
-            'reconstruction_coef': args.reconstruction_coef,
-            'embedding_dim': args.embedding_dim,
-            'base_items': args.base_items,
-            'auxiliary_coef': args.auxiliary_coef,
-            'contrastive_coef': args.contrastive_coef,
-            'n_batches_to_dead': args.n_batches_to_dead,
-            'test_ratio': args.test_ratio,
-            'model': args.model,
-            'base_min_user_interactions': args.base_min_user_interactions,
-            'sample_users': args.sample_users,
+            'expansion_ratio': expansion_ratio,
+            'min_item_interactions': min_item_interactions,
+            'target_ratio': target_ratio,
+            'beta2': beta2,
+            'beta1': beta1,
+            'top_k': top_k,
+            'seed': seed,
+            'l1_coef': l1_coef,
+            'min_user_interactions': min_user_interactions,
+            'epochs': epochs,
+            'note': note,
+            'reconstruction_loss': reconstruction_loss,
+            'val_ratio': val_ratio,
+            'dataset': dataset,
+            'batch_size': batch_size,
+            'lr': lr,
+            'base_factors': base_factors,
+            'normalize': normalize,
+            'base_model': base_model_name,
+            'base_min_item_interactions': base_min_item_interactions,
+            'users': num_users,
+            'topk_aux': topk_aux,
+            'items': num_items,
+            'base_users': base_users,
+            'early_stop': early_stop,
+            'evaluate_every': evaluate_every,
+            'reconstruction_coef': reconstruction_coef,
+            'embedding_dim': embedding_dim,
+            'base_items': base_items,
+            'auxiliary_coef': auxiliary_coef,
+            'contrastive_coef': contrastive_coef,
+            'n_batches_to_dead': n_batches_to_dead,
+            'test_ratio': test_ratio,
+            'model': model,
+            'base_min_user_interactions': base_min_user_interactions,
+            'sample_users': sample_users,
         })
         
         # Train the model
         train(
-            model=model,
+            model=sae,
             base_model=base_model,
             optimizer=optimizer,
             train_csr=train_csr,
             valid_csr=valid_csr,
             test_csr=test_csr,
             device=device,
-            dataset=args.dataset,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            early_stop=args.early_stop,
-            evaluate_every=args.evaluate_every,
-            model_name=args.model,
-            embedding_dim=args.embedding_dim,
-            top_k=args.top_k,
-            contrastive_coef=args.contrastive_coef,
-            sample_users=args.sample_users,
-            target_ratio=args.target_ratio,
-            seed=args.seed,
+            epochs=epochs,
+            batch_size=batch_size,
+            early_stop=early_stop,
+            evaluate_every=evaluate_every,
+            contrastive_coef=contrastive_coef,
+            sample_users=sample_users,
+            target_ratio=target_ratio,
+            seed=seed,
         )
 
         # Update context for next pipeline step
         context["training_sae"] = {
             "status": "trained",
-            "model_name": args.model,
+            "model_name": model,
             "run_id": mlflow.active_run().info.run_id,
-            "embedding_dim": args.embedding_dim,
-            "top_k": args.top_k if args.model in ['TopKSAE', 'BatchTopKSAE'] else None,
+            "embedding_dim": embedding_dim,
+            "top_k": top_k if model in ['TopKSAE', 'BatchTopKSAE'] else None,
         }
         return context
-
-
-if __name__ == '__main__':
-    args = parse_arguments()
-    plugin = Plugin()
-    plugin.run(context={}, **vars(args))

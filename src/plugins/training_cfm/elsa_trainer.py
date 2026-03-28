@@ -1,13 +1,11 @@
-import argparse
 import torch
 import mlflow
 import numpy as np
+import scipy.sparse as sp
 import os
 from tqdm import tqdm
 from copy import deepcopy
 
-from utils.datasets.lastFm1k_loader import LastFm1kLoader
-from utils.datasets.movieLens_loader import MovieLensLoader
 from utils.datasets.data_loader import DataLoader
 from utils.torch.models.elsa import ELSA
 from utils.plugin_logger import get_logger
@@ -20,27 +18,6 @@ from plugins.plugin_interface import BasePlugin
 
 logger = get_logger(__name__)
 
-
-def parse_arguments():
-    """Parse command-line arguments for ELSA training.
-    
-    Returns:
-        argparse.Namespace: Parsed arguments containing all training configuration parameters.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='LastFM1k', help='Dataset to use. For now, only "LastFM1k" and "MovieLens" are supported')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train the model')
-    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-    parser.add_argument('--factors', type=int, default=256, help='Number of factors for the model')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate for training')
-    parser.add_argument('--early_stop', type=int, default=10, help='Number of epochs to wait for improvement before stopping')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
-    parser.add_argument('--val_ratio', type=float, default=0.1, help='Validation ratio')
-    parser.add_argument('--test_ratio', type=float, default=0.1, help='Test ratio')
-    parser.add_argument('--target_ratio', type=float, default=0.2, help='Ratio of target interactions')
-    parser.add_argument('--beta1', type=float, default=0.9, help='Beta1 for Adam optimizer')
-    parser.add_argument('--beta2', type=float, default=0.99, help='Beta2 for Adam optimizer')
-    return parser.parse_args()
 
 
 def train(
@@ -204,22 +181,21 @@ class Plugin(BasePlugin):
     """ELSA (Scalable Linear Shallow Autoencoder) training plugin.
     
     This plugin implements the training pipeline for collaborative filtering using
-    the ELSA model. It handles dataset loading, model initialization, training with
+    the ELSA model. It handles model initialization, training with
     early stopping, and MLflow experiment tracking.
+    
+    Expects a prior dataset_loading step in the pipeline context.
     """
     
     def run(
         self,
         context: dict,
-        dataset: str = 'LastFM1k',
         epochs: int = 100,
         batch_size: int = 64,
         factors: int = 256,
         lr: float = 0.0001,
         early_stop: int = 10,
         seed: int = 43,
-        val_ratio: float = 0.1,
-        test_ratio: float = 0.1,
         target_ratio: float = 0.2,
         beta1: float = 0.9,
         beta2: float = 0.99,
@@ -228,15 +204,13 @@ class Plugin(BasePlugin):
         
         Args:
             context: Shared context dictionary for pipeline communication.
-            dataset: Dataset name ('LastFM1k' or 'MovieLens').
+                     Must contain context['dataset_loading']['run_id'].
             epochs: Maximum number of training epochs.
             batch_size: Number of samples per batch.
             factors: Number of latent factors (embedding dimension).
             lr: Learning rate for Adam optimizer.
             early_stop: Epochs without improvement before stopping (0 to disable).
             seed: Random seed for reproducibility.
-            val_ratio: Validation set ratio (0.0-1.0).
-            test_ratio: Test set ratio (0.0-1.0).
             target_ratio: Ratio of interactions used as targets in evaluation.
             beta1: Adam optimizer beta1 parameter (momentum).
             beta2: Adam optimizer beta2 parameter (RMSprop).
@@ -250,15 +224,27 @@ class Plugin(BasePlugin):
         
         set_seed(seed)
         
-        # Load and prepare dataset
-        dataset_loader = self._load_dataset(dataset, seed, val_ratio, test_ratio)
-        train_csr, valid_csr, test_csr = dataset_loader.train_csr, dataset_loader.valid_csr, dataset_loader.test_csr
+        # Load dataset artifacts from the dataset_loading pipeline step
+        dataset_run_id = context['dataset_loading']['run_id']
+        dataset_run = mlflow.get_run(dataset_run_id)
+        dataset_params = dataset_run.data.params
+        artifact_uri = dataset_run.info.artifact_uri
+        if 'mlruns' in artifact_uri:
+            artifact_uri = './' + artifact_uri[artifact_uri.find('mlruns'):]
+
+        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
+
+        train_csr = sp.load_npz(f'{artifact_uri}/train_csr.npz')
+        valid_csr = sp.load_npz(f'{artifact_uri}/valid_csr.npz')
+        test_csr = sp.load_npz(f'{artifact_uri}/test_csr.npz')
         
-        # Extract dataset metadata for logging
-        min_user_interactions = dataset_loader.MIN_USER_INTERACTIONS
-        min_item_interactions = dataset_loader.MIN_ITEM_INTERACTIONS
-        num_users = len(dataset_loader.users)
-        num_items = len(dataset_loader.items)
+        num_users = int(dataset_params['num_users'])
+        num_items = int(dataset_params['num_items'])
+        min_user_interactions = int(dataset_params['min_user_interactions'])
+        min_item_interactions = int(dataset_params['min_item_interactions'])
+        dataset = dataset_params['dataset_name']
+        val_ratio = float(dataset_params['val_ratio'])
+        test_ratio = float(dataset_params['test_ratio'])
         
         logger.info(f'Training data: {train_csr.shape}, Validation data: {valid_csr.shape}, Test data: {test_csr.shape}')
         
@@ -293,38 +279,3 @@ class Plugin(BasePlugin):
         
         context["model"] = {"status": "trained", "model_name": "ELSA"}
         return context
-    
-    def _load_dataset(self, dataset: str, seed: int, val_ratio: float, test_ratio: float):
-        """Load and prepare the specified dataset.
-        
-        Args:
-            dataset: Dataset name ('LastFM1k' or 'MovieLens').
-            seed: Random seed for data splitting.
-            val_ratio: Validation set ratio.
-            test_ratio: Test set ratio.
-        
-        Returns:
-            DatasetLoader: Prepared dataset loader with train/val/test splits.
-        
-        Raises:
-            ValueError: If dataset name is not supported.
-        """
-        logger.info(f'Loading dataset: {dataset}')
-        
-        if dataset == 'LastFM1k':
-            dataset_loader = LastFm1kLoader()
-        elif dataset == 'MovieLens':
-            dataset_loader = MovieLensLoader()
-        else:
-            raise ValueError(f'Dataset "{dataset}" not supported. Available: LastFM1k, MovieLens')
-        
-        # Prepare dataset with train/val/test splits
-        config = argparse.Namespace(seed=seed, val_ratio=val_ratio, test_ratio=test_ratio)
-        dataset_loader.prepare(config)
-        return dataset_loader
-
-
-if __name__ == '__main__':
-    args = parse_arguments()
-    plugin = Plugin()
-    plugin.run(context={}, **vars(args))
