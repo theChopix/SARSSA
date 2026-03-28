@@ -11,14 +11,15 @@ from sklearn.feature_extraction.text import TfidfTransformer
 
 from utils.datasets.lastFm1k_loader import LastFm1kLoader
 from utils.datasets.movieLens_loader import MovieLensLoader
-from utils.models.elsa import ELSA
-from utils.models.sae import BasicSAE, TopKSAE, BatchTopKSAE
+from utils.torch.models.elsa import ELSA
+from utils.torch.models.sae import BasicSAE, TopKSAE, BatchTopKSAE
 from utils.plugin_logger import get_logger
 from plugins.plugin_interface import BasePlugin
-from .tf_idf_utils import Utils
+from utils.torch.runtime import set_device, set_seed
+from utils.torch.checkpointing import load_checkpoint
 
 logger = get_logger(__name__)
-device = Utils.set_device()
+device = set_device()
 
 
 @torch.no_grad()
@@ -53,14 +54,15 @@ class Plugin(BasePlugin):
             seed: int = 42,
             sae_model: str = "TopKSAE",   # BasicSAE / TopKSAE / BatchTopKSAE
     ):
-        Utils.set_seed(seed)
+        set_seed(seed)
 
         # resolve previous run IDs
-        base_run_id = context["last_plugin_run_id"]  # SAE run
+        base_run_id = context["training_sae"]['run_id']  # SAE run
         sae_run = mlflow.get_run(base_run_id)
         sae_params = sae_run.data.params
 
-        base_model_run_id = sae_params["base_run_id"]
+        # base_model_run_id = sae_params["base_run_id"]
+        base_model_run_id = context['training_cfm']['run_id']  # ELSA run
         elsa_run = mlflow.get_run(base_model_run_id)
 
 
@@ -94,7 +96,7 @@ class Plugin(BasePlugin):
         elsa_opt = torch.optim.Adam(elsa.parameters())
         elsa_artifact_path = elsa_run.info.artifact_uri
         elsa_artifact_path = './' + elsa_artifact_path[elsa_artifact_path.find('mlruns'):]
-        Utils.load_checkpoint(
+        load_checkpoint(
             elsa,
             elsa_opt,
             f"{elsa_artifact_path}/checkpoint.ckpt",
@@ -140,7 +142,7 @@ class Plugin(BasePlugin):
         sae_opt = torch.optim.Adam(sae.parameters())
         sae_artifact_path = sae_run.info.artifact_uri
         sae_artifact_path = './' + sae_artifact_path[sae_artifact_path.find('mlruns'):]
-        Utils.load_checkpoint(
+        load_checkpoint(
             sae,
             sae_opt,
             f"{sae_artifact_path}/checkpoint.ckpt",
