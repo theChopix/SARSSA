@@ -116,22 +116,6 @@ def train(
         run_name = f'{model_name}_{embedding_dim}_{top_k}_{timestamp}'
     else:
         run_name = f'{model_name}_{embedding_dim}_{timestamp}'
-    
-    # Log all parameters to MLflow
-    mlflow.log_params({
-        'dataset': dataset,
-        'epochs': epochs,
-        'batch_size': batch_size,
-        'early_stop': early_stop,
-        'embedding_dim': embedding_dim,
-        'top_k': top_k,
-        'model': model_name,
-        'contrastive_coef': contrastive_coef,
-        'sample_users': sample_users,
-        'target_ratio': target_ratio,
-        'seed': seed,
-        'evaluate_every': evaluate_every
-    })
 
     def sampled_interactions(batch, ratio=0.8):
         """Randomly sample a fraction of interactions from a batch.
@@ -515,6 +499,46 @@ class Plugin(BasePlugin):
 
         # Initialize optimizer
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(args.beta1, args.beta2))
+        
+        # Log all parameters to MLflow
+        mlflow.log_params({
+            'expansion_ratio': args.expansion_ratio,
+            'min_item_interactions': args.min_item_interactions,
+            'target_ratio': args.target_ratio,
+            'beta2': args.beta2,
+            'beta1': args.beta1,
+            'top_k': args.top_k,
+            'seed': args.seed,
+            'l1_coef': args.l1_coef,
+            'min_user_interactions': args.min_user_interactions,
+            'epochs': args.epochs,
+            'note': args.note,
+            'reconstruction_loss': args.reconstruction_loss,
+            'val_ratio': args.val_ratio,
+            'dataset': args.dataset,
+            'batch_size': args.batch_size,
+            'lr': args.lr,
+            'base_factors': args.base_factors,
+            'normalize': args.normalize,
+            'base_model': args.base_model,
+            'base_min_item_interactions': args.base_min_item_interactions,
+            'users': args.users,
+            'topk_aux': args.topk_aux,
+            'items': args.items,
+            'base_users': args.base_users,
+            'early_stop': args.early_stop,
+            'evaluate_every': args.evaluate_every,
+            'reconstruction_coef': args.reconstruction_coef,
+            'embedding_dim': args.embedding_dim,
+            'base_items': args.base_items,
+            'auxiliary_coef': args.auxiliary_coef,
+            'contrastive_coef': args.contrastive_coef,
+            'n_batches_to_dead': args.n_batches_to_dead,
+            'test_ratio': args.test_ratio,
+            'model': args.model,
+            'base_min_user_interactions': args.base_min_user_interactions,
+            'sample_users': args.sample_users,
+        })
         
         # Train the model
         train(
