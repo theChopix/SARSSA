@@ -25,10 +25,8 @@ class SAE(nn.Module):
         self.encoder_b = nn.Parameter(torch.zeros(embedding_dim))
         self.decoder_w = nn.Parameter(nn.init.kaiming_uniform_(torch.empty([embedding_dim, input_dim])))
         self.decoder_b = nn.Parameter(torch.zeros(input_dim))
-        # memory of inactive neurons
         self.inactive_neurons = torch.zeros(embedding_dim, device=self.device)
         
-        # use transpose encoder as decoder to eliminate dead neurons
         self.decoder_w.data = self.encoder_w.t().data
         self.normalize_decoder()
 
@@ -183,8 +181,8 @@ class TopKSAE(SAE):
 class BatchTopKSAE(SAE):
     def __init__(self, input_dim: int, embedding_dim: int, cfg: dict):
         super().__init__(input_dim, embedding_dim, cfg)
-        self.threshold = nn.Parameter(torch.zeros(1), requires_grad=False) # threshold for inference
-        self.processed_batches_count = nn.Parameter(torch.zeros(1), requires_grad=False) # number of processed batches
+        self.threshold = nn.Parameter(torch.zeros(1), requires_grad=False)
+        self.processed_batches_count = nn.Parameter(torch.zeros(1), requires_grad=False)
         
         self.k = cfg["k"]
         self.reconstruction_coef = cfg.get("reconstruction_coef", 1.0)
@@ -194,7 +192,6 @@ class BatchTopKSAE(SAE):
         
     def _update_threshold(self, min_batch_value: float) -> None:
         self.processed_batches_count += 1
-        # update the threshold as average of all processed batches min values
         self.threshold += (min_batch_value - self.threshold) / self.processed_batches_count
 
     def post_process_embedding(self, e: torch.Tensor) -> torch.Tensor:
@@ -204,7 +201,6 @@ class BatchTopKSAE(SAE):
             min_nonzero_value = batch_topk.values[batch_topk.values > 0].min().cpu().item()
             self._update_threshold(min_nonzero_value)
         else:
-            # during inference, use the threshold to filter out small values
             e_topk = torch.where(e > self.threshold, e, torch.zeros_like(e))
         return e_topk
     

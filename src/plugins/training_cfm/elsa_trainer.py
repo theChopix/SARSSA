@@ -9,9 +9,11 @@ from copy import deepcopy
 from utils.datasets.lastFm1k_loader import LastFm1kLoader
 from utils.datasets.movieLens_loader import MovieLensLoader
 from utils.datasets.data_loader import DataLoader
-from utils.models.elsa import ELSA
+from utils.torch.models.elsa import ELSA
 from utils.plugin_logger import get_logger
-from .elsa_trainer_utils import Utils
+from utils.torch.runtime import set_device, set_seed
+from utils.torch.checkpointing import save_checkpoint, load_checkpoint
+from utils.torch.evalution import evaluate_dense_encoder
 
 from plugins.plugin_interface import BasePlugin
 
@@ -154,7 +156,7 @@ def train(
 
         # Evaluate on validation set
         model.eval()
-        valid_metrics = Utils.evaluate_dense_encoder(model, valid_csr, target_ratio, batch_size, device, seed=seed + epoch)
+        valid_metrics = evaluate_dense_encoder(model, valid_csr, target_ratio, batch_size, device, seed=seed + epoch)
         valid_metrics['loss'] = float(np.mean([model.compute_loss_dict(batch)['Loss'].item() for batch in valid_dataloader]))
         
         # Log validation metrics to MLflow
@@ -184,16 +186,16 @@ def train(
         optimizer = best_optimizer
         
     # Final evaluation on test set
-    test_metrics = Utils.evaluate_dense_encoder(model, test_csr, target_ratio, batch_size, device, seed=seed)
+    test_metrics = evaluate_dense_encoder(model, test_csr, target_ratio, batch_size, device, seed=seed)
     for key, val in test_metrics.items():
         mlflow.log_metric(f'{key}/test', val)
     logger.info(f'Test metrics - R@20: {test_metrics["R20"]:.4f} - NDCG20: {test_metrics["NDCG20"]:.4f}')
     
     # Save model checkpoint and log artifacts to MLflow
     temp_path = 'checkpoint.ckpt'
-    Utils.save_checkpoint(model, optimizer, temp_path)
+    save_checkpoint(model, optimizer, temp_path)
     mlflow.log_artifact(temp_path)
-    mlflow.log_artifact('utils/models/elsa.py')
+    mlflow.log_artifact('utils/torch/models/elsa.py')
     os.remove(temp_path)
     logger.info('Model successfully saved')
 
@@ -243,10 +245,10 @@ class Plugin(BasePlugin):
             dict: Updated context with training status.
         """
         # Initialize device and set random seed for reproducibility
-        device = Utils.set_device()
+        device = set_device()
         logger.info(f'Using device: {device}')
         
-        Utils.set_seed(seed)
+        set_seed(seed)
         
         # Load and prepare dataset
         dataset_loader = self._load_dataset(dataset, seed, val_ratio, test_ratio)

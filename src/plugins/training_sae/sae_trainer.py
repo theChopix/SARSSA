@@ -10,10 +10,12 @@ from copy import deepcopy
 from utils.datasets.lastFm1k_loader import LastFm1kLoader
 from utils.datasets.movieLens_loader import MovieLensLoader
 from utils.datasets.data_loader import DataLoader
-from utils.models.elsa import ELSA
-from utils.models.sae import SAE, BasicSAE, TopKSAE, BatchTopKSAE
+from utils.torch.models.elsa import ELSA
+from utils.torch.models.sae import SAE, BasicSAE, TopKSAE, BatchTopKSAE
 from utils.plugin_logger import get_logger
-from .sae_trainer_utils import Utils
+from utils.torch.runtime import set_device, set_seed
+from utils.torch.checkpointing import save_checkpoint, load_checkpoint
+from utils.torch.evalution import evaluate_sparse_encoder
 
 from plugins.plugin_interface import BasePlugin
 
@@ -271,7 +273,7 @@ def train(
                 mlflow.log_metric(f'loss/{key}/valid', float(np.mean(val)), step=epoch)
                 
             # Compute validation metrics (sparsity, reconstruction quality, recommendation performance)
-            valid_metrics = Utils.evaluate_sparse_encoder(base_model, model, valid_csr, target_ratio, batch_size, device, seed=seed)
+            valid_metrics = evaluate_sparse_encoder(base_model, model, valid_csr, target_ratio, batch_size, device, seed=seed)
             for key, val in valid_metrics.items():
                 mlflow.log_metric(f'{key}/valid', val, step=epoch)
             
@@ -303,7 +305,7 @@ def train(
         optimizer = best_optimizer
     
     # Final evaluation on test set
-    test_metrics = Utils.evaluate_sparse_encoder(base_model, model, test_csr, target_ratio, batch_size, device, seed=seed)
+    test_metrics = evaluate_sparse_encoder(base_model, model, test_csr, target_ratio, batch_size, device, seed=seed)
     for key, val in test_metrics.items():
         mlflow.log_metric(f'{key}/test', val)
     logger.info(
@@ -315,9 +317,9 @@ def train(
     
     # Save model checkpoint and log artifacts to MLflow
     temp_path = './checkpoint.ckpt'
-    Utils.save_checkpoint(model, optimizer, temp_path)
+    save_checkpoint(model, optimizer, temp_path)
     mlflow.log_artifact(temp_path)
-    mlflow.log_artifact('utils/models/sae.py')
+    mlflow.log_artifact('utils/torch/models/sae.py')
     os.remove(temp_path)
     logger.info('Model successfully saved')
 
@@ -394,10 +396,10 @@ class Plugin(BasePlugin):
             dict: Updated context with training status.
         """
         # Initialize device and set random seed
-        device = Utils.set_device()
+        device = set_device()
         logger.info(f'Using device: {device}')
         
-        Utils.set_seed(seed)
+        set_seed(seed)
         
         # Create args namespace for compatibility
         args = argparse.Namespace(
@@ -479,7 +481,7 @@ class Plugin(BasePlugin):
         # Load pre-trained ELSA model from artifacts
         base_model = ELSA(args.base_items, args.base_factors)
         base_optimizer = torch.optim.Adam(base_model.parameters())
-        Utils.load_checkpoint(base_model, base_optimizer, f'{artifact_path}/checkpoint.ckpt', device)
+        load_checkpoint(base_model, base_optimizer, f'{artifact_path}/checkpoint.ckpt', device)
         base_model.to(device)
         base_model.eval()
         
