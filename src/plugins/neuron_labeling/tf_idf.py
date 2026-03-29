@@ -175,7 +175,7 @@ class Plugin(BasePlugin):
             with open(f"{tmp}/neuron_labels.json", "w") as f:
                 json.dump(neuron_labels, f, indent=2)
 
-            mlflow.log_artifacts(tmp, artifact_path="neuron_labeling")
+            mlflow.log_artifacts(tmp)
 
         mlflow.log_params({
             "neuron_labeling": True,
@@ -186,7 +186,6 @@ class Plugin(BasePlugin):
         # context update
         context["neuron_labeling"] = {
             "status": "completed",
-            "artifact_path": "neuron_labeling",
         }
 
         return context
