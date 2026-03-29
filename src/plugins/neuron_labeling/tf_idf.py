@@ -14,6 +14,7 @@ from utils.plugin_logger import get_logger
 from plugins.plugin_interface import BasePlugin
 from utils.torch.runtime import set_device, set_seed
 from utils.torch.checkpointing import load_checkpoint
+from utils.mlflow_manager import MLflowRunLoader
 
 logger = get_logger(__name__)
 device = set_device()
@@ -43,62 +44,46 @@ def compute_sae_item_activations(
 
 
 class Plugin(BasePlugin):
-    def run(self,
-            context: dict,
-
-            batch_size: int = 1024,
-            seed: int = 42,
-            sae_model: str = "TopKSAE",   # BasicSAE / TopKSAE / BatchTopKSAE
-    ):
-        set_seed(seed)
-
-        # resolve previous run IDs
-        base_run_id = context["training_sae"]['run_id']  # SAE run
-        sae_run = mlflow.get_run(base_run_id)
-        sae_params = sae_run.data.params
-
-        base_model_run_id = context['training_cfm']['run_id']  # ELSA run
-        elsa_run = mlflow.get_run(base_model_run_id)
-
-        # load dataset artifacts from the dataset_loading pipeline step
+    def _load_artifacts(self, context, device, sae_model):
+        """Load dataset, ELSA, and SAE artifacts from previous pipeline steps."""
+        # Load dataset artifacts
         dataset_run_id = context['dataset_loading']['run_id']
-        dataset_run = mlflow.get_run(dataset_run_id)
-        dataset_artifact_uri = dataset_run.info.artifact_uri
-        if 'mlruns' in dataset_artifact_uri:
-            dataset_artifact_uri = './' + dataset_artifact_uri[dataset_artifact_uri.find('mlruns'):]
+        dataset_loader = MLflowRunLoader(dataset_run_id)
 
         logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
 
-        items = np.load(f'{dataset_artifact_uri}/items.npy', allow_pickle=True)
-        num_items = len(items)
+        self.items = dataset_loader.get_npy_artifact('items.npy', allow_pickle=True)
+        self.num_items = len(self.items)
+        self.tag_ids = dataset_loader.get_json_artifact('tag_ids.json')
+        self.tag_item_counts = dataset_loader.get_npz_artifact('tag_item_matrix.npz')
 
-        with open(f'{dataset_artifact_uri}/tag_ids.json', 'r') as f:
-            tag_ids = json.load(f)
-
-        tag_item_counts = sp.load_npz(f'{dataset_artifact_uri}/tag_item_matrix.npz')
-
-        if tag_ids is None or tag_item_counts is None:
+        if self.tag_ids is None or self.tag_item_counts is None:
             raise RuntimeError("Dataset does not support neuron labeling (no tag data available)")
 
-        # load ELSA model
+        # Load ELSA model
         logger.info("Loading ELSA model")
-        elsa = ELSA(
-            input_dim=int(elsa_run.data.params["items"]),
-            embedding_dim=int(elsa_run.data.params["factors"]),
+        elsa_run_id = context['training_cfm']['run_id']
+        elsa_loader = MLflowRunLoader(elsa_run_id)
+        elsa_params = elsa_loader.get_parameters()
+
+        self.elsa = ELSA(
+            input_dim=int(elsa_params["items"]),
+            embedding_dim=int(elsa_params["factors"]),
         )
-        elsa_opt = torch.optim.Adam(elsa.parameters())
-        elsa_artifact_path = elsa_run.info.artifact_uri
-        elsa_artifact_path = './' + elsa_artifact_path[elsa_artifact_path.find('mlruns'):]
+        elsa_opt = torch.optim.Adam(self.elsa.parameters())
         load_checkpoint(
-            elsa,
+            self.elsa,
             elsa_opt,
-            f"{elsa_artifact_path}/checkpoint.ckpt",
+            elsa_loader.get_artifact_path("checkpoint.ckpt"),
             device,
         )
-        elsa.to(device).eval()
+        self.elsa.to(device).eval()
 
-        # load SAE model
+        # Load SAE model
         logger.info("Loading SAE model")
+        sae_run_id = context["training_sae"]['run_id']
+        sae_loader = MLflowRunLoader(sae_run_id)
+        sae_params = sae_loader.get_parameters()
 
         cfg = {
             "reconstruction_loss": sae_params["reconstruction_loss"],
@@ -112,49 +97,58 @@ class Plugin(BasePlugin):
         }
 
         if sae_model == "BasicSAE":
-            sae = BasicSAE(
-                int(elsa_run.data.params["factors"]),
+            self.sae = BasicSAE(
+                int(elsa_params["factors"]),
                 int(sae_params["embedding_dim"]),
                 cfg,
             )
         elif sae_model == "TopKSAE":
-            sae = TopKSAE(
-                int(elsa_run.data.params["factors"]),
+            self.sae = TopKSAE(
+                int(elsa_params["factors"]),
                 int(sae_params["embedding_dim"]),
                 cfg,
             )
         elif sae_model == "BatchTopKSAE":
-            sae = BatchTopKSAE(
-                int(elsa_run.data.params["factors"]),
+            self.sae = BatchTopKSAE(
+                int(elsa_params["factors"]),
                 int(sae_params["embedding_dim"]),
                 cfg,
             )
         else:
             raise ValueError(f"SAE model {sae_model} not supported")
 
-        sae_opt = torch.optim.Adam(sae.parameters())
-        sae_artifact_path = sae_run.info.artifact_uri
-        sae_artifact_path = './' + sae_artifact_path[sae_artifact_path.find('mlruns'):]
+        sae_opt = torch.optim.Adam(self.sae.parameters())
         load_checkpoint(
-            sae,
+            self.sae,
             sae_opt,
-            f"{sae_artifact_path}/checkpoint.ckpt",
+            sae_loader.get_artifact_path("checkpoint.ckpt"),
             device,
         )
-        sae.to(device).eval()
+        self.sae.to(device).eval()
+
+    def run(self,
+            context: dict,
+
+            batch_size: int = 1024,
+            seed: int = 42,
+            sae_model: str = "TopKSAE",   # BasicSAE / TopKSAE / BatchTopKSAE
+    ):
+        set_seed(seed)
+
+        self._load_artifacts(context, device, sae_model)
 
         # compute SAE activations
         item_acts = compute_sae_item_activations(
-            elsa,
-            sae,
-            num_items,
+            self.elsa,
+            self.sae,
+            self.num_items,
             batch_size=batch_size,
             device=device,
         )
 
         # build tag–item probability matrix
-        tag_item_prob = tag_item_counts.multiply(
-            1.0 / tag_item_counts.sum(axis=1)
+        tag_item_prob = self.tag_item_counts.multiply(
+            1.0 / self.tag_item_counts.sum(axis=1)
         )
 
         # aggregate tag → neuron
@@ -166,7 +160,7 @@ class Plugin(BasePlugin):
         tfidf_nt = tfidf.fit_transform(tag_neuron.T).T
 
         neuron_labels = {
-            int(n): tag_ids[int(tfidf_nt[:, n].argmax())]
+            int(n): self.tag_ids[int(tfidf_nt[:, n].argmax())]
             for n in range(tfidf_nt.shape[1])
         }
 
@@ -185,7 +179,7 @@ class Plugin(BasePlugin):
 
         mlflow.log_params({
             "neuron_labeling": True,
-            "num_tags": len(tag_ids),
+            "num_tags": len(self.tag_ids),
             "num_neurons": item_acts.shape[1],
         })
 

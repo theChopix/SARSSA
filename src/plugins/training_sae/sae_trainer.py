@@ -16,6 +16,7 @@ from utils.torch.checkpointing import save_checkpoint, load_checkpoint
 from utils.torch.evalution import evaluate_sparse_encoder
 
 from plugins.plugin_interface import BasePlugin
+from utils.mlflow_manager import MLflowRunLoader
 
 
 logger = get_logger(__name__)
@@ -269,6 +270,55 @@ class Plugin(BasePlugin):
     Expects prior dataset_loading and training_cfm steps in the pipeline context.
     """
     
+    def _load_artifacts(self, context, device):
+        """Load dataset and base model artifacts from previous pipeline steps."""
+        # Load dataset artifacts
+        dataset_run_id = context['dataset_loading']['run_id']
+        dataset_loader = MLflowRunLoader(dataset_run_id)
+        
+        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
+        
+        self.train_csr = dataset_loader.get_npz_artifact('train_csr.npz')
+        self.valid_csr = dataset_loader.get_npz_artifact('valid_csr.npz')
+        self.test_csr = dataset_loader.get_npz_artifact('test_csr.npz')
+        
+        dataset_params = dataset_loader.get_parameters()
+        self.dataset = dataset_params['dataset_name']
+        self.num_users = int(dataset_params['num_users'])
+        self.num_items = int(dataset_params['num_items'])
+        self.min_user_interactions = int(dataset_params['min_user_interactions'])
+        self.min_item_interactions = int(dataset_params['min_item_interactions'])
+        self.val_ratio = float(dataset_params['val_ratio'])
+        self.test_ratio = float(dataset_params['test_ratio'])
+        
+        logger.info(f'Training data: {self.train_csr.shape}, Validation data: {self.valid_csr.shape}, Test data: {self.test_csr.shape}')
+        
+        # Load base ELSA model artifacts
+        base_run_id = context['training_cfm']['run_id']
+        base_loader = MLflowRunLoader(base_run_id)
+        
+        base_params = base_loader.get_parameters()
+        self.base_model_name = base_params['model']
+        self.base_factors = int(base_params['factors'])
+        self.base_min_user_interactions = int(base_params['min_user_interactions'])
+        self.base_min_item_interactions = int(base_params['min_item_interactions'])
+        self.base_users = int(base_params['users'])
+        self.base_items = int(base_params['items'])
+        
+        logger.info(f'Base model: {self.base_model_name} with {self.base_factors} factors')
+        
+        assert self.num_items == self.base_items, 'Number of items in dataset does not match base model'
+        assert self.num_users == self.base_users, 'Number of users in dataset does not match base model'
+        
+        # Load pre-trained ELSA model from artifacts
+        self.base_model = ELSA(self.base_items, self.base_factors)
+        base_optimizer = torch.optim.Adam(self.base_model.parameters())
+        load_checkpoint(self.base_model, base_optimizer, base_loader.get_artifact_path('checkpoint.ckpt'), device)
+        self.base_model.to(device)
+        self.base_model.eval()
+        
+        logger.info('Base ELSA model loaded successfully')
+    
     def run(
         self,
         context: dict,
@@ -334,62 +384,12 @@ class Plugin(BasePlugin):
         
         set_seed(seed)
 
-        # Load dataset artifacts from the dataset_loading pipeline step
-        dataset_run_id = context['dataset_loading']['run_id']
-        dataset_run = mlflow.get_run(dataset_run_id)
-        dataset_params = dataset_run.data.params
-        dataset_artifact_uri = dataset_run.info.artifact_uri
-        if 'mlruns' in dataset_artifact_uri:
-            dataset_artifact_uri = './' + dataset_artifact_uri[dataset_artifact_uri.find('mlruns'):]
+        self._load_artifacts(context, device)
 
-        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
-
-        train_csr = sp.load_npz(f'{dataset_artifact_uri}/train_csr.npz')
-        valid_csr = sp.load_npz(f'{dataset_artifact_uri}/valid_csr.npz')
-        test_csr = sp.load_npz(f'{dataset_artifact_uri}/test_csr.npz')
-
-        dataset = dataset_params['dataset_name']
-        num_users = int(dataset_params['num_users'])
-        num_items = int(dataset_params['num_items'])
-        min_user_interactions = int(dataset_params['min_user_interactions'])
-        min_item_interactions = int(dataset_params['min_item_interactions'])
-        val_ratio = float(dataset_params['val_ratio'])
-        test_ratio = float(dataset_params['test_ratio'])
-
-        logger.info(f'Training data: {train_csr.shape}, Validation data: {valid_csr.shape}, Test data: {test_csr.shape}')
-
-        # Load base model information from previous pipeline step
-        base_run_id = context['training_cfm']['run_id']
-        base_model_run = mlflow.get_run(base_run_id)
-        
-        base_params = base_model_run.data.params
-        artifact_path = base_model_run.info.artifact_uri
-        if 'mlruns' in artifact_path:
-            artifact_path = './' + artifact_path[artifact_path.find('mlruns'):]
-        
-        base_model_name = base_params['model']
-        base_factors = int(base_params['factors'])
-        base_min_user_interactions = int(base_params['min_user_interactions'])
-        base_min_item_interactions = int(base_params['min_item_interactions'])
-        base_users = int(base_params['users'])
-        base_items = int(base_params['items'])
-        expansion_ratio = embedding_dim / base_factors
+        expansion_ratio = embedding_dim / self.base_factors
         reconstruction_coef = 1 - (auxiliary_coef + contrastive_coef + l1_coef)
         
-        logger.info(f'Base model: {base_model_name} with {base_factors} factors')
-        logger.info(f'Expansion ratio: {expansion_ratio:.1f}x ({base_factors} → {embedding_dim})')
-        
-        assert num_items == base_items, 'Number of items in dataset does not match base model'
-        assert num_users == base_users, 'Number of users in dataset does not match base model'
-        
-        # Load pre-trained ELSA model from artifacts
-        base_model = ELSA(base_items, base_factors)
-        base_optimizer = torch.optim.Adam(base_model.parameters())
-        load_checkpoint(base_model, base_optimizer, f'{artifact_path}/checkpoint.ckpt', device)
-        base_model.to(device)
-        base_model.eval()
-        
-        logger.info('Base ELSA model loaded successfully')
+        logger.info(f'Expansion ratio: {expansion_ratio:.1f}x ({self.base_factors} → {embedding_dim})')
         
         # Configure SAE model
         cfg = {
@@ -407,11 +407,11 @@ class Plugin(BasePlugin):
         
         # Initialize SAE model based on variant
         if model == 'BasicSAE':
-            sae = BasicSAE(base_factors, embedding_dim, cfg).to(device)
+            sae = BasicSAE(self.base_factors, embedding_dim, cfg).to(device)
         elif model == 'TopKSAE':
-            sae = TopKSAE(base_factors, embedding_dim, cfg).to(device)
+            sae = TopKSAE(self.base_factors, embedding_dim, cfg).to(device)
         elif model == 'BatchTopKSAE':
-            sae = BatchTopKSAE(base_factors, embedding_dim, cfg).to(device)
+            sae = BatchTopKSAE(self.base_factors, embedding_dim, cfg).to(device)
         else:
             raise ValueError(f'Model {model} not supported. Check typos.')
         
@@ -423,51 +423,51 @@ class Plugin(BasePlugin):
         # Log all parameters to MLflow
         mlflow.log_params({
             'expansion_ratio': expansion_ratio,
-            'min_item_interactions': min_item_interactions,
+            'min_item_interactions': self.min_item_interactions,
             'target_ratio': target_ratio,
             'beta2': beta2,
             'beta1': beta1,
             'top_k': top_k,
             'seed': seed,
             'l1_coef': l1_coef,
-            'min_user_interactions': min_user_interactions,
+            'min_user_interactions': self.min_user_interactions,
             'epochs': epochs,
             'note': note,
             'reconstruction_loss': reconstruction_loss,
-            'val_ratio': val_ratio,
-            'dataset': dataset,
+            'val_ratio': self.val_ratio,
+            'dataset': self.dataset,
             'batch_size': batch_size,
             'lr': lr,
-            'base_factors': base_factors,
+            'base_factors': self.base_factors,
             'normalize': normalize,
-            'base_model': base_model_name,
-            'base_min_item_interactions': base_min_item_interactions,
-            'users': num_users,
+            'base_model': self.base_model_name,
+            'base_min_item_interactions': self.base_min_item_interactions,
+            'users': self.num_users,
             'topk_aux': topk_aux,
-            'items': num_items,
-            'base_users': base_users,
+            'items': self.num_items,
+            'base_users': self.base_users,
             'early_stop': early_stop,
             'evaluate_every': evaluate_every,
             'reconstruction_coef': reconstruction_coef,
             'embedding_dim': embedding_dim,
-            'base_items': base_items,
+            'base_items': self.base_items,
             'auxiliary_coef': auxiliary_coef,
             'contrastive_coef': contrastive_coef,
             'n_batches_to_dead': n_batches_to_dead,
-            'test_ratio': test_ratio,
+            'test_ratio': self.test_ratio,
             'model': model,
-            'base_min_user_interactions': base_min_user_interactions,
+            'base_min_user_interactions': self.base_min_user_interactions,
             'sample_users': sample_users,
         })
         
         # Train the model
         train(
             model=sae,
-            base_model=base_model,
+            base_model=self.base_model,
             optimizer=optimizer,
-            train_csr=train_csr,
-            valid_csr=valid_csr,
-            test_csr=test_csr,
+            train_csr=self.train_csr,
+            valid_csr=self.valid_csr,
+            test_csr=self.test_csr,
             device=device,
             epochs=epochs,
             batch_size=batch_size,

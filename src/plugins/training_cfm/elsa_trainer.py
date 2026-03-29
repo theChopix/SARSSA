@@ -14,6 +14,7 @@ from utils.torch.checkpointing import save_checkpoint, load_checkpoint
 from utils.torch.evalution import evaluate_dense_encoder
 
 from plugins.plugin_interface import BasePlugin
+from utils.mlflow_manager import MLflowRunLoader
 
 
 logger = get_logger(__name__)
@@ -187,6 +188,28 @@ class Plugin(BasePlugin):
     Expects a prior dataset_loading step in the pipeline context.
     """
     
+    def _load_artifacts(self, context):
+        """Load dataset artifacts from the dataset_loading pipeline step."""
+        dataset_run_id = context['dataset_loading']['run_id']
+        dataset_loader = MLflowRunLoader(dataset_run_id)
+        
+        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
+        
+        self.train_csr = dataset_loader.get_npz_artifact('train_csr.npz')
+        self.valid_csr = dataset_loader.get_npz_artifact('valid_csr.npz')
+        self.test_csr = dataset_loader.get_npz_artifact('test_csr.npz')
+        
+        dataset_params = dataset_loader.get_parameters()
+        self.num_users = int(dataset_params['num_users'])
+        self.num_items = int(dataset_params['num_items'])
+        self.min_user_interactions = int(dataset_params['min_user_interactions'])
+        self.min_item_interactions = int(dataset_params['min_item_interactions'])
+        self.dataset = dataset_params['dataset_name']
+        self.val_ratio = float(dataset_params['val_ratio'])
+        self.test_ratio = float(dataset_params['test_ratio'])
+        
+        logger.info(f'Training data: {self.train_csr.shape}, Validation data: {self.valid_csr.shape}, Test data: {self.test_csr.shape}')
+    
     def run(
         self,
         context: dict,
@@ -223,58 +246,36 @@ class Plugin(BasePlugin):
         logger.info(f'Using device: {device}')
         
         set_seed(seed)
-        
-        # Load dataset artifacts from the dataset_loading pipeline step
-        dataset_run_id = context['dataset_loading']['run_id']
-        dataset_run = mlflow.get_run(dataset_run_id)
-        dataset_params = dataset_run.data.params
-        artifact_uri = dataset_run.info.artifact_uri
-        if 'mlruns' in artifact_uri:
-            artifact_uri = './' + artifact_uri[artifact_uri.find('mlruns'):]
 
-        logger.info(f'Loading dataset artifacts from run {dataset_run_id}')
-
-        train_csr = sp.load_npz(f'{artifact_uri}/train_csr.npz')
-        valid_csr = sp.load_npz(f'{artifact_uri}/valid_csr.npz')
-        test_csr = sp.load_npz(f'{artifact_uri}/test_csr.npz')
-        
-        num_users = int(dataset_params['num_users'])
-        num_items = int(dataset_params['num_items'])
-        min_user_interactions = int(dataset_params['min_user_interactions'])
-        min_item_interactions = int(dataset_params['min_item_interactions'])
-        dataset = dataset_params['dataset_name']
-        val_ratio = float(dataset_params['val_ratio'])
-        test_ratio = float(dataset_params['test_ratio'])
-        
-        logger.info(f'Training data: {train_csr.shape}, Validation data: {valid_csr.shape}, Test data: {test_csr.shape}')
+        self._load_artifacts(context)
         
         # Initialize ELSA model and optimizer
-        model = ELSA(input_dim=num_items, embedding_dim=factors).to(device)
+        model = ELSA(input_dim=self.num_items, embedding_dim=factors).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
         
         train(
             model=model,
             optimizer=optimizer,
-            train_csr=train_csr,
-            valid_csr=valid_csr,
-            test_csr=test_csr,
+            train_csr=self.train_csr,
+            valid_csr=self.valid_csr,
+            test_csr=self.test_csr,
             device=device,
             epochs=epochs,
             batch_size=batch_size,
             early_stop=early_stop,
             target_ratio=target_ratio,
             seed=seed,
-            dataset=dataset,
+            dataset=self.dataset,
             factors=factors,
             lr=lr,
-            val_ratio=val_ratio,
-            test_ratio=test_ratio,
+            val_ratio=self.val_ratio,
+            test_ratio=self.test_ratio,
             beta1=beta1,
             beta2=beta2,
-            min_user_interactions=min_user_interactions,
-            min_item_interactions=min_item_interactions,
-            num_users=num_users,
-            num_items=num_items,
+            min_user_interactions=self.min_user_interactions,
+            min_item_interactions=self.min_item_interactions,
+            num_users=self.num_users,
+            num_items=self.num_items,
         )
         
         context["model"] = {"status": "trained", "model_name": "ELSA"}
