@@ -12,7 +12,7 @@ class PipelineEngine:
         mlflow.set_experiment("pipeline_experiments_01")
 
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        with mlflow.start_run(run_name=f"pipeline_run_{timestamp}") as pipeline_experiment:
+        with mlflow.start_run(run_name=f"pipeline_run_{timestamp}") as _:
 
             for step in self.steps:
                 plugin_name = step["plugin"]
@@ -22,6 +22,8 @@ class PipelineEngine:
                 with mlflow.start_run(run_name=f"{plugin_name}", nested=True) as pipeline_step:
 
                     context = plugin.run(context, **params)
-                    context['last_plugin_run_id'] = pipeline_step.info.run_id
+
+                    plugin_category = plugin_name.split(".")[0]
+                    context[plugin_category] = {'run_id': pipeline_step.info.run_id}
 
         return context
