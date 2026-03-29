@@ -44,7 +44,7 @@ def compute_sae_item_activations(
 
 
 class Plugin(BasePlugin):
-    def _load_artifacts(self, context, device, sae_model):
+    def _load_artifacts(self, context, device):
         """Load dataset, ELSA, and SAE artifacts from previous pipeline steps."""
         # Load dataset artifacts
         dataset_run_id = context['dataset_loading']['run_id']
@@ -84,6 +84,9 @@ class Plugin(BasePlugin):
         sae_run_id = context["training_sae"]['run_id']
         sae_loader = MLflowRunLoader(sae_run_id)
         sae_params = sae_loader.get_parameters()
+
+        sae_model = sae_params["model"]
+        logger.info(f"SAE model type from training_sae: {sae_model}")
 
         cfg = {
             "reconstruction_loss": sae_params["reconstruction_loss"],
@@ -131,11 +134,10 @@ class Plugin(BasePlugin):
 
             batch_size: int = 1024,
             seed: int = 42,
-            sae_model: str = "TopKSAE",   # BasicSAE / TopKSAE / BatchTopKSAE
     ):
         set_seed(seed)
 
-        self._load_artifacts(context, device, sae_model)
+        self._load_artifacts(context, device)
 
         # compute SAE activations
         item_acts = compute_sae_item_activations(
