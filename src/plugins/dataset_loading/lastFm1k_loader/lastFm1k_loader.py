@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sp
 import mlflow
 
-from plugins.dataset_loading.dataset_loader import DatasetLoader
+from plugins.dataset_loading._dataset_loader import DatasetLoader
 from plugins.plugin_interface import BasePlugin
 from utils.plugin_logger import get_logger
 
