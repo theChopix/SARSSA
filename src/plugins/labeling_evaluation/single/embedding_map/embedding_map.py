@@ -9,11 +9,25 @@ import umap
 from plugins.plugin_interface import BasePlugin
 from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
 from utils.plugin_logger import get_logger
+from utils.mlflow_manager import MLflowRunLoader
 
 logger = get_logger(__name__)
 
 
 class Plugin(BasePlugin):
+    def _load_artifacts(self, context):
+        """Load neuron labeling artifacts from the neuron_labeling pipeline step."""
+        neuron_labeling_run_id = context['neuron_labeling']['run_id']
+        neuron_labeling_loader = MLflowRunLoader(neuron_labeling_run_id)
+        
+        logger.info(f'Loading neuron labeling artifacts from run {neuron_labeling_run_id}')
+        
+        self.neuron_labels = neuron_labeling_loader.get_json_artifact('neuron_labels.json')
+        self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
+        self.label_texts = [str(self.neuron_labels[nid]) for nid in self.neuron_ids]
+        
+        logger.info(f'Loaded {len(self.neuron_ids)} neuron labels')
+    
     def run(
         self,
         context: dict,
@@ -24,32 +38,13 @@ class Plugin(BasePlugin):
         umap_random_state: int = 42,
         point_size: int = 8,
     ) -> dict:
+        self._load_artifacts(context)
 
-        
-        # 1. Resolve neuron labeling run and its artifact path                
-        labeling_run_id = context["last_plugin_run_id"]
-        logger.info(f"Loading neuron labeling run: {labeling_run_id}")
+        logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
 
-        labeling_run = mlflow.get_run(labeling_run_id)
-        artifact_uri = labeling_run.info.artifact_uri
-        artifact_dir = _uri_to_path(artifact_uri)
-
-        # 2. Load neuron labelss
-        labels_path = f"{artifact_dir}/neuron_labeling/neuron_labels.json"
-        logger.info(f"Loading neuron labels from {labels_path}")
-
-        with open(labels_path, "r") as f:
-            neuron_labels: dict = json.load(f)
-
-        neuron_ids = sorted(neuron_labels.keys(), key=lambda x: int(x))
-        label_texts = [str(neuron_labels[nid]) for nid in neuron_ids]
-
-        logger.info(f"Embedding {len(label_texts)} neuron labels with {embedding_model}")
-
-        # 3. Embed labels
         embedder = OpenAIEmbeddingLLM(model=embedding_model)
         embeddings = np.array(
-            [embedder.generate_embedding(t) for t in label_texts]
+            [embedder.generate_embedding(t) for t in self.label_texts]
         )
 
         logger.info(
@@ -58,7 +53,6 @@ class Plugin(BasePlugin):
             f"metric={umap_metric})"
         )
 
-        # 4. UMAP dimensionality reduction
         reducer = umap.UMAP(
             n_components=2,
             n_neighbors=umap_n_neighbors,
@@ -67,10 +61,10 @@ class Plugin(BasePlugin):
             random_state=umap_random_state,
         )
         coords = reducer.fit_transform(embeddings)
-        # 5. Build interactive Plotly scatter                                 #
+        
         hover_texts = [
-            f"<b>Neuron {nid}</b><br>{neuron_labels[nid]}"
-            for nid in neuron_ids
+            f"<b>Neuron {nid}</b><br>{self.neuron_labels[nid]}"
+            for nid in self.neuron_ids
         ]
 
         fig = go.Figure(
@@ -81,7 +75,7 @@ class Plugin(BasePlugin):
                 marker=dict(size=point_size, opacity=0.8, colorscale="Viridis"),
                 text=hover_texts,
                 hovertemplate="%{text}<extra></extra>",
-                customdata=neuron_ids,
+                customdata=self.neuron_ids,
             )
         )
 
@@ -100,11 +94,11 @@ class Plugin(BasePlugin):
         with tempfile.TemporaryDirectory() as tmp:
             html_path = f"{tmp}/embedding_map.html"
             fig.write_html(html_path)
-            mlflow.log_artifact(html_path, artifact_path="labeling_evaluation")
+            mlflow.log_artifact(html_path)
 
             coords_path = f"{tmp}/umap_coords.npy"
             np.save(coords_path, coords)
-            mlflow.log_artifact(coords_path, artifact_path="labeling_evaluation")
+            mlflow.log_artifact(coords_path)
 
         mlflow.log_params(
             {
@@ -113,7 +107,7 @@ class Plugin(BasePlugin):
                 "umap_min_dist": umap_min_dist,
                 "umap_metric": umap_metric,
                 "umap_random_state": umap_random_state,
-                "num_neurons": len(neuron_ids),
+                "num_neurons": len(self.neuron_ids),
             }
         )
 
@@ -124,18 +118,7 @@ class Plugin(BasePlugin):
         }
 
         logger.info(
-            "Embedding map saved to mlflow artifacts as interactive HTML under 'labeling_evaluation/'"
+            "Embedding map saved to mlflow artifacts as interactive HTML"
         )
 
         return context
-
-
-
-# helpers                                                                      #
-
-def _uri_to_path(uri: str) -> str:
-    if uri.startswith("file://"):
-        return uri[len("file://"):]
-    if uri.startswith("mlruns"):
-        return "./" + uri
-    return uri
