@@ -182,10 +182,3 @@ class Plugin(BasePlugin):
             "num_tags": len(self.tag_ids),
             "num_neurons": item_acts.shape[1],
         })
-
-        # context update
-        context["neuron_labeling"] = {
-            "status": "completed",
-        }
-
-        return context

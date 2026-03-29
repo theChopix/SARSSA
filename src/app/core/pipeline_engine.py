@@ -21,7 +21,7 @@ class PipelineEngine:
 
                 with mlflow.start_run(run_name=f"{plugin_name}", nested=True) as pipeline_step:
 
-                    context = plugin.run(context, **params)
+                    plugin.run(context, **params)
 
                     plugin_category = plugin_name.split(".")[0]
                     context[plugin_category] = {'run_id': pipeline_step.info.run_id}

@@ -102,13 +102,6 @@ class Plugin(BasePlugin):
             }
         )
 
-        context["labeling_evaluation"] = {
-            "status": "completed",
-            "artifact_path": "labeling_evaluation",
-        }
-
         logger.info(
             "Dendrogram saved to mlflow artifacts as SVG and searchable PDF'"
         )
-
-        return context

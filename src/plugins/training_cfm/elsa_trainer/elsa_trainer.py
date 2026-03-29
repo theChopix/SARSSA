@@ -277,6 +277,3 @@ class Plugin(BasePlugin):
             num_users=self.num_users,
             num_items=self.num_items,
         )
-        
-        context["model"] = {"status": "trained", "model_name": "ELSA"}
-        return context

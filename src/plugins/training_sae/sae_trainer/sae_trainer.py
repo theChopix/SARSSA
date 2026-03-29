@@ -478,13 +478,3 @@ class Plugin(BasePlugin):
             target_ratio=target_ratio,
             seed=seed,
         )
-
-        # Update context for next pipeline step
-        context["training_sae"] = {
-            "status": "trained",
-            "model_name": model,
-            "run_id": mlflow.active_run().info.run_id,
-            "embedding_dim": embedding_dim,
-            "top_k": top_k if model in ['TopKSAE', 'BatchTopKSAE'] else None,
-        }
-        return context

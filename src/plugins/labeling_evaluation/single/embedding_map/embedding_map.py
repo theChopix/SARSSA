@@ -111,14 +111,6 @@ class Plugin(BasePlugin):
             }
         )
 
-        # 7. Update context
-        context["labeling_evaluation"] = {
-            "status": "completed",
-            "artifact_path": "labeling_evaluation",
-        }
-
         logger.info(
             "Embedding map saved to mlflow artifacts as interactive HTML"
         )
-
-        return context

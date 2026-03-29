@@ -167,5 +167,3 @@ class Plugin(BasePlugin):
         logger.info(f"Users: {len(dataset_loader.users)}, Items: {len(dataset_loader.items)}")
         logger.info(f"Train: {len(dataset_loader.train_users)}, Valid: {len(dataset_loader.valid_users)}, Test: {len(dataset_loader.test_users)}")
         logger.info("="*50)
-        
-        return context
