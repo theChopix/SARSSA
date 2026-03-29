@@ -1,10 +1,97 @@
+# =========================
+# Environment & Secrets
+# =========================
 .env
-.venv
+.env.*
+.venv/
+venv/
+ENV/
+env/
+
+# =========================
+# Python Cache & Builds
+# =========================
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+
+# =========================
+# Jupyter Notebook
+# =========================
+.ipynb_checkpoints
+
+# =========================
+# Logs & Runtime Files
+# =========================
+*.log
+*.out
+*.err
+
+# =========================
+# Data & Experiment Tracking
+# =========================
 data/
 mlruns/
+wandb/
+outputs/
+checkpoints/
 
+# =========================
+# IDE & Editor Files
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Windsurf (requested)
+.windsurf/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Project-specific Files
+# =========================
 curl.txt
 project_specification.pdf
-.windsurf/
+audit*.md
+
+# =========================
+# Testing & Coverage
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Type Checkers
+# =========================
+.mypy_cache/
+.pyre/
+.pytype/
+
+# =========================
+# Documentation
+# =========================
+docs/_build/
+
+# =========================
+# Misc
+# =========================
+*.sqlite3
+*.db
