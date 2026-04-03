@@ -65,10 +65,10 @@ def _recall_at_k_batch(batch_topk_indices: torch.Tensor, batch_target: torch.Ten
 
 
 def evaluate_recall_at_k_from_elsa(model: BaseModel, inputs: DataLoader, targets: DataLoader, k: int) -> np.ndarray:
-    """Evaluate Recall@K for an ELSA model on a dataset.
+    """Evaluate Recall@K for a base model on a dataset.
     
     Args:
-        model: Trained ELSA model.
+        model: Trained base model.
         inputs: DataLoader with input interactions.
         targets: DataLoader with target interactions.
         k: Number of top recommendations to consider.
@@ -114,10 +114,10 @@ def ndcg_at_k(topk_batch: torch.Tensor, target_batch: torch.Tensor, k: int) -> t
 
 
 def evaluate_ndcg_at_k_from_elsa(model: BaseModel, inputs: DataLoader, targets: DataLoader, k: int) -> np.ndarray:
-    """Evaluate NDCG@K for an ELSA model on a dataset.
+    """Evaluate NDCG@K for a base model on a dataset.
     
     Args:
-        model: Trained ELSA model.
+        model: Trained base model.
         inputs: DataLoader with input interactions.
         targets: DataLoader with target interactions.
         k: Number of top recommendations to consider.
@@ -133,7 +133,7 @@ def evaluate_ndcg_at_k_from_elsa(model: BaseModel, inputs: DataLoader, targets: 
 
 
 def evaluate_dense_encoder(model: BaseModel, split_csr: sp.csr_matrix, target_ratio: float, batch_size: int, device, seed: int = 42) -> dict[str, float]:
-    """Evaluate an ELSA model using Recall@20 and NDCG@20 metrics.
+    """Evaluate a dense encoder model using Recall@20 and NDCG@20 metrics.
     
     This is the main evaluation function that:
     1. Splits interactions into inputs and targets
@@ -141,7 +141,7 @@ def evaluate_dense_encoder(model: BaseModel, split_csr: sp.csr_matrix, target_ra
     3. Returns average scores across all users
     
     Args:
-        model: Trained ELSA model to evaluate.
+        model: Trained base model to evaluate.
         split_csr: Sparse CSR matrix of user-item interactions.
         target_ratio: Ratio of interactions to use as targets.
         batch_size: Batch size for evaluation.
@@ -216,10 +216,10 @@ def evaluate_sparse_encoder(base_model: BaseModel, sae_model: SAE, split_csr: sp
     - Reconstruction quality (cosine similarity)
     - Sparsity metrics (L0, dead neurons)
     - Recommendation performance (Recall@20, NDCG@20)
-    - Performance degradation compared to base ELSA model
+    - Performance degradation compared to base model
     
     Args:
-        base_model: Pre-trained ELSA model (frozen).
+        base_model: Pre-trained base model (frozen).
         sae_model: Trained SAE model to evaluate.
         split_csr: Sparse CSR matrix of user-item interactions for this split.
         target_ratio: Fraction of interactions to use as targets (e.g., 0.2).
@@ -233,10 +233,10 @@ def evaluate_sparse_encoder(base_model: BaseModel, sae_model: SAE, split_csr: sp
             - L0: Average number of non-zero features in sparse embeddings
             - DeadNeurons: Fraction of neurons that never activate
             - R20: Recall@20 with SAE
-            - R20_Degradation: Difference in Recall@20 (SAE - ELSA)
-            - NDCG20_base: NDCG@20 with base ELSA model
+            - R20_Degradation: Difference in Recall@20 (SAE - base model)
+            - NDCG20_base: NDCG@20 with base model
             - NDCG20: NDCG@20 with SAE
-            - NDCG20_Degradation: Difference in NDCG@20 (SAE - ELSA)
+            - NDCG20_Degradation: Difference in NDCG@20 (SAE - base model)
     """
     inputs, targets = split_input_target_interactions(split_csr, target_ratio, seed)
     inputs = DataLoader(inputs, batch_size, device, shuffle=False)
