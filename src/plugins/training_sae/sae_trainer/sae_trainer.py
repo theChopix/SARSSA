@@ -9,10 +9,10 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from utils.datasets.data_loader import DataLoader
-from utils.torch.models.interfaces import BaseModel
-from utils.torch.models.sae import SAE
-from utils.torch.model_registry import get_sae_model_class
-from utils.torch.model_loader import load_base_model
+from utils.torch.models.base_model import BaseModel
+from utils.torch.models.sae_model import SAE
+from utils.torch.models.model_registry import get_sae_model_class
+from utils.torch.models.model_loader import load_base_model
 from utils.plugin_logger import get_logger
 from utils.torch.runtime import set_device, set_seed
 from utils.torch.evalution import evaluate_sparse_encoder

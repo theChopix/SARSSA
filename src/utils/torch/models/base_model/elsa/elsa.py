@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from utils.torch.models.interfaces import BaseModel
-from utils.torch.model_registry import register_base_model
+from utils.torch.models.base_model import BaseModel
+from utils.torch.models.model_registry import register_base_model
 
 
 def l2_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:

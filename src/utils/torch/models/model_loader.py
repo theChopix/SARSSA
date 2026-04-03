@@ -2,11 +2,13 @@ import json
 import torch
 from pathlib import Path
 
-from utils.torch.model_registry import get_base_model_class, get_sae_model_class
+from utils.torch.models.model_registry import get_base_model_class, get_sae_model_class
 
 # Import model modules to trigger @register_base_model / @register_sae_model decorators
-import utils.torch.models.elsa  # noqa: F401
-import utils.torch.models.sae  # noqa: F401
+import utils.torch.models.base_model.elsa  # noqa: F401
+import utils.torch.models.sae_model.basic_sae  # noqa: F401
+import utils.torch.models.sae_model.topk_sae  # noqa: F401
+import utils.torch.models.sae_model.batch_topk_sae  # noqa: F401
 
 
 def load_base_model(artifact_path: str, device: str = "cpu"):

@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from utils.torch.models.interfaces import BaseModel
-from utils.torch.models.sae import SAE
+from utils.torch.models.base_model import BaseModel
+from utils.torch.models.sae_model import SAE
 
 
-class SAEWrapper(nn.Module):
-    """Wraps a base model and a SAE via composition.
+class FusedModel(nn.Module):
+    """Fuses a base model and a SAE via composition.
     
     Uses the base model's encode/decode interface rather than
     accessing internal attributes directly.

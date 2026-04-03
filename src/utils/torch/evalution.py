@@ -3,9 +3,9 @@ import numpy as np
 import scipy.sparse as sp
 
 from utils.datasets.data_loader import DataLoader
-from utils.torch.models.interfaces import BaseModel
-from utils.torch.models.sae import SAE
-from utils.torch.models.elsa_with_sae import SAEWrapper
+from utils.torch.models.base_model import BaseModel
+from utils.torch.models.sae_model import SAE
+from utils.torch.models.fused_model import FusedModel
 
 
 def split_input_target_interactions(user_item_csr: sp.csr_matrix, target_ratio: float, seed: int = 42) -> tuple[sp.csr_matrix, sp.csr_matrix]:
@@ -243,7 +243,7 @@ def evaluate_sparse_encoder(base_model: BaseModel, sae_model: SAE, split_csr: sp
     targets = DataLoader(targets, batch_size, device, shuffle=False)
     full = DataLoader(split_csr, batch_size, device, shuffle=False)
 
-    fused_model = SAEWrapper(base_model, sae_model)
+    fused_model = FusedModel(base_model, sae_model)
     
     base_model.eval()
     sae_model.eval()

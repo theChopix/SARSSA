@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from utils.plugin_logger import get_logger
 from plugins.plugin_interface import BasePlugin
 from utils.torch.runtime import set_device, set_seed
-from utils.torch.model_loader import load_base_model, load_sae_model
+from utils.torch.models.model_loader import load_base_model, load_sae_model
 from utils.mlflow_manager import MLflowRunLoader
 
 logger = get_logger(__name__)

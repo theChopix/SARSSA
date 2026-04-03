@@ -8,7 +8,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from utils.datasets.data_loader import DataLoader
-from utils.torch.models.elsa import ELSA
+from utils.torch.models.base_model.elsa import ELSA
 from utils.plugin_logger import get_logger
 from utils.torch.runtime import set_device, set_seed
 from utils.torch.evalution import evaluate_dense_encoder
