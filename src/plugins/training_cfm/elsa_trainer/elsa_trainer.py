@@ -1,3 +1,4 @@
+import json
 import torch
 import mlflow
 import numpy as np
@@ -10,7 +11,6 @@ from utils.datasets.data_loader import DataLoader
 from utils.torch.models.elsa import ELSA
 from utils.plugin_logger import get_logger
 from utils.torch.runtime import set_device, set_seed
-from utils.torch.checkpointing import save_checkpoint, load_checkpoint
 from utils.torch.evalution import evaluate_dense_encoder
 
 from plugins.plugin_interface import BasePlugin
@@ -169,13 +169,23 @@ def train(
         mlflow.log_metric(f'{key}/test', val)
     logger.info(f'Test metrics - R@20: {test_metrics["R20"]:.4f} - NDCG20: {test_metrics["NDCG20"]:.4f}')
     
-    # Save model checkpoint and log artifacts to MLflow
-    temp_path = 'checkpoint.ckpt'
-    save_checkpoint(model, optimizer, temp_path)
-    mlflow.log_artifact(temp_path)
-    mlflow.log_artifact('utils/torch/models/elsa.py')
-    os.remove(temp_path)
-    logger.info('Model successfully saved')
+    # Export model artifact (config.json + model.pt)
+    artifact_dir = 'model_artifact'
+    os.makedirs(artifact_dir, exist_ok=True)
+
+    config = model.get_config()
+    with open(os.path.join(artifact_dir, 'config.json'), 'w') as f:
+        json.dump(config, f, indent=2)
+
+    torch.save({'state_dict': model.state_dict()}, os.path.join(artifact_dir, 'model.pt'))
+
+    mlflow.log_artifacts(artifact_dir)
+
+    # Cleanup
+    for fname in os.listdir(artifact_dir):
+        os.remove(os.path.join(artifact_dir, fname))
+    os.rmdir(artifact_dir)
+    logger.info('Model artifact successfully saved')
 
 
 class Plugin(BasePlugin):

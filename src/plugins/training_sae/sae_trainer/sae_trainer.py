@@ -1,3 +1,4 @@
+import json
 import os
 import datetime
 import mlflow
@@ -8,11 +9,12 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from utils.datasets.data_loader import DataLoader
-from utils.torch.models.elsa import ELSA
-from utils.torch.models.sae import SAE, BasicSAE, TopKSAE, BatchTopKSAE
+from utils.torch.models.interfaces import BaseModel
+from utils.torch.models.sae import SAE
+from utils.torch.model_registry import get_sae_model_class
+from utils.torch.model_loader import load_base_model
 from utils.plugin_logger import get_logger
 from utils.torch.runtime import set_device, set_seed
-from utils.torch.checkpointing import save_checkpoint, load_checkpoint
 from utils.torch.evalution import evaluate_sparse_encoder
 
 from plugins.plugin_interface import BasePlugin
@@ -25,7 +27,7 @@ logger = get_logger(__name__)
 
 def train(
     model: SAE,
-    base_model: ELSA,
+    base_model: BaseModel,
     optimizer,
     train_csr,
     valid_csr,
@@ -251,13 +253,23 @@ def train(
         f'NDCG20 Degradation: {test_metrics["NDCG20_Degradation"]:.4f}'
     )
     
-    # Save model checkpoint and log artifacts to MLflow
-    temp_path = './checkpoint.ckpt'
-    save_checkpoint(model, optimizer, temp_path)
-    mlflow.log_artifact(temp_path)
-    mlflow.log_artifact('utils/torch/models/sae.py')
-    os.remove(temp_path)
-    logger.info('Model successfully saved')
+    # Export model artifact (config.json + model.pt)
+    artifact_dir = 'model_artifact'
+    os.makedirs(artifact_dir, exist_ok=True)
+
+    config = model.get_config()
+    with open(os.path.join(artifact_dir, 'config.json'), 'w') as f:
+        json.dump(config, f, indent=2)
+
+    torch.save({'state_dict': model.state_dict()}, os.path.join(artifact_dir, 'model.pt'))
+
+    mlflow.log_artifacts(artifact_dir)
+
+    # Cleanup
+    for fname in os.listdir(artifact_dir):
+        os.remove(os.path.join(artifact_dir, fname))
+    os.rmdir(artifact_dir)
+    logger.info('Model artifact successfully saved')
 
 
 class Plugin(BasePlugin):
@@ -293,7 +305,7 @@ class Plugin(BasePlugin):
         
         logger.info(f'Training data: {self.train_csr.shape}, Validation data: {self.valid_csr.shape}, Test data: {self.test_csr.shape}')
         
-        # Load base ELSA model artifacts
+        # Load base model via registry-based loader
         base_run_id = context['training_cfm']['run_id']
         base_loader = MLflowRunLoader(base_run_id)
         
@@ -310,14 +322,10 @@ class Plugin(BasePlugin):
         assert self.num_items == self.base_items, 'Number of items in dataset does not match base model'
         assert self.num_users == self.base_users, 'Number of users in dataset does not match base model'
         
-        # Load pre-trained ELSA model from artifacts
-        self.base_model = ELSA(self.base_items, self.base_factors)
-        base_optimizer = torch.optim.Adam(self.base_model.parameters())
-        load_checkpoint(self.base_model, base_optimizer, base_loader.get_artifact_path('checkpoint.ckpt'), device)
-        self.base_model.to(device)
-        self.base_model.eval()
+        # Load pre-trained base model from artifact (config.json + model.pt)
+        self.base_model = load_base_model(base_loader.get_artifact_path(), device)
         
-        logger.info('Base ELSA model loaded successfully')
+        logger.info('Base model loaded successfully')
     
     def run(
         self,
@@ -391,29 +399,22 @@ class Plugin(BasePlugin):
         
         logger.info(f'Expansion ratio: {expansion_ratio:.1f}x ({self.base_factors} → {embedding_dim})')
         
-        # Configure SAE model
-        cfg = {
-            'reconstruction_loss': reconstruction_loss,
-            "topk_aux": topk_aux,
-            "n_batches_to_dead": n_batches_to_dead,
-            "l1_coef": l1_coef,
-            "k": top_k,
-            "device": device,
-            "normalize": normalize,
-            "auxiliary_coef": auxiliary_coef,
-            "contrastive_coef": contrastive_coef,
-            "reconstruction_coef": reconstruction_coef,
-        }
-        
-        # Initialize SAE model based on variant
-        if model == 'BasicSAE':
-            sae = BasicSAE(self.base_factors, embedding_dim, cfg).to(device)
-        elif model == 'TopKSAE':
-            sae = TopKSAE(self.base_factors, embedding_dim, cfg).to(device)
-        elif model == 'BatchTopKSAE':
-            sae = BatchTopKSAE(self.base_factors, embedding_dim, cfg).to(device)
-        else:
-            raise ValueError(f'Model {model} not supported. Check typos.')
+        # Initialize SAE model via registry
+        sae_cls = get_sae_model_class(model)
+        sae = sae_cls(
+            input_dim=self.base_factors,
+            embedding_dim=embedding_dim,
+            reconstruction_loss=reconstruction_loss,
+            topk_aux=topk_aux,
+            n_batches_to_dead=n_batches_to_dead,
+            l1_coef=l1_coef,
+            k=top_k,
+            device=device,
+            normalize=normalize,
+            auxiliary_coef=auxiliary_coef,
+            contrastive_coef=contrastive_coef,
+            reconstruction_coef=reconstruction_coef,
+        ).to(device)
         
         logger.info(f'Initialized {model} with {embedding_dim} dimensions')
 

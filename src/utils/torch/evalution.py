@@ -3,9 +3,9 @@ import numpy as np
 import scipy.sparse as sp
 
 from utils.datasets.data_loader import DataLoader
-from utils.torch.models.elsa import ELSA
+from utils.torch.models.interfaces import BaseModel
 from utils.torch.models.sae import SAE
-from utils.torch.models.elsa_with_sae import ELSAWithSAE
+from utils.torch.models.elsa_with_sae import SAEWrapper
 
 
 def split_input_target_interactions(user_item_csr: sp.csr_matrix, target_ratio: float, seed: int = 42) -> tuple[sp.csr_matrix, sp.csr_matrix]:
@@ -64,7 +64,7 @@ def _recall_at_k_batch(batch_topk_indices: torch.Tensor, batch_target: torch.Ten
     return r
 
 
-def evaluate_recall_at_k_from_elsa(model: ELSA, inputs: DataLoader, targets: DataLoader, k: int) -> np.ndarray:
+def evaluate_recall_at_k_from_elsa(model: BaseModel, inputs: DataLoader, targets: DataLoader, k: int) -> np.ndarray:
     """Evaluate Recall@K for an ELSA model on a dataset.
     
     Args:
@@ -113,7 +113,7 @@ def ndcg_at_k(topk_batch: torch.Tensor, target_batch: torch.Tensor, k: int) -> t
     return dcg / idcg, dcg, idcg
 
 
-def evaluate_ndcg_at_k_from_elsa(model: ELSA, inputs: DataLoader, targets: DataLoader, k: int) -> np.ndarray:
+def evaluate_ndcg_at_k_from_elsa(model: BaseModel, inputs: DataLoader, targets: DataLoader, k: int) -> np.ndarray:
     """Evaluate NDCG@K for an ELSA model on a dataset.
     
     Args:
@@ -132,7 +132,7 @@ def evaluate_ndcg_at_k_from_elsa(model: ELSA, inputs: DataLoader, targets: DataL
     return torch.cat(ndcg).detach().cpu().numpy()
 
 
-def evaluate_dense_encoder(model: ELSA, split_csr: sp.csr_matrix, target_ratio: float, batch_size: int, device, seed: int = 42) -> dict[str, float]:
+def evaluate_dense_encoder(model: BaseModel, split_csr: sp.csr_matrix, target_ratio: float, batch_size: int, device, seed: int = 42) -> dict[str, float]:
     """Evaluate an ELSA model using Recall@20 and NDCG@20 metrics.
     
     This is the main evaluation function that:
@@ -208,7 +208,7 @@ def evaluate_dead_neurons(sparse_embeddings: torch.Tensor) -> int:
     return int((sparse_embeddings.sum(0) == 0).sum().detach().cpu().numpy())
 
 
-def evaluate_sparse_encoder(base_model: ELSA, sae_model: SAE, split_csr: sp.csr_matrix, 
+def evaluate_sparse_encoder(base_model: BaseModel, sae_model: SAE, split_csr: sp.csr_matrix, 
                            target_ratio: float, batch_size: int, device, seed: int = 42) -> dict[str, float]:
     """Evaluate a sparse autoencoder model on recommendation quality and sparsity.
     
@@ -243,7 +243,7 @@ def evaluate_sparse_encoder(base_model: ELSA, sae_model: SAE, split_csr: sp.csr_
     targets = DataLoader(targets, batch_size, device, shuffle=False)
     full = DataLoader(split_csr, batch_size, device, shuffle=False)
 
-    fused_model = ELSAWithSAE(base_model, sae_model)
+    fused_model = SAEWrapper(base_model, sae_model)
     
     base_model.eval()
     sae_model.eval()
@@ -290,7 +290,7 @@ def evaluate_sparse_encoder(base_model: ELSA, sae_model: SAE, split_csr: sp.csr_
     return {
         'CosineSim': float(np.mean(cosines)),
         'L0': float(np.mean(l0s)),
-        'DeadNeurons': dead_neurons / sae_model.encoder_w.shape[1],
+        'DeadNeurons': dead_neurons / sae_model.embedding_dim,
         'R20': float(recalls_with_sae),
         'R20_Degradation': float(recall_degradations),
         'NDCG20_base': float(ndcgs),

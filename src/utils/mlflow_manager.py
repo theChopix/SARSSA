@@ -64,20 +64,23 @@ class MLflowRunLoader:
             self._artifact_uri = base_uri
         return self._artifact_uri
     
-    def get_artifact_path(self, filename: str, artifact_path: Optional[str] = None) -> str:
+    def get_artifact_path(self, filename: Optional[str] = None, artifact_path: Optional[str] = None) -> str:
         """
-        Construct the full path to an artifact file.
+        Construct the full path to an artifact file or directory.
         
         Args:
-            filename: Name of the artifact file
+            filename: Name of the artifact file. If None, returns the base artifact directory.
             artifact_path: Optional subdirectory within artifacts (e.g., "dataset", "model")
             
         Returns:
-            Full path to the artifact file
+            Full path to the artifact file or directory
         """
+        base = self.artifact_uri
         if artifact_path:
-            return f"{self.artifact_uri}/{artifact_path}/{filename}"
-        return f"{self.artifact_uri}/{filename}"
+            base = f"{base}/{artifact_path}"
+        if filename:
+            return f"{base}/{filename}"
+        return base
     
     def get_parameters(self) -> Dict[str, str]:
         """

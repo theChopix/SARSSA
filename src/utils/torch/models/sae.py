@@ -5,21 +5,23 @@ import torch.nn.functional as F
 import torch.optim as optim
 from typing import Optional
 
+from utils.torch.model_registry import register_sae_model
+
 def l2_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return x / x.norm(dim=dim, keepdim=True)
 
 
 class SAE(nn.Module):
-    def __init__(self, input_dim: int, embedding_dim: int, cfg: dict):
+    def __init__(self, input_dim: int, embedding_dim: int, **kwargs):
         super().__init__()
         self.input_dim = input_dim
         self.embedding_dim = embedding_dim
-        self.cfg = cfg
-        self.reconstruction_loss = cfg.get("reconstruction_loss", "Cosine")
-        self.device = cfg.get("device", "cpu")
-        self.n_batches_to_dead = cfg.get("n_batches_to_dead", 5)
-        self.topk_aux = cfg.get("topk_aux", 512)
-        self.normalize = cfg.get("normalize", False)
+        self.cfg = kwargs
+        self.reconstruction_loss = kwargs.get("reconstruction_loss", "Cosine")
+        self.device = kwargs.get("device", "cpu")
+        self.n_batches_to_dead = kwargs.get("n_batches_to_dead", 5)
+        self.topk_aux = kwargs.get("topk_aux", 512)
+        self.normalize = kwargs.get("normalize", False)
         
         self.encoder_w = nn.Parameter(nn.init.kaiming_uniform_(torch.empty([input_dim, embedding_dim])))
         self.encoder_b = nn.Parameter(torch.zeros(embedding_dim))
@@ -135,13 +137,18 @@ class SAE(nn.Module):
         self.inactive_neurons += (e.sum(0) == 0).float()
         self.inactive_neurons[e.sum(0) > 0] = 0
 
+    def get_config(self) -> dict:
+        """Return config needed to reconstruct this model. Subclasses should override."""
+        raise NotImplementedError
 
+
+@register_sae_model("BasicSAE")
 class BasicSAE(SAE):
-    def __init__(self, input_dim: int, embedding_dim: int, cfg: dict):
-        super().__init__(input_dim, embedding_dim, cfg)
-        self.reconstruction_coef = cfg.get("reconstruction_coef", 1.0)
-        self.auxiliary_coef = cfg.get("auxiliary_coef", 0)
-        self.contrastive_coef = cfg.get("contrastive_coef", 0)
+    def __init__(self, input_dim: int, embedding_dim: int, **kwargs):
+        super().__init__(input_dim, embedding_dim, **kwargs)
+        self.reconstruction_coef = self.cfg.get("reconstruction_coef", 1.0)
+        self.auxiliary_coef = self.cfg.get("auxiliary_coef", 0)
+        self.contrastive_coef = self.cfg.get("contrastive_coef", 0)
 
     def post_process_embedding(self, e: torch.Tensor) -> torch.Tensor:
         return e
@@ -151,16 +158,34 @@ class BasicSAE(SAE):
         auxiliary_loss = partial_losses["Auxiliary"]
         return reconstruction_loss + self.cfg["auxiliary_coef"] * auxiliary_loss
 
+    def get_config(self) -> dict:
+        return {
+            "model_type": "BasicSAE",
+            "architecture": {
+                "input_dim": self.input_dim,
+                "embedding_dim": self.embedding_dim,
+                "reconstruction_loss": self.reconstruction_loss,
+                "normalize": self.normalize,
+                "auxiliary_coef": self.cfg.get("auxiliary_coef", 0),
+                "contrastive_coef": self.cfg.get("contrastive_coef", 0),
+                "l1_coef": self.cfg.get("l1_coef", 0),
+                "reconstruction_coef": self.reconstruction_coef,
+                "n_batches_to_dead": self.n_batches_to_dead,
+                "topk_aux": self.topk_aux,
+            }
+        }
 
+
+@register_sae_model("TopKSAE")
 class TopKSAE(SAE):
-    def __init__(self, input_dim: int, embedding_dim: int, cfg: dict):
-        super().__init__(input_dim, embedding_dim, cfg)
-        self.k = cfg["k"]
-        self.reconstruction_coef = cfg.get("reconstruction_coef", 1.0)
-        self.auxiliary_coef = cfg.get("auxiliary_coef", 0)
-        self.contrastive_coef = cfg.get("contrastive_coef", 0)
-        self.l1_coef = cfg.get("l1_coef", 0)
-        self.topk_inference = cfg.get("topk_inference", True)
+    def __init__(self, input_dim: int, embedding_dim: int, **kwargs):
+        super().__init__(input_dim, embedding_dim, **kwargs)
+        self.k = self.cfg["k"]
+        self.reconstruction_coef = self.cfg.get("reconstruction_coef", 1.0)
+        self.auxiliary_coef = self.cfg.get("auxiliary_coef", 0)
+        self.contrastive_coef = self.cfg.get("contrastive_coef", 0)
+        self.l1_coef = self.cfg.get("l1_coef", 0)
+        self.topk_inference = self.cfg.get("topk_inference", True)
 
     def post_process_embedding(self, e: torch.Tensor) -> torch.Tensor:
         if self.training or self.topk_inference:
@@ -177,18 +202,38 @@ class TopKSAE(SAE):
         contrastive_loss = con_coef * partial_losses["Contrastive"]
         
         return reconstruction_loss + auxiliary_loss + contrastive_loss
-    
+
+    def get_config(self) -> dict:
+        return {
+            "model_type": "TopKSAE",
+            "architecture": {
+                "input_dim": self.input_dim,
+                "embedding_dim": self.embedding_dim,
+                "k": self.k,
+                "reconstruction_loss": self.reconstruction_loss,
+                "normalize": self.normalize,
+                "auxiliary_coef": self.cfg.get("auxiliary_coef", 0),
+                "contrastive_coef": self.cfg.get("contrastive_coef", 0),
+                "l1_coef": self.l1_coef,
+                "reconstruction_coef": self.reconstruction_coef,
+                "n_batches_to_dead": self.n_batches_to_dead,
+                "topk_aux": self.topk_aux,
+            }
+        }
+
+
+@register_sae_model("BatchTopKSAE")
 class BatchTopKSAE(SAE):
-    def __init__(self, input_dim: int, embedding_dim: int, cfg: dict):
-        super().__init__(input_dim, embedding_dim, cfg)
+    def __init__(self, input_dim: int, embedding_dim: int, **kwargs):
+        super().__init__(input_dim, embedding_dim, **kwargs)
         self.threshold = nn.Parameter(torch.zeros(1), requires_grad=False)
         self.processed_batches_count = nn.Parameter(torch.zeros(1), requires_grad=False)
         
-        self.k = cfg["k"]
-        self.reconstruction_coef = cfg.get("reconstruction_coef", 1.0)
-        self.auxiliary_coef = cfg.get("auxiliary_coef", 0)
-        self.contrastive_coef = cfg.get("contrastive_coef", 0)
-        self.l1_coef = cfg.get("l1_coef", 0)
+        self.k = self.cfg["k"]
+        self.reconstruction_coef = self.cfg.get("reconstruction_coef", 1.0)
+        self.auxiliary_coef = self.cfg.get("auxiliary_coef", 0)
+        self.contrastive_coef = self.cfg.get("contrastive_coef", 0)
+        self.l1_coef = self.cfg.get("l1_coef", 0)
         
     def _update_threshold(self, min_batch_value: float) -> None:
         self.processed_batches_count += 1
@@ -212,3 +257,21 @@ class BatchTopKSAE(SAE):
         contrastive_loss = con_coef * partial_losses["Contrastive"]
         
         return reconstruction_loss + auxiliary_loss + contrastive_loss
+
+    def get_config(self) -> dict:
+        return {
+            "model_type": "BatchTopKSAE",
+            "architecture": {
+                "input_dim": self.input_dim,
+                "embedding_dim": self.embedding_dim,
+                "k": self.k,
+                "reconstruction_loss": self.reconstruction_loss,
+                "normalize": self.normalize,
+                "auxiliary_coef": self.cfg.get("auxiliary_coef", 0),
+                "contrastive_coef": self.cfg.get("contrastive_coef", 0),
+                "l1_coef": self.l1_coef,
+                "reconstruction_coef": self.reconstruction_coef,
+                "n_batches_to_dead": self.n_batches_to_dead,
+                "topk_aux": self.topk_aux,
+            }
+        }

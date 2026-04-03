@@ -8,12 +8,10 @@ from tqdm import tqdm
 
 from sklearn.feature_extraction.text import TfidfTransformer
 
-from utils.torch.models.elsa import ELSA
-from utils.torch.models.sae import BasicSAE, TopKSAE, BatchTopKSAE
 from utils.plugin_logger import get_logger
 from plugins.plugin_interface import BasePlugin
 from utils.torch.runtime import set_device, set_seed
-from utils.torch.checkpointing import load_checkpoint
+from utils.torch.model_loader import load_base_model, load_sae_model
 from utils.mlflow_manager import MLflowRunLoader
 
 logger = get_logger(__name__)
@@ -60,74 +58,19 @@ class Plugin(BasePlugin):
         if self.tag_ids is None or self.tag_item_counts is None:
             raise RuntimeError("Dataset does not support neuron labeling (no tag data available)")
 
-        # Load ELSA model
-        logger.info("Loading ELSA model")
-        elsa_run_id = context['training_cfm']['run_id']
-        elsa_loader = MLflowRunLoader(elsa_run_id)
-        elsa_params = elsa_loader.get_parameters()
+        # Load base model via registry-based loader
+        logger.info("Loading base model")
+        base_run_id = context['training_cfm']['run_id']
+        base_loader = MLflowRunLoader(base_run_id)
+        self.elsa = load_base_model(base_loader.get_artifact_path(), device)
+        logger.info("Base model loaded successfully")
 
-        self.elsa = ELSA(
-            input_dim=int(elsa_params["items"]),
-            embedding_dim=int(elsa_params["factors"]),
-        )
-        elsa_opt = torch.optim.Adam(self.elsa.parameters())
-        load_checkpoint(
-            self.elsa,
-            elsa_opt,
-            elsa_loader.get_artifact_path("checkpoint.ckpt"),
-            device,
-        )
-        self.elsa.to(device).eval()
-
-        # Load SAE model
+        # Load SAE model via registry-based loader
         logger.info("Loading SAE model")
         sae_run_id = context["training_sae"]['run_id']
         sae_loader = MLflowRunLoader(sae_run_id)
-        sae_params = sae_loader.get_parameters()
-
-        sae_model = sae_params["model"]
-        logger.info(f"SAE model type from training_sae: {sae_model}")
-
-        cfg = {
-            "reconstruction_loss": sae_params["reconstruction_loss"],
-            "k": int(sae_params["top_k"]),
-            "device": device,
-            "normalize": sae_params["normalize"] == "True",
-            "auxiliary_coef": float(sae_params["auxiliary_coef"]),
-            "contrastive_coef": float(sae_params["contrastive_coef"]),
-            "l1_coef": float(sae_params["l1_coef"]),
-            "reconstruction_coef": float(sae_params["reconstruction_coef"]),
-        }
-
-        if sae_model == "BasicSAE":
-            self.sae = BasicSAE(
-                int(elsa_params["factors"]),
-                int(sae_params["embedding_dim"]),
-                cfg,
-            )
-        elif sae_model == "TopKSAE":
-            self.sae = TopKSAE(
-                int(elsa_params["factors"]),
-                int(sae_params["embedding_dim"]),
-                cfg,
-            )
-        elif sae_model == "BatchTopKSAE":
-            self.sae = BatchTopKSAE(
-                int(elsa_params["factors"]),
-                int(sae_params["embedding_dim"]),
-                cfg,
-            )
-        else:
-            raise ValueError(f"SAE model {sae_model} not supported")
-
-        sae_opt = torch.optim.Adam(self.sae.parameters())
-        load_checkpoint(
-            self.sae,
-            sae_opt,
-            sae_loader.get_artifact_path("checkpoint.ckpt"),
-            device,
-        )
-        self.sae.to(device).eval()
+        self.sae = load_sae_model(sae_loader.get_artifact_path(), device)
+        logger.info("SAE model loaded successfully")
 
     def run(self,
             context: dict,

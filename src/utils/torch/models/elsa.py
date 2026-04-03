@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
+from utils.torch.models.interfaces import BaseModel
+from utils.torch.model_registry import register_base_model
+
 
 def l2_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return x / x.norm(dim=dim, keepdim=True)
@@ -12,7 +15,8 @@ def normalized_mse_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Ten
     return (l2_normalize(y_pred) - l2_normalize(y_true)).pow(2).sum(-1).mean()
 
 
-class ELSA(nn.Module):
+@register_base_model("elsa")
+class ELSA(BaseModel):
     """Scalable Linear Shallow Autoencoder
     Paper: https://dl.acm.org/doi/abs/10.1145/3523227.3551482"""
 
@@ -60,6 +64,15 @@ class ELSA(nn.Module):
         topk_scores, topk_indices = torch.topk(scores, k)
         return topk_scores.cpu().numpy(), topk_indices.cpu().numpy()
     
+    def get_config(self) -> dict:
+        return {
+            "model_type": "elsa",
+            "architecture": {
+                "input_dim": self.encoder.shape[0],
+                "embedding_dim": self.encoder.shape[1],
+            }
+        }
+
     @staticmethod
     def normalize_relevance_scores(relevance_scores: torch.Tensor) -> torch.Tensor:
         maxs = torch.max(relevance_scores, dim=-1, keepdim=True)[0]
