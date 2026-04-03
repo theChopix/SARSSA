@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import scipy.sparse as sp
 
-from utils.datasets.data_loader import DataLoader
+from utils.data_loading.data_loader import DataLoader
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.sae_model import SAE
 from utils.torch.models.fused_model import FusedModel

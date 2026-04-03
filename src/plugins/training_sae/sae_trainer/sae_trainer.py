@@ -8,7 +8,7 @@ import scipy.sparse as sp
 from tqdm import tqdm
 from copy import deepcopy
 
-from utils.datasets.data_loader import DataLoader
+from utils.data_loading.data_loader import DataLoader
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.sae_model import SAE
 from utils.torch.models.model_registry import get_sae_model_class
