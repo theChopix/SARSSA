@@ -41,14 +41,14 @@ def train(
 ):
     """Train a Sparse Autoencoder (SAE) model with early stopping and MLflow tracking.
 
-    The training process learns sparse representations of dense ELSA embeddings while
+    The training process learns sparse representations of dense base model embeddings while
     maintaining recommendation quality. Supports multiple training modes (from interactions
     or pre-computed embeddings) and advanced techniques like contrastive learning and
     auxiliary loss for dead neuron reactivation.
 
     Args:
         model: SAE model to train (BasicSAE, TopKSAE, or BatchTopKSAE).
-        base_model: Pre-trained ELSA model (frozen) used to encode interactions.
+        base_model: Pre-trained base model (frozen) used to encode interactions.
         optimizer: Optimizer for training (typically Adam).
         train_csr: Training data as sparse CSR matrix (users x items).
         valid_csr: Validation data as sparse CSR matrix.
@@ -127,7 +127,7 @@ def train(
         """Train one epoch using on-the-fly interaction encoding.
 
         This mode supports data augmentation and contrastive learning but is slower
-        as it encodes interactions through ELSA every epoch.
+        as it encodes interactions through base model every epoch.
 
         Returns:
             dict: Training losses for this epoch.
@@ -149,7 +149,7 @@ def train(
             if sample_users:
                 batched_interactions = sampled_interactions(batched_interactions)
 
-            # Encode interactions through ELSA
+            # Encode interactions through base model
             embedding_batch = base_model.encode(batched_interactions).detach()
 
             # Train SAE
@@ -299,7 +299,7 @@ def train(
 class Plugin(BasePlugin):
     """SAE (Sparse Autoencoder) training plugin.
 
-    Trains a sparse autoencoder on top of a pre-trained ELSA model to learn
+    Trains a sparse autoencoder on top of a pre-trained base model to learn
     interpretable, sparse representations of user embeddings while maintaining
     recommendation quality.
 
