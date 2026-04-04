@@ -91,6 +91,24 @@ class Plugin(BasePlugin):
             int(n): self.tag_ids[int(tfidf_nt[:, n].argmax())] for n in range(tfidf_nt.shape[1])
         }
 
+        # tag → neuron mappings (used by the steering plugin)
+        # characteristic_neuron_per_tag: for each tag, the neuron that best characterises it
+        #   tfidf with term=tag, document=neuron → argmax over neurons for each tag
+        tfidf_tn_dense = tfidf_tn.toarray() if sp.issparse(tfidf_tn) else np.asarray(tfidf_tn)
+        characteristic_neuron_per_tag = {
+            self.tag_ids[int(t)]: int(tfidf_tn_dense[t].argmax())
+            for t in range(tfidf_tn_dense.shape[0])
+        }
+
+        # top_neuron_per_tag: for each tag, the neuron whose firing is most unique to it
+        #   tfidf with term=neuron, document=tag → argmax over neurons for each tag
+        tfidf_nt_dense = tfidf_nt.toarray() if sp.issparse(tfidf_nt) else np.asarray(tfidf_nt)
+        top_neuron_per_tag = {
+            self.tag_ids[int(t)]: int(tfidf_nt_dense[:, t].argmax())
+            for t in range(tfidf_nt_dense.shape[1])
+            if t < len(self.tag_ids)
+        }
+
         # log artifacts
         with tempfile.TemporaryDirectory() as tmp:
             torch.save(item_acts, f"{tmp}/item_acts.pt")
@@ -101,6 +119,12 @@ class Plugin(BasePlugin):
 
             with open(f"{tmp}/neuron_labels.json", "w") as f:
                 json.dump(neuron_labels, f, indent=2)
+
+            with open(f"{tmp}/characteristic_neuron_per_tag.json", "w") as f:
+                json.dump(characteristic_neuron_per_tag, f, indent=2)
+
+            with open(f"{tmp}/top_neuron_per_tag.json", "w") as f:
+                json.dump(top_neuron_per_tag, f, indent=2)
 
             mlflow.log_artifacts(tmp)
 

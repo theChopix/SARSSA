@@ -369,6 +369,167 @@ def evaluate_sparse_encoder(
     }
 
 
+def evaluate_recall_at_k_steered(model, inputs, targets, k: int) -> np.ndarray:
+    """Evaluate Recall@K for a steered model.
+
+    The ``inputs`` iterator must yield ``(interaction_batch, concept_id_batch)``
+    tuples (zipped personal and steering data-loaders).
+
+    Args:
+        model: :class:`SteeredModel` with a ``recommend(batch, …)`` method.
+        inputs: Iterator of (interaction_batch, concept_id_batch) tuples.
+        targets: DataLoader of target interaction batches.
+        k: Number of top recommendations to consider.
+
+    Returns:
+        np.ndarray: Recall@K scores for all users.
+    """
+    recall = []
+    for (interaction_batch, concept_id_batch), target_batch in zip(inputs, targets):
+        _, topk_indices = model.recommend(
+            (interaction_batch, concept_id_batch),
+            model._concept_neuron_mapping,
+            k=k,
+            mask_interactions=True,
+        )
+        recall.append(
+            _recall_at_k_batch(torch.tensor(topk_indices).to(target_batch.device), target_batch, k)
+        )
+    return torch.cat(recall).detach().cpu().numpy()
+
+
+def evaluate_ndcg_at_k_steered(model, inputs, targets, k: int) -> np.ndarray:
+    """Evaluate NDCG@K for a steered model.
+
+    The ``inputs`` iterator must yield ``(interaction_batch, concept_id_batch)``
+    tuples (zipped personal and steering data-loaders).
+
+    Args:
+        model: :class:`SteeredModel` with a ``recommend(batch, …)`` method.
+        inputs: Iterator of (interaction_batch, concept_id_batch) tuples.
+        targets: DataLoader of target interaction batches.
+        k: Number of top recommendations to consider.
+
+    Returns:
+        np.ndarray: NDCG@K scores for all users.
+    """
+    ndcg_scores = []
+    for (interaction_batch, concept_id_batch), target_batch in zip(inputs, targets):
+        _, topk_indices = model.recommend(
+            (interaction_batch, concept_id_batch),
+            model._concept_neuron_mapping,
+            k=k,
+            mask_interactions=True,
+        )
+        ndcg_scores.append(
+            ndcg_at_k(torch.tensor(topk_indices).to(target_batch.device), target_batch, k)[0]
+        )
+    return torch.cat(ndcg_scores).detach().cpu().numpy()
+
+
+def evaluate_steering(
+    model,
+    concept_neuron_mapping: torch.Tensor,
+    inputs: sp.csr_matrix,
+    targets: sp.csr_matrix,
+    tag_item_counts: sp.csr_matrix,
+    device,
+    k: int = 20,
+    batch_size: int = 1024,
+) -> dict:
+    """Evaluate steering quality on personal and segment (concept) targets.
+
+    For each test user the function selects the concept whose items are most
+    desired (appear in targets but not in inputs).  It then measures how well
+    the steered model recovers both the user's personal held-out items and the
+    items associated with the steered concept.
+
+    Args:
+        model: :class:`SteeredModel` instance (with ``alpha`` already set).
+        concept_neuron_mapping: (num_concepts,) tensor mapping concept index → neuron.
+        inputs: Sparse CSR matrix of input interactions (users × items).
+        targets: Sparse CSR matrix of target interactions (users × items).
+        tag_item_counts: Sparse CSR matrix (tags × items) with tag-item counts.
+        device: PyTorch device.
+        k: Top-K for evaluation.
+        batch_size: Batch size for processing.
+
+    Returns:
+        dict: Dictionary with recall@K and ndcg@K for both personal and segment targets.
+    """
+    # Binarise tag-item counts and compute per-user tag coverage
+    tag_item_binary = tag_item_counts.copy()
+    tag_item_binary.data[:] = 1
+    item_tag_binary = tag_item_binary.T.astype(np.int64).toarray()
+
+    input_tags_per_user = inputs.astype(np.int64) @ item_tag_binary
+    target_tags_per_user = targets.astype(np.int64) @ item_tag_binary
+    desired_tags_per_user = target_tags_per_user - input_tags_per_user
+    desired_tags_per_user[desired_tags_per_user < 0] = 0
+    desired_tags_per_user = torch.tensor(desired_tags_per_user)
+
+    # Select the most-desired concept for each user
+    values, indices = torch.topk(desired_tags_per_user, k=1)
+    assert values.min() > 0, "Some users have no desired tags — check data split"
+
+    segment_inputs = indices.numpy().flatten()  # (num_users,) concept id per user
+    segment_target_matrix = tag_item_binary[segment_inputs]  # (num_users, num_items)
+
+    # Store concept→neuron mapping on model for use by evaluate helpers
+    model._concept_neuron_mapping = concept_neuron_mapping
+
+    # Build data-loaders
+    personal_input_dl = DataLoader(inputs, batch_size, device)
+    steering_input_dl = DataLoader(segment_inputs, batch_size, device)
+    personal_target_dl = DataLoader(targets, batch_size, device)
+    segment_target_dl = DataLoader(segment_target_matrix, batch_size, device)
+
+    model.eval()
+
+    personal_recalls = evaluate_recall_at_k_steered(
+        model, zip(personal_input_dl, steering_input_dl), personal_target_dl, k
+    )
+    # Re-create iterators (they are consumed)
+    personal_input_dl2 = DataLoader(inputs, batch_size, device)
+    steering_input_dl2 = DataLoader(segment_inputs, batch_size, device)
+    segment_recalls = evaluate_recall_at_k_steered(
+        model, zip(personal_input_dl2, steering_input_dl2), segment_target_dl, k
+    )
+
+    personal_input_dl3 = DataLoader(inputs, batch_size, device)
+    steering_input_dl3 = DataLoader(segment_inputs, batch_size, device)
+    personal_target_dl3 = DataLoader(targets, batch_size, device)
+    personal_ndcgs = evaluate_ndcg_at_k_steered(
+        model, zip(personal_input_dl3, steering_input_dl3), personal_target_dl3, k
+    )
+
+    personal_input_dl4 = DataLoader(inputs, batch_size, device)
+    steering_input_dl4 = DataLoader(segment_inputs, batch_size, device)
+    segment_target_dl4 = DataLoader(segment_target_matrix, batch_size, device)
+    segment_ndcgs = evaluate_ndcg_at_k_steered(
+        model, zip(personal_input_dl4, steering_input_dl4), segment_target_dl4, k
+    )
+
+    return {
+        f"recall@{k}(personal)": {
+            "mean": float(np.mean(personal_recalls)),
+            "se": float(np.std(personal_recalls) / np.sqrt(len(personal_recalls))),
+        },
+        f"recall@{k}(segment)": {
+            "mean": float(np.mean(segment_recalls)),
+            "se": float(np.std(segment_recalls) / np.sqrt(len(segment_recalls))),
+        },
+        f"ndcg@{k}(personal)": {
+            "mean": float(np.mean(personal_ndcgs)),
+            "se": float(np.std(personal_ndcgs) / np.sqrt(len(personal_ndcgs))),
+        },
+        f"ndcg@{k}(segment)": {
+            "mean": float(np.mean(segment_ndcgs)),
+            "se": float(np.std(segment_ndcgs) / np.sqrt(len(segment_ndcgs))),
+        },
+    }
+
+
 @torch.no_grad()
 def compute_sae_item_activations(
     base_model: BaseModel,
