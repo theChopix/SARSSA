@@ -1,15 +1,15 @@
-import json
 import tempfile
-import numpy as np
-import mlflow
+
 import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import linkage, dendrogram
+import mlflow
+import numpy as np
+from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import pdist
 
-from utils.plugin_logger import get_logger
 from plugins.plugin_interface import BasePlugin
 from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
 from utils.mlflow_manager import MLflowRunLoader
+from utils.plugin_logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -17,17 +17,17 @@ logger = get_logger(__name__)
 class Plugin(BasePlugin):
     def _load_artifacts(self, context):
         """Load neuron labeling artifacts from the neuron_labeling pipeline step."""
-        neuron_labeling_run_id = context['neuron_labeling']['run_id']
+        neuron_labeling_run_id = context["neuron_labeling"]["run_id"]
         neuron_labeling_loader = MLflowRunLoader(neuron_labeling_run_id)
-        
-        logger.info(f'Loading neuron labeling artifacts from run {neuron_labeling_run_id}')
-        
-        self.neuron_labels = neuron_labeling_loader.get_json_artifact('neuron_labels.json')
+
+        logger.info(f"Loading neuron labeling artifacts from run {neuron_labeling_run_id}")
+
+        self.neuron_labels = neuron_labeling_loader.get_json_artifact("neuron_labels.json")
         self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
         self.label_texts = [str(self.neuron_labels[nid]) for nid in self.neuron_ids]
-        
-        logger.info(f'Loaded {len(self.neuron_ids)} neuron labels')
-    
+
+        logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
+
     def run(
         self,
         context: dict,
@@ -42,9 +42,7 @@ class Plugin(BasePlugin):
         logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
 
         embedder = OpenAIEmbeddingLLM(model=embedding_model)
-        embeddings = np.array(
-            [embedder.generate_embedding(t) for t in self.label_texts]
-        )
+        embeddings = np.array([embedder.generate_embedding(t) for t in self.label_texts])
 
         # pairwise cosine distance then hierarchical clustering
         distances = pdist(embeddings, metric="cosine")
@@ -76,7 +74,6 @@ class Plugin(BasePlugin):
         plt.tight_layout()
 
         with tempfile.TemporaryDirectory() as tmp:
-
             # SVG (zoomable)
             svg_path = f"{tmp}/dendrogram.svg"
             fig.savefig(svg_path)
@@ -102,6 +99,4 @@ class Plugin(BasePlugin):
             }
         )
 
-        logger.info(
-            "Dendrogram saved to mlflow artifacts as SVG and searchable PDF'"
-        )
+        logger.info("Dendrogram saved to mlflow artifacts as SVG and searchable PDF'")

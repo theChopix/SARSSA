@@ -1,4 +1,3 @@
-import json
 import tempfile
 
 import mlflow
@@ -8,8 +7,8 @@ import umap
 
 from plugins.plugin_interface import BasePlugin
 from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
-from utils.plugin_logger import get_logger
 from utils.mlflow_manager import MLflowRunLoader
+from utils.plugin_logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -17,17 +16,17 @@ logger = get_logger(__name__)
 class Plugin(BasePlugin):
     def _load_artifacts(self, context):
         """Load neuron labeling artifacts from the neuron_labeling pipeline step."""
-        neuron_labeling_run_id = context['neuron_labeling']['run_id']
+        neuron_labeling_run_id = context["neuron_labeling"]["run_id"]
         neuron_labeling_loader = MLflowRunLoader(neuron_labeling_run_id)
-        
-        logger.info(f'Loading neuron labeling artifacts from run {neuron_labeling_run_id}')
-        
-        self.neuron_labels = neuron_labeling_loader.get_json_artifact('neuron_labels.json')
+
+        logger.info(f"Loading neuron labeling artifacts from run {neuron_labeling_run_id}")
+
+        self.neuron_labels = neuron_labeling_loader.get_json_artifact("neuron_labels.json")
         self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
         self.label_texts = [str(self.neuron_labels[nid]) for nid in self.neuron_ids]
-        
-        logger.info(f'Loaded {len(self.neuron_ids)} neuron labels')
-    
+
+        logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
+
     def run(
         self,
         context: dict,
@@ -43,9 +42,7 @@ class Plugin(BasePlugin):
         logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
 
         embedder = OpenAIEmbeddingLLM(model=embedding_model)
-        embeddings = np.array(
-            [embedder.generate_embedding(t) for t in self.label_texts]
-        )
+        embeddings = np.array([embedder.generate_embedding(t) for t in self.label_texts])
 
         logger.info(
             f"Embeddings shape: {embeddings.shape}. "
@@ -61,10 +58,9 @@ class Plugin(BasePlugin):
             random_state=umap_random_state,
         )
         coords = reducer.fit_transform(embeddings)
-        
+
         hover_texts = [
-            f"<b>Neuron {nid}</b><br>{self.neuron_labels[nid]}"
-            for nid in self.neuron_ids
+            f"<b>Neuron {nid}</b><br>{self.neuron_labels[nid]}" for nid in self.neuron_ids
         ]
 
         fig = go.Figure(
@@ -72,7 +68,7 @@ class Plugin(BasePlugin):
                 x=coords[:, 0],
                 y=coords[:, 1],
                 mode="markers",
-                marker=dict(size=point_size, opacity=0.8, colorscale="Viridis"),
+                marker={"size": point_size, "opacity": 0.8, "colorscale": "Viridis"},
                 text=hover_texts,
                 hovertemplate="%{text}<extra></extra>",
                 customdata=self.neuron_ids,
@@ -80,10 +76,10 @@ class Plugin(BasePlugin):
         )
 
         fig.update_layout(
-            title=dict(
-                text="Neuron label embedding map (UMAP 2-D projection)",
-                font=dict(size=18),
-            ),
+            title={
+                "text": "Neuron label embedding map (UMAP 2-D projection)",
+                "font": {"size": 18},
+            },
             xaxis_title="UMAP-1",
             yaxis_title="UMAP-2",
             hovermode="closest",
@@ -111,6 +107,4 @@ class Plugin(BasePlugin):
             }
         )
 
-        logger.info(
-            "Embedding map saved to mlflow artifacts as interactive HTML"
-        )
+        logger.info("Embedding map saved to mlflow artifacts as interactive HTML")
