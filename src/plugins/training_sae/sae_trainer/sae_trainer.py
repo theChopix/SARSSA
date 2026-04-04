@@ -112,7 +112,8 @@ def train(
         [
             base_model.encode(sampled_interactions(batch)).detach().cpu().numpy()
             for batch in tqdm(
-                valid_interaction_dataloader, desc="Computing augmented validation embeddings"
+                valid_interaction_dataloader,
+                desc="Computing augmented validation embeddings",
             )
         ]
     )
@@ -225,7 +226,13 @@ def train(
 
             # Compute validation metrics (sparsity, reconstruction quality, recommendation performance)
             valid_metrics = evaluate_sparse_encoder(
-                base_model, model, valid_csr, target_ratio, batch_size, device, seed=seed
+                base_model,
+                model,
+                valid_csr,
+                target_ratio,
+                batch_size,
+                device,
+                seed=seed,
             )
             for key, val in valid_metrics.items():
                 mlflow.log_metric(f"{key}/valid", val, step=epoch)
