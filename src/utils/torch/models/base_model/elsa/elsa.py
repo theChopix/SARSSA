@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Optional
 
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.model_registry import register_base_model
@@ -22,14 +21,18 @@ class ELSA(BaseModel):
 
     def __init__(self, input_dim: int, embedding_dim: int):
         super().__init__()
-        self.encoder = nn.Parameter(nn.init.kaiming_uniform_(torch.empty([input_dim, embedding_dim])))
+        self.encoder = nn.Parameter(
+            nn.init.kaiming_uniform_(torch.empty([input_dim, embedding_dim]))
+        )
         self.normalize_encoder()
 
     @torch.no_grad()
     def normalize_encoder(self) -> None:
         self.encoder.data = l2_normalize(self.encoder.data)
         if self.encoder.grad is not None:
-            self.encoder.grad -= (self.encoder.grad * self.encoder.data).sum(-1, keepdim=True) * self.encoder.data
+            self.encoder.grad -= (self.encoder.grad * self.encoder.data).sum(
+                -1, keepdim=True
+            ) * self.encoder.data
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         return x @ self.encoder
@@ -43,7 +46,9 @@ class ELSA(BaseModel):
     def compute_loss_dict(self, batch: torch.Tensor) -> dict[str, torch.Tensor]:
         return {"Loss": normalized_mse_loss(self(batch), batch)}
 
-    def train_step(self, optimizer: optim.Optimizer, batch: torch.Tensor) -> dict[str, torch.Tensor]:
+    def train_step(
+        self, optimizer: optim.Optimizer, batch: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
         losses = self.compute_loss_dict(batch)
         optimizer.zero_grad()
         losses["Loss"].backward()
@@ -52,7 +57,13 @@ class ELSA(BaseModel):
         return losses
 
     @torch.no_grad()
-    def recommend(self, interaction_batch: torch.Tensor, k: Optional[int], mask_interactions: bool = True, mask: Optional[torch.Tensor] = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def recommend(
+        self,
+        interaction_batch: torch.Tensor,
+        k: int | None = None,
+        mask_interactions: bool = True,
+        mask: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         scores = self.decode(self.encode(interaction_batch)) - interaction_batch
         scores = self.normalize_relevance_scores(scores)
         if k is None:
@@ -63,14 +74,14 @@ class ELSA(BaseModel):
             scores = torch.where(mask, 0, scores)
         topk_scores, topk_indices = torch.topk(scores, k)
         return topk_scores.cpu().numpy(), topk_indices.cpu().numpy()
-    
+
     def get_config(self) -> dict:
         return {
             "model_type": "elsa",
             "architecture": {
                 "input_dim": self.encoder.shape[0],
                 "embedding_dim": self.encoder.shape[1],
-            }
+            },
         }
 
     @staticmethod

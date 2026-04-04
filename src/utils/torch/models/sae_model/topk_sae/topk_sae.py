@@ -1,7 +1,7 @@
 import torch
 
-from utils.torch.models.sae_model import SAE
 from utils.torch.models.model_registry import register_sae_model
+from utils.torch.models.sae_model import SAE
 
 
 @register_sae_model("TopKSAE")
@@ -21,14 +21,21 @@ class TopKSAE(SAE):
             return torch.zeros_like(e).scatter(-1, e_topk.indices, e_topk.values)
         else:
             return e
-        
+
     def total_loss(self, partial_losses: dict) -> torch.Tensor:
-        rec_coef, aux_coef, con_coef = self.cfg["reconstruction_coef"], self.cfg["auxiliary_coef"], self.cfg["contrastive_coef"]
-        
-        reconstruction_loss = rec_coef * partial_losses[self.reconstruction_loss] + self.l1_coef * partial_losses["L1"]
+        rec_coef, aux_coef, con_coef = (
+            self.cfg["reconstruction_coef"],
+            self.cfg["auxiliary_coef"],
+            self.cfg["contrastive_coef"],
+        )
+
+        reconstruction_loss = (
+            rec_coef * partial_losses[self.reconstruction_loss]
+            + self.l1_coef * partial_losses["L1"]
+        )
         auxiliary_loss = aux_coef * partial_losses["Auxiliary"]
         contrastive_loss = con_coef * partial_losses["Contrastive"]
-        
+
         return reconstruction_loss + auxiliary_loss + contrastive_loss
 
     def get_config(self) -> dict:
@@ -46,5 +53,5 @@ class TopKSAE(SAE):
                 "reconstruction_coef": self.reconstruction_coef,
                 "n_batches_to_dead": self.n_batches_to_dead,
                 "topk_aux": self.topk_aux,
-            }
+            },
         }

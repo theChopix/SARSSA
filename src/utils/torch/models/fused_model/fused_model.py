@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from typing import Optional
 
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.sae_model import SAE
@@ -8,7 +7,7 @@ from utils.torch.models.sae_model import SAE
 
 class FusedModel(nn.Module):
     """Fuses a base model and a SAE via composition.
-    
+
     Uses the base model's encode/decode interface rather than
     accessing internal attributes directly.
     """
@@ -30,7 +29,13 @@ class FusedModel(nn.Module):
         return nn.ReLU()(self.decode(z_sae) - x)
 
     @torch.no_grad()
-    def recommend(self, interaction_batch: torch.Tensor, k: Optional[int], mask_interactions: bool = True, mask: Optional[torch.Tensor] = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def recommend(
+        self,
+        interaction_batch: torch.Tensor,
+        k: int | None,
+        mask_interactions: bool = True,
+        mask: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         z = self.encode(interaction_batch)
         z_sae = self.sae(z)[0]
         scores = self.decode(z_sae) - interaction_batch

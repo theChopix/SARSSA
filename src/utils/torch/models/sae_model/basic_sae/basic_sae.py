@@ -1,7 +1,7 @@
 import torch
 
-from utils.torch.models.sae_model import SAE
 from utils.torch.models.model_registry import register_sae_model
+from utils.torch.models.sae_model import SAE
 
 
 @register_sae_model("BasicSAE")
@@ -16,7 +16,9 @@ class BasicSAE(SAE):
         return e
 
     def total_loss(self, partial_losses: dict) -> torch.Tensor:
-        reconstruction_loss = partial_losses[self.reconstruction_loss] + self.cfg["l1_coef"] * partial_losses["L1"]
+        reconstruction_loss = (
+            partial_losses[self.reconstruction_loss] + self.cfg["l1_coef"] * partial_losses["L1"]
+        )
         auxiliary_loss = partial_losses["Auxiliary"]
         return reconstruction_loss + self.cfg["auxiliary_coef"] * auxiliary_loss
 
@@ -34,5 +36,5 @@ class BasicSAE(SAE):
                 "reconstruction_coef": self.reconstruction_coef,
                 "n_batches_to_dead": self.n_batches_to_dead,
                 "topk_aux": self.topk_aux,
-            }
+            },
         }

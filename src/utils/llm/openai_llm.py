@@ -1,9 +1,8 @@
-from typing import List, Tuple
 import os
 
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage
+from langchain_openai import ChatOpenAI
 
 from .llm import ChatLLM
 
@@ -15,12 +14,17 @@ class OpenAIChatLLM(ChatLLM):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.model_ = ChatOpenAI(openai_api_key=os.getenv("OPENAI_API_KEY"),
-                                model=self.model,
-                                temperature=self.temperature,
-                                max_tokens=self.max_tokens
-                        )
-        
-    def generate_response(self, prompt: str | List[Tuple[str, str]]) -> str:
+        api_key = os.getenv("OPENAI_API_KEY") or ""
+        self.model_ = ChatOpenAI(
+            openai_api_key=api_key,  # type: ignore[arg-type]
+            model=self.model,  # type: ignore[call-arg]
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
+
+    def generate_response(self, prompt: str | list[tuple[str, str]]) -> str:
         message: AIMessage = self.model_.invoke(prompt)
-        return message.content
+        content = message.content
+        if isinstance(content, str):
+            return content
+        return str(content)
