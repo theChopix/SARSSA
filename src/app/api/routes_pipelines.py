@@ -1,8 +1,10 @@
 from fastapi import APIRouter
-from app.models.pipeline import PipelineRequest
+
 from app.core.pipeline_engine import PipelineEngine
+from app.models.pipeline import PipelineRequest
 
 router = APIRouter()
+
 
 @router.post("/run")
 def run_pipeline(context: dict, pipeline_request: PipelineRequest):
@@ -10,5 +12,5 @@ def run_pipeline(context: dict, pipeline_request: PipelineRequest):
 
     engine = PipelineEngine(steps)
     result = engine.run(context)
-    
+
     return {"message": "Pipeline finished", "result": result}

@@ -1,5 +1,6 @@
 import importlib
 
+
 class PluginManager:
     @staticmethod
     def load(plugin_name):
