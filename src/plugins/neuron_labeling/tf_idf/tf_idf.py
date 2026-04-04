@@ -6,39 +6,16 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 from sklearn.feature_extraction.text import TfidfTransformer
-from tqdm import tqdm
 
 from plugins.plugin_interface import BasePlugin
 from utils.mlflow_manager import MLflowRunLoader
 from utils.plugin_logger import get_logger
+from utils.torch.evalution import compute_sae_item_activations
 from utils.torch.models.model_loader import load_base_model, load_sae_model
 from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
 device = set_device()
-
-
-@torch.no_grad()
-def compute_sae_item_activations(
-    elsa,
-    sae,
-    num_items,
-    batch_size=1024,
-    device="cpu",
-):
-    elsa.eval().to(device)
-    sae.eval().to(device)
-
-    eye = torch.eye(num_items, device=device)
-    activations = []
-
-    for i in tqdm(range(0, num_items, batch_size), desc="Computing SAE item activations"):
-        batch = eye[i : i + batch_size]
-        dense = elsa.encode(batch)
-        e, *_ = sae.encode(dense)
-        activations.append(e.cpu())
-
-    return torch.cat(activations)  # (items × neurons)
 
 
 class Plugin(BasePlugin):
@@ -68,7 +45,7 @@ class Plugin(BasePlugin):
         logger.info("Loading base model")
         base_run_id = context["training_cfm"]["run_id"]
         base_loader = MLflowRunLoader(base_run_id)
-        self.elsa = load_base_model(base_loader.get_artifact_path(), device)
+        self.base_model = load_base_model(base_loader.get_artifact_path(), device)
         logger.info("Base model loaded successfully")
 
         # Load SAE model via registry-based loader
@@ -90,7 +67,7 @@ class Plugin(BasePlugin):
 
         # compute SAE activations
         item_acts = compute_sae_item_activations(
-            self.elsa,
+            self.base_model,
             self.sae,
             self.num_items,
             batch_size=batch_size,

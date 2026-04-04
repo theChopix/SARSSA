@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 import torch
+from tqdm import tqdm
 
 from utils.data_loading.data_loader import DataLoader
 from utils.torch.models.base_model import BaseModel
@@ -364,3 +365,41 @@ def evaluate_sparse_encoder(
         "NDCG20": float(ndcgs_with_sae),
         "NDCG20_Degradation": float(ndcg_degradations),
     }
+
+
+@torch.no_grad()
+def compute_sae_item_activations(
+    base_model: BaseModel,
+    sae: SAE,
+    num_items: int,
+    batch_size: int = 1024,
+    device: str = "cpu",
+):
+    """Compute SAE activations for all items using one-hot item representations.
+
+    Encodes each item through the base model and then through the SAE encoder,
+    collecting the sparse activation vectors for every item.
+
+    Args:
+        base_model: Pre-trained base model with an ``encode`` method.
+        sae: Trained sparse autoencoder with an ``encode`` method.
+        num_items: Total number of items in the catalogue.
+        batch_size: Number of items to process per batch.
+        device: PyTorch device for computation.
+
+    Returns:
+        torch.Tensor: SAE activation matrix of shape ``(num_items, num_neurons)``.
+    """
+    base_model.eval().to(device)
+    sae.eval().to(device)
+
+    eye = torch.eye(num_items, device=device)
+    activations = []
+
+    for i in tqdm(range(0, num_items, batch_size), desc="Computing SAE item activations"):
+        batch = eye[i : i + batch_size]
+        dense = base_model.encode(batch)
+        e, *_ = sae.encode(dense)
+        activations.append(e.cpu())
+
+    return torch.cat(activations)  # (items × neurons)
