@@ -78,7 +78,7 @@ def _recall_at_k_batch(
     return r
 
 
-def evaluate_recall_at_k_from_elsa(
+def evaluate_recall_at_k_from_base_model(
     model: BaseModel, inputs: DataLoader, targets: DataLoader, k: int
 ) -> np.ndarray:
     """Evaluate Recall@K for a base model on a dataset.
@@ -133,7 +133,7 @@ def ndcg_at_k(
     return dcg / idcg, dcg, idcg
 
 
-def evaluate_ndcg_at_k_from_elsa(
+def evaluate_ndcg_at_k_from_base_model(
     model: BaseModel, inputs: DataLoader, targets: DataLoader, k: int
 ) -> np.ndarray:
     """Evaluate NDCG@K for a base model on a dataset.
@@ -186,8 +186,8 @@ def evaluate_dense_encoder(
     inputs = DataLoader(inputs, batch_size, device, shuffle=False)
     targets = DataLoader(targets, batch_size, device, shuffle=False)
 
-    recalls = evaluate_recall_at_k_from_elsa(model, inputs, targets, k=20)
-    ndcgs = evaluate_ndcg_at_k_from_elsa(model, inputs, targets, k=20)
+    recalls = evaluate_recall_at_k_from_base_model(model, inputs, targets, k=20)
+    ndcgs = evaluate_ndcg_at_k_from_base_model(model, inputs, targets, k=20)
 
     return {"R20": float(np.mean(recalls)), "NDCG20": float(np.mean(ndcgs))}
 
@@ -306,10 +306,12 @@ def evaluate_sparse_encoder(
         device=device,
     )
 
-    elsa_recommendations = np.vstack(
+    base_model_recommendations = np.vstack(
         [base_model.recommend(batch, 20, mask_interactions=True)[1] for batch in inputs]
     )
-    elsa_rec_dataloader = DataLoader(elsa_recommendations, batch_size, device, shuffle=False)
+    base_model_rec_dataloader = DataLoader(
+        base_model_recommendations, batch_size, device, shuffle=False
+    )
     sae_recommendations = np.vstack(
         [fused_model.recommend(batch, 20, mask_interactions=True)[1] for batch in inputs]
     )
@@ -323,7 +325,7 @@ def evaluate_sparse_encoder(
         np.concatenate(
             [
                 _recall_at_k_batch(recs, targs, 20).cpu().numpy()
-                for recs, targs in zip(elsa_rec_dataloader, targets)
+                for recs, targs in zip(base_model_rec_dataloader, targets)
             ]
         )
     )
@@ -341,7 +343,7 @@ def evaluate_sparse_encoder(
         np.concatenate(
             [
                 ndcg_at_k(recs, targs, 20)[0].cpu().numpy()
-                for recs, targs in zip(elsa_rec_dataloader, targets)
+                for recs, targs in zip(base_model_rec_dataloader, targets)
             ]
         )
     )
