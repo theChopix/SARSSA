@@ -19,3 +19,88 @@ The goal of this project is to provide a modular, reproducible, and extensible f
 
 ## Context
 The platform generalizes prior SAE-based recommender research to enable systematic comparison of methods and efficient collaboration within the research group.
+
+## Development
+
+### Prerequisites
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) - Fast Python package installer and resolver
+- [just](https://github.com/casey/just) - Command runner (optional but recommended)
+
+### Tooling
+This project uses modern Python tooling for development:
+
+- **uv**: Fast package management and virtual environment handling
+- **ruff**: Lightning-fast Python linter and formatter (replaces black, isort, flake8)
+- **ty**: Fast Python type checker (alternative to mypy)
+- **pre-commit**: Git hooks for automated code quality checks
+- **justfile**: Task runner for common development commands
+
+### Quick Start
+
+Install dependencies:
+```bash
+uv sync
+```
+
+Set up pre-commit hooks:
+```bash
+just install-hooks
+# or: uv run pre-commit install
+```
+
+Run the application:
+```bash
+just run
+# or: cd src && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Common Commands
+
+With `just` installed, you can use these commands:
+
+```bash
+just install          # Install dependencies
+just install-hooks    # Install pre-commit hooks
+just run              # Run the FastAPI application
+just format           # Format code with ruff
+just lint             # Lint code with ruff
+just lint-fix         # Lint and auto-fix issues
+just type-check       # Type check with ty
+just pre-commit       # Run pre-commit hooks on all files
+just check            # Run all checks (lint + type-check)
+just fix              # Format and fix all issues
+just pre-commit-fix   # Install hooks and run pre-commit
+just clean            # Clean up generated files
+just mlflow           # Start MLflow server
+just download-movielens  # Download MovieLens dataset
+just download-lastfm     # Download LastFM dataset
+```
+
+Run `just` without arguments to see all available commands.
+
+### Manual Commands
+
+If you prefer not to use `just`:
+
+```bash
+# Install dependencies
+uv sync
+
+# Run application
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Format code
+uv run ruff format .
+
+# Lint code
+uv run ruff check .
+uv run ruff check --fix .  # with auto-fix
+
+# Type check
+uv run ty
+
+# Pre-commit hooks
+uv run pre-commit install
+uv run pre-commit run --all-files
+```

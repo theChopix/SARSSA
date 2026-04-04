@@ -4,6 +4,7 @@
 .env
 .env.*
 .venv/
+.venv_/
 venv/
 ENV/
 env/
@@ -70,6 +71,8 @@ Thumbs.db
 curl.txt
 project_specification.pdf
 audit*.md
+examples/
+my_tools/
 
 # =========================
 # Testing & Coverage
@@ -84,6 +87,11 @@ htmlcov/
 .mypy_cache/
 .pyre/
 .pytype/
+
+# =========================
+# Modern Python Tooling
+# =========================
+.ruff_cache/
 
 # =========================
 # Documentation
