@@ -25,4 +25,6 @@ class PipelineEngine:
                     plugin_category = plugin_name.split(".")[0]
                     context[plugin_category] = {"run_id": pipeline_step.info.run_id}
 
+            mlflow.log_dict(context, "context.json")
+
         return context
