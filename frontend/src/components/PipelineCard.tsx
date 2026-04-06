@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Settings } from "lucide-react";
+import { Settings, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { PluginCategory, PluginImplementation } from "@/api/types";
 import { usePipelineStore } from "@/store/pipelineStore";
 
@@ -17,15 +24,29 @@ interface PipelineCardProps {
 
 export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
   const card = usePipelineStore((s) => s.cards[category.name]);
+  const previousRuns = usePipelineStore((s) => s.previousRuns);
   const setCardMode = usePipelineStore((s) => s.setCardMode);
   const selectPlugin = usePipelineStore((s) => s.selectPlugin);
   const setParam = usePipelineStore((s) => s.setParam);
   const toggleConfig = usePipelineStore((s) => s.toggleConfig);
+  const loadFromRun = usePipelineStore((s) => s.loadFromRun);
 
   const mode = card?.mode ?? "new";
   const selectedPlugin = card?.selectedPlugin ?? null;
   const configOpen = card?.configOpen ?? null;
   const params = card?.params ?? {};
+  const loadedRunId = card?.loadedRunId ?? null;
+
+  const eligibleRuns = useMemo(
+    () =>
+      previousRuns.filter(
+        (run) =>
+          run.status === "FINISHED" &&
+          run.context != null &&
+          run.context[category.name] != null,
+      ),
+    [previousRuns, category.name],
+  );
 
   const groups = useMemo(() => {
     const grouped = new Map<string, PluginImplementation[]>();
@@ -153,10 +174,44 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
           </RadioGroup>
         )}
 
-        {/* Load mode: placeholder for previous run selector (task 12) */}
+        {/* Load mode: previous run selector */}
         {mode === "load" && (
-          <div className="text-sm text-muted-foreground italic py-4 text-center">
-            Previous run selector — coming soon
+          <div className="space-y-2">
+            {eligibleRuns.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-4 text-center">
+                No previous runs found for this step.
+              </p>
+            ) : (
+              <>
+                <Label className="text-xs text-muted-foreground">
+                  Select a previous run
+                </Label>
+                <Select
+                  value={loadedRunId ?? undefined}
+                  onValueChange={(val) => loadFromRun(category.name, val as string)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose a run..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleRuns.map((run) => (
+                      <SelectItem key={run.run_id} value={run.run_id}>
+                        {run.run_name}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({new Date(run.start_time).toLocaleString()})
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {loadedRunId && (
+                  <div className="flex items-center gap-1.5 text-sm text-green-600">
+                    <Check className="h-4 w-4" />
+                    Context loaded from previous run
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

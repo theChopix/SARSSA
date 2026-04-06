@@ -51,6 +51,7 @@ interface PipelineStore {
   toggleConfig: (category: string, pluginPath: string | null) => void;
   setCardStatus: (category: string, status: CardStatus, error?: string) => void;
   setLoadedRun: (category: string, runId: string | null) => void;
+  loadFromRun: (category: string, runId: string) => void;
 
   // Actions: pipeline execution
   setPipelineStatus: (status: "idle" | "running" | "done" | "error", error?: string) => void;
@@ -184,11 +185,27 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       },
     })),
 
+  loadFromRun: (category, runId) => {
+    const { categories } = get();
+    const oneTime = categories
+      .filter((c) => c.type === "one_time")
+      .sort((a, b) => a.order - b.order);
+    const targetIdx = oneTime.findIndex((c) => c.name === category);
+    if (targetIdx === -1) return;
+
+    // Set this card and all predecessors to "load" mode with the same run
+    for (let i = 0; i <= targetIdx; i++) {
+      get().setCardMode(oneTime[i].name, "load");
+      get().setLoadedRun(oneTime[i].name, runId);
+      get().setCardStatus(oneTime[i].name, "done");
+    }
+  },
+
   setPipelineStatus: (status, error) =>
     set({ pipelineStatus: status, pipelineError: error ?? null }),
 
   runUpTo: async (targetCategory) => {
-    const { categories, cards } = get();
+    const { categories, cards, previousRuns } = get();
     const oneTime = categories
       .filter((c) => c.type === "one_time")
       .sort((a, b) => a.order - b.order);
@@ -196,32 +213,52 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     const targetIdx = oneTime.findIndex((c) => c.name === targetCategory);
     if (targetIdx === -1) return;
 
-    const stepsToRun = oneTime.slice(0, targetIdx + 1);
+    const catsUpTo = oneTime.slice(0, targetIdx + 1);
 
-    const steps: StepDefinition[] = stepsToRun.map((cat) => {
+    // Build initial context from loaded runs, and steps for "new" categories
+    const context: Record<string, unknown> = {};
+    const steps: StepDefinition[] = [];
+    const newCats: string[] = [];
+
+    for (const cat of catsUpTo) {
       const card = cards[cat.name];
-      const pluginPath = card?.selectedPlugin ?? cat.implementations[0]?.plugin_path;
-      const userParams = card?.params[pluginPath] ?? {};
-      return { plugin: pluginPath, params: userParams };
-    });
+      if (card?.mode === "load" && card.loadedRunId) {
+        // Inject context from the loaded run
+        const run = previousRuns.find((r) => r.run_id === card.loadedRunId);
+        if (run?.context?.[cat.name]) {
+          context[cat.name] = run.context[cat.name];
+        }
+      } else {
+        // Execute this step fresh
+        const pluginPath = card?.selectedPlugin ?? cat.implementations[0]?.plugin_path;
+        const userParams = card?.params[pluginPath] ?? {};
+        steps.push({ plugin: pluginPath, params: userParams });
+        newCats.push(cat.name);
+      }
+    }
 
-    // Mark cards as running
-    for (const cat of stepsToRun) {
-      get().setCardStatus(cat.name, "running");
+    if (steps.length === 0) {
+      // Everything is loaded, nothing to execute
+      return;
+    }
+
+    // Mark new cards as running
+    for (const name of newCats) {
+      get().setCardStatus(name, "running");
     }
     get().setPipelineStatus("running");
 
     try {
-      await runPipeline({}, { steps });
-      for (const cat of stepsToRun) {
-        get().setCardStatus(cat.name, "done");
+      await runPipeline(context, { steps });
+      for (const name of newCats) {
+        get().setCardStatus(name, "done");
       }
       get().setPipelineStatus("done");
       get().fetchRuns();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      for (const cat of stepsToRun) {
-        get().setCardStatus(cat.name, "error", msg);
+      for (const name of newCats) {
+        get().setCardStatus(name, "error", msg);
       }
       get().setPipelineStatus("error", msg);
     }
