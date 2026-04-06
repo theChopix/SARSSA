@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Settings, Check } from "lucide-react";
+import { Settings, Check, Play, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -30,14 +30,29 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
   const setParam = usePipelineStore((s) => s.setParam);
   const toggleConfig = usePipelineStore((s) => s.toggleConfig);
   const loadFromRun = usePipelineStore((s) => s.loadFromRun);
+  const setTargetRun = usePipelineStore((s) => s.setTargetRun);
+  const doExecuteMultiRunStep = usePipelineStore((s) => s.executeMultiRunStep);
 
   const mode = card?.mode ?? "new";
   const selectedPlugin = card?.selectedPlugin ?? null;
   const configOpen = card?.configOpen ?? null;
   const params = card?.params ?? {};
   const loadedRunId = card?.loadedRunId ?? null;
+  const targetRunId = card?.targetRunId ?? null;
+  const cardStatus = card?.status ?? "idle";
+  const executionLog = card?.executionLog ?? [];
+
+  const isMultiRun = category.type === "multi_run";
 
   const eligibleRuns = useMemo(
+    () =>
+      previousRuns.filter(
+        (run) => run.status === "FINISHED" && run.context != null,
+      ),
+    [previousRuns],
+  );
+
+  const loadEligibleRuns = useMemo(
     () =>
       previousRuns.filter(
         (run) =>
@@ -124,6 +139,119 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
     );
   }
 
+  if (isMultiRun) {
+    return (
+      <Card className="flex flex-col">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">{category.display_name}</CardTitle>
+        </CardHeader>
+
+        <CardContent className="flex-1 flex flex-col gap-4">
+          {/* Target run selector */}
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              Target pipeline run
+            </Label>
+            {eligibleRuns.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-2">
+                Run a one-time pipeline first.
+              </p>
+            ) : (
+              <Select
+                value={targetRunId ?? undefined}
+                onValueChange={(val) => setTargetRun(category.name, val as string)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a pipeline run..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleRuns.map((run) => (
+                    <SelectItem key={run.run_id} value={run.run_id}>
+                      {run.run_name}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        ({new Date(run.start_time).toLocaleString()})
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Implementation radio list */}
+          <RadioGroup
+            value={selectedPlugin ?? ""}
+            onValueChange={(val) => selectPlugin(category.name, val)}
+            className="space-y-1"
+          >
+            {hasGroups
+              ? Array.from(groups.entries()).map(([groupName, impls]) => (
+                  <div key={groupName}>
+                    {groupName !== "__default__" && (
+                      <div className="flex items-center gap-2 mt-2 mb-1">
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {groupName}
+                        </Badge>
+                        <Separator className="flex-1" />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      {impls.map(renderImplementation)}
+                    </div>
+                  </div>
+                ))
+              : category.implementations.map(renderImplementation)}
+          </RadioGroup>
+
+          {/* Execute button */}
+          <div className="mt-auto pt-2">
+            <Button
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white cursor-pointer"
+              disabled={!targetRunId || !selectedPlugin || cardStatus === "running"}
+              onClick={() => doExecuteMultiRunStep(category.name)}
+            >
+              <Play className="h-4 w-4 mr-1" />
+              {cardStatus === "running" ? "Executing..." : "Execute step"}
+            </Button>
+          </div>
+
+          {/* Execution log */}
+          {executionLog.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Execution log</Label>
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {executionLog.map((entry, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded ${
+                      entry.status === "done"
+                        ? "bg-green-50 text-green-700"
+                        : "bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {entry.status === "done" ? (
+                      <Check className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {entry.plugin} → {entry.runName}
+                    </span>
+                    <span className="ml-auto text-[10px] opacity-60 shrink-0">
+                      {new Date(entry.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="flex flex-col">
       <CardHeader className="pb-3">
@@ -177,7 +305,7 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
         {/* Load mode: previous run selector */}
         {mode === "load" && (
           <div className="space-y-2">
-            {eligibleRuns.length === 0 ? (
+            {loadEligibleRuns.length === 0 ? (
               <p className="text-sm text-muted-foreground italic py-4 text-center">
                 No previous runs found for this step.
               </p>
@@ -194,7 +322,7 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
                     <SelectValue placeholder="Choose a run..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {eligibleRuns.map((run) => (
+                    {loadEligibleRuns.map((run) => (
                       <SelectItem key={run.run_id} value={run.run_id}>
                         {run.run_name}
                         <span className="ml-2 text-xs text-muted-foreground">

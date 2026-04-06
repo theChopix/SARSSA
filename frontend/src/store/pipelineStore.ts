@@ -8,12 +8,22 @@ import {
   fetchPluginRegistry,
   fetchPipelineRuns,
   runPipeline,
+  executeStep,
 } from "@/api/client";
 
 // --- Per-card state ---
 
 export type CardMode = "new" | "load";
 export type CardStatus = "idle" | "running" | "done" | "error";
+
+export interface ExecutionLogEntry {
+  timestamp: number;
+  runId: string;
+  runName: string;
+  plugin: string;
+  status: "done" | "error";
+  error?: string;
+}
 
 export interface CardState {
   mode: CardMode;
@@ -23,6 +33,8 @@ export interface CardState {
   status: CardStatus;
   error: string | null;
   loadedRunId: string | null;
+  targetRunId: string | null;
+  executionLog: ExecutionLogEntry[];
 }
 
 // --- Store shape ---
@@ -52,6 +64,8 @@ interface PipelineStore {
   setCardStatus: (category: string, status: CardStatus, error?: string) => void;
   setLoadedRun: (category: string, runId: string | null) => void;
   loadFromRun: (category: string, runId: string) => void;
+  setTargetRun: (category: string, runId: string | null) => void;
+  executeMultiRunStep: (category: string) => Promise<void>;
 
   // Actions: pipeline execution
   setPipelineStatus: (status: "idle" | "running" | "done" | "error", error?: string) => void;
@@ -68,6 +82,8 @@ function defaultCardState(): CardState {
     status: "idle",
     error: null,
     loadedRunId: null,
+    targetRunId: null,
+    executionLog: [],
   };
 }
 
@@ -184,6 +200,86 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         },
       },
     })),
+
+  setTargetRun: (category, runId) =>
+    set((state) => ({
+      cards: {
+        ...state.cards,
+        [category]: {
+          ...(state.cards[category] ?? defaultCardState()),
+          targetRunId: runId,
+        },
+      },
+    })),
+
+  executeMultiRunStep: async (category) => {
+    const { cards, previousRuns } = get();
+    const card = cards[category];
+    if (!card?.targetRunId || !card.selectedPlugin) return;
+
+    const run = previousRuns.find((r) => r.run_id === card.targetRunId);
+    const pluginPath = card.selectedPlugin;
+    const userParams = card.params[pluginPath] ?? {};
+
+    get().setCardStatus(category, "running");
+
+    try {
+      await executeStep(card.targetRunId, {
+        plugin: pluginPath,
+        params: userParams,
+      });
+
+      const entry: ExecutionLogEntry = {
+        timestamp: Date.now(),
+        runId: card.targetRunId,
+        runName: run?.run_name ?? card.targetRunId,
+        plugin: pluginPath.split(".").pop() ?? pluginPath,
+        status: "done",
+      };
+
+      set((state) => {
+        const c = state.cards[category] ?? defaultCardState();
+        return {
+          cards: {
+            ...state.cards,
+            [category]: {
+              ...c,
+              status: "done",
+              error: null,
+              executionLog: [entry, ...c.executionLog],
+            },
+          },
+        };
+      });
+      get().fetchRuns();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+
+      const entry: ExecutionLogEntry = {
+        timestamp: Date.now(),
+        runId: card.targetRunId,
+        runName: run?.run_name ?? card.targetRunId,
+        plugin: pluginPath.split(".").pop() ?? pluginPath,
+        status: "error",
+        error: msg,
+      };
+
+      set((state) => {
+        const c = state.cards[category] ?? defaultCardState();
+        return {
+          cards: {
+            ...state.cards,
+            [category]: {
+              ...c,
+              status: "error",
+              error: msg,
+              executionLog: [entry, ...c.executionLog],
+            },
+          },
+        };
+      });
+    }
+  },
 
   loadFromRun: (category, runId) => {
     const { categories } = get();
