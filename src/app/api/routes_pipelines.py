@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs
@@ -23,6 +24,21 @@ def run_pipeline(context: dict, pipeline_request: PipelineRequest):
     result = engine.run(context)
 
     return {"message": "Pipeline finished", "result": result}
+
+
+@router.post("/run-stream")
+def run_pipeline_stream(context: dict, pipeline_request: PipelineRequest):
+    steps = [step.model_dump() for step in pipeline_request.steps]
+    engine = PipelineEngine(steps)
+
+    return StreamingResponse(
+        engine.run_streaming(context),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/{run_id}/execute-step")

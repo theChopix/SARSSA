@@ -7,7 +7,7 @@ import type {
 import {
   fetchPluginRegistry,
   fetchPipelineRuns,
-  runPipeline,
+  runPipelineStream,
   executeStep,
 } from "@/api/client";
 
@@ -338,23 +338,43 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       return;
     }
 
-    // Mark new cards as running
+    // Mark all new cards as idle initially
     for (const name of newCats) {
-      get().setCardStatus(name, "running");
+      get().setCardStatus(name, "idle");
     }
     get().setPipelineStatus("running");
 
     try {
-      await runPipeline(context, { steps });
-      for (const name of newCats) {
-        get().setCardStatus(name, "done");
+      for await (const event of runPipelineStream(context, { steps })) {
+        const { event: eventName, data } = event;
+        const category = data.category as string | undefined;
+
+        switch (eventName) {
+          case "step_start":
+            if (category) get().setCardStatus(category, "running");
+            break;
+          case "step_done":
+            if (category) get().setCardStatus(category, "done");
+            break;
+          case "step_error":
+            if (category) get().setCardStatus(category, "error", data.error as string);
+            break;
+          case "pipeline_done":
+            get().setPipelineStatus("done");
+            get().fetchRuns();
+            break;
+          case "pipeline_error":
+            get().setPipelineStatus("error", data.error as string);
+            break;
+        }
       }
-      get().setPipelineStatus("done");
-      get().fetchRuns();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       for (const name of newCats) {
-        get().setCardStatus(name, "error", msg);
+        const card = get().cards[name];
+        if (card?.status === "running" || card?.status === "idle") {
+          get().setCardStatus(name, "error", msg);
+        }
       }
       get().setPipelineStatus("error", msg);
     }
