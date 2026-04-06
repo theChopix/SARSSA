@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { PipelineCard } from "@/components/PipelineCard";
@@ -12,6 +13,7 @@ function App() {
   const pipelineStatus = usePipelineStore((s) => s.pipelineStatus);
   const runUpTo = usePipelineStore((s) => s.runUpTo);
   const runFullPipeline = usePipelineStore((s) => s.runFullPipeline);
+  const pipelineError = usePipelineStore((s) => s.pipelineError);
 
   useEffect(() => {
     fetchRegistry();
@@ -94,14 +96,32 @@ function App() {
           </section>
         )}
 
+        {/* Pipeline status banner */}
+        {pipelineStatus === "done" && (
+          <div className="mt-6 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            Pipeline finished successfully. Check MLflow for results.
+          </div>
+        )}
+        {pipelineStatus === "error" && pipelineError && (
+          <div className="mt-6 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span className="break-all">{pipelineError}</span>
+          </div>
+        )}
+
         {/* Run full pipeline button */}
-        <div className="mt-10">
+        <div className="mt-6">
           <Button
             className="w-full bg-blue-500 hover:bg-blue-600 text-white py-6 text-base font-medium cursor-pointer"
             disabled={pipelineStatus === "running"}
             onClick={() => runFullPipeline()}
           >
-            {pipelineStatus === "running" ? "Running..." : "Run full pipeline"}
+            {pipelineStatus === "running" ? (
+              <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Running pipeline...</>
+            ) : (
+              "Run full pipeline"
+            )}
           </Button>
         </div>
       </div>

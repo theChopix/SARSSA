@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Settings, Check, Play, AlertCircle } from "lucide-react";
+import { Settings, Check, Play, AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,17 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
   const executionLog = card?.executionLog ?? [];
 
   const isMultiRun = category.type === "multi_run";
+  const cardError = card?.error ?? null;
+  const isRunning = cardStatus === "running";
+
+  const borderClass =
+    cardStatus === "running"
+      ? "border-blue-400"
+      : cardStatus === "done"
+        ? "border-green-400"
+        : cardStatus === "error"
+          ? "border-red-400"
+          : "";
 
   const eligibleRuns = useMemo(
     () =>
@@ -141,9 +152,12 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
 
   if (isMultiRun) {
     return (
-      <Card className="flex flex-col">
+      <Card className={`flex flex-col ${borderClass}`}>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">{category.display_name}</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">{category.display_name}</CardTitle>
+            <StatusIndicator status={cardStatus} />
+          </div>
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col gap-4">
@@ -217,6 +231,14 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
             </Button>
           </div>
 
+          {/* Error message */}
+          {cardStatus === "error" && cardError && (
+            <div className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1.5">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span className="break-all">{cardError}</span>
+            </div>
+          )}
+
           {/* Execution log */}
           {executionLog.length > 0 && (
             <div className="space-y-1">
@@ -253,9 +275,12 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
   }
 
   return (
-    <Card className="flex flex-col">
+    <Card className={`flex flex-col ${borderClass}`}>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">{category.display_name}</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">{category.display_name}</CardTitle>
+          <StatusIndicator status={cardStatus} />
+        </div>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col gap-4">
@@ -343,19 +368,53 @@ export function PipelineCard({ category, onRunUpTo }: PipelineCardProps) {
           </div>
         )}
 
+        {/* Error message */}
+        {cardStatus === "error" && cardError && (
+          <div className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1.5">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span className="break-all">{cardError}</span>
+          </div>
+        )}
+
         {/* Run up to this step button */}
         <div className="mt-auto pt-2">
           <Button
             variant="outline"
             className="w-full border-blue-400 text-blue-600 hover:bg-blue-50 cursor-pointer"
+            disabled={isRunning}
             onClick={onRunUpTo}
           >
-            Run up to this step
+            {isRunning ? (
+              <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Running...</>
+            ) : (
+              "Run up to this step"
+            )}
           </Button>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function StatusIndicator({ status }: { status: string }) {
+  if (status === "running") {
+    return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
+  }
+  if (status === "done") {
+    return (
+      <div className="flex items-center gap-1 text-green-600">
+        <Check className="h-5 w-5" />
+      </div>
+    );
+  }
+  if (status === "error") {
+    return (
+      <div className="flex items-center gap-1 text-red-500">
+        <AlertCircle className="h-5 w-5" />
+      </div>
+    );
+  }
+  return null;
 }
 
 function ModeButton({
