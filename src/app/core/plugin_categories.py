@@ -1,0 +1,37 @@
+PLUGIN_CATEGORIES = {
+    "dataset_loading": {
+        "order": 0,
+        "type": "one_time",
+        "display_name": "Dataset Loading",
+    },
+    "training_cfm": {
+        "order": 1,
+        "type": "one_time",
+        "display_name": "Training CFM",
+    },
+    "training_sae": {
+        "order": 2,
+        "type": "one_time",
+        "display_name": "Training SAE",
+    },
+    "neuron_labeling": {
+        "order": 3,
+        "type": "one_time",
+        "display_name": "Neuron Labeling",
+    },
+    "labeling_evaluation": {
+        "order": 4,
+        "type": "multi_run",
+        "display_name": "Labeling Evaluation",
+    },
+    "inspection": {
+        "order": 5,
+        "type": "multi_run",
+        "display_name": "Inspection",
+    },
+    "steering": {
+        "order": 6,
+        "type": "multi_run",
+        "display_name": "Steering",
+    },
+}
