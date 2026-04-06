@@ -79,6 +79,45 @@ just download-lastfm     # Download LastFM dataset
 
 Run `just` without arguments to see all available commands.
 
+### Running Backend + Frontend (Development)
+
+You need **two terminals** — one for the backend API server and one for the frontend dev server.
+
+#### Terminal 1 — Backend (FastAPI)
+
+```bash
+# From the project root
+cd src
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Or with `just`:
+```bash
+just run
+```
+
+The API will be available at **http://localhost:8000**. You can check the interactive docs at http://localhost:8000/docs.
+
+#### Terminal 2 — Frontend (Vite + React)
+
+```bash
+cd frontend
+npm install   # first time only
+npm run dev
+```
+
+The frontend will be available at **http://localhost:5173** and will proxy API requests to the backend via CORS.
+
+#### Optional — MLflow UI
+
+To browse past experiment results:
+```bash
+just mlflow
+# or: cd src && uv run mlflow ui --port 5000
+```
+
+MLflow UI will be available at **http://localhost:5000**.
+
 ### Manual Commands
 
 If you prefer not to use `just`:
