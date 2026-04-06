@@ -9,6 +9,9 @@ function App() {
   const loading = usePipelineStore((s) => s.loading);
   const fetchRegistry = usePipelineStore((s) => s.fetchRegistry);
   const fetchRuns = usePipelineStore((s) => s.fetchRuns);
+  const pipelineStatus = usePipelineStore((s) => s.pipelineStatus);
+  const runUpTo = usePipelineStore((s) => s.runUpTo);
+  const runFullPipeline = usePipelineStore((s) => s.runFullPipeline);
 
   useEffect(() => {
     fetchRegistry();
@@ -66,10 +69,7 @@ function App() {
                 <PipelineCard
                   key={cat.name}
                   category={cat}
-                  onRunUpTo={() => {
-                    // Task 11 will implement this
-                    console.log("Run up to:", cat.name);
-                  }}
+                  onRunUpTo={() => runUpTo(cat.name)}
                 />
               ))}
             </div>
@@ -87,9 +87,7 @@ function App() {
                 <PipelineCard
                   key={cat.name}
                   category={cat}
-                  onRunUpTo={() => {
-                    console.log("Run up to:", cat.name);
-                  }}
+                  onRunUpTo={() => runUpTo(cat.name)}
                 />
               ))}
             </div>
@@ -100,12 +98,10 @@ function App() {
         <div className="mt-10">
           <Button
             className="w-full bg-blue-500 hover:bg-blue-600 text-white py-6 text-base font-medium cursor-pointer"
-            onClick={() => {
-              // Task 11 will implement this
-              console.log("Run full pipeline");
-            }}
+            disabled={pipelineStatus === "running"}
+            onClick={() => runFullPipeline()}
           >
-            Run full pipeline
+            {pipelineStatus === "running" ? "Running..." : "Run full pipeline"}
           </Button>
         </div>
       </div>

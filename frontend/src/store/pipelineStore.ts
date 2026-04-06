@@ -2,10 +2,12 @@ import { create } from "zustand";
 import type {
   PluginCategory,
   PipelineRun,
+  StepDefinition,
 } from "@/api/types";
 import {
   fetchPluginRegistry,
   fetchPipelineRuns,
+  runPipeline,
 } from "@/api/client";
 
 // --- Per-card state ---
@@ -52,6 +54,8 @@ interface PipelineStore {
 
   // Actions: pipeline execution
   setPipelineStatus: (status: "idle" | "running" | "done" | "error", error?: string) => void;
+  runUpTo: (targetCategory: string) => Promise<void>;
+  runFullPipeline: () => Promise<void>;
 }
 
 function defaultCardState(): CardState {
@@ -182,4 +186,55 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
   setPipelineStatus: (status, error) =>
     set({ pipelineStatus: status, pipelineError: error ?? null }),
+
+  runUpTo: async (targetCategory) => {
+    const { categories, cards } = get();
+    const oneTime = categories
+      .filter((c) => c.type === "one_time")
+      .sort((a, b) => a.order - b.order);
+
+    const targetIdx = oneTime.findIndex((c) => c.name === targetCategory);
+    if (targetIdx === -1) return;
+
+    const stepsToRun = oneTime.slice(0, targetIdx + 1);
+
+    const steps: StepDefinition[] = stepsToRun.map((cat) => {
+      const card = cards[cat.name];
+      const pluginPath = card?.selectedPlugin ?? cat.implementations[0]?.plugin_path;
+      const userParams = card?.params[pluginPath] ?? {};
+      return { plugin: pluginPath, params: userParams };
+    });
+
+    // Mark cards as running
+    for (const cat of stepsToRun) {
+      get().setCardStatus(cat.name, "running");
+    }
+    get().setPipelineStatus("running");
+
+    try {
+      await runPipeline({}, { steps });
+      for (const cat of stepsToRun) {
+        get().setCardStatus(cat.name, "done");
+      }
+      get().setPipelineStatus("done");
+      get().fetchRuns();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      for (const cat of stepsToRun) {
+        get().setCardStatus(cat.name, "error", msg);
+      }
+      get().setPipelineStatus("error", msg);
+    }
+  },
+
+  runFullPipeline: async () => {
+    const { categories } = get();
+    const oneTime = categories
+      .filter((c) => c.type === "one_time")
+      .sort((a, b) => a.order - b.order);
+    const last = oneTime[oneTime.length - 1];
+    if (last) {
+      await get().runUpTo(last.name);
+    }
+  },
 }));
