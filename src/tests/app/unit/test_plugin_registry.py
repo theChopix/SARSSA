@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.plugin_registry import (
+from app.core.plugin_discovery.plugin_registry import (
     _extract_parameters,
     _find_plugin_modules,
     _make_display_name,
@@ -158,7 +158,7 @@ class TestFindPluginModules:
 class TestExtractParameters:
     """Tests for _extract_parameters with mocked PluginManager."""
 
-    @patch("app.core.plugin_registry.PluginManager")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
     def test_extracts_optional_params(self, mock_pm: MagicMock) -> None:
         """Verify params with defaults are marked as not required."""
 
@@ -174,7 +174,7 @@ class TestExtractParameters:
         assert params[0].default == 64
         assert params[0].type == "int"
 
-    @patch("app.core.plugin_registry.PluginManager")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
     def test_extracts_required_params(self, mock_pm: MagicMock) -> None:
         """Verify params without defaults are marked as required."""
         import inspect
@@ -186,7 +186,7 @@ class TestExtractParameters:
         assert params[0].required is True
         assert params[0].default is None
 
-    @patch("app.core.plugin_registry.PluginManager")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
     def test_excludes_self_and_context(self, mock_pm: MagicMock) -> None:
         """Verify self and context are filtered out."""
         mock_pm.load.return_value = _make_mock_plugin({"epochs": (int, 10)})
@@ -195,7 +195,7 @@ class TestExtractParameters:
         assert "self" not in names
         assert "context" not in names
 
-    @patch("app.core.plugin_registry.PluginManager")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
     def test_unannotated_param_defaults_to_str(self, mock_pm: MagicMock) -> None:
         """Verify params without type annotations default to 'str'."""
         import inspect
@@ -216,7 +216,7 @@ class TestExtractParameters:
         params = _extract_parameters("fake.module.module")
         assert params[0].type == "str"
 
-    @patch("app.core.plugin_registry.PluginManager")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
     def test_returns_parameter_info_instances(self, mock_pm: MagicMock) -> None:
         """Verify returned items are ParameterInfo models."""
         mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
@@ -249,9 +249,9 @@ class TestMakeDisplayName:
 class TestGetPluginRegistry:
     """Tests for get_plugin_registry with mocked internals."""
 
-    @patch("app.core.plugin_registry._discover_implementations")
+    @patch("app.core.plugin_discovery.plugin_registry._discover_implementations")
     @patch(
-        "app.core.plugin_registry.PLUGIN_CATEGORIES",
+        "app.core.plugin_discovery.plugin_registry.PLUGIN_CATEGORIES",
         {
             "cat_a": CategoryInfo(order=0, type=CategoryType.ONE_TIME, display_name="Cat A"),
             "cat_b": CategoryInfo(order=1, type=CategoryType.MULTI_RUN, display_name="Cat B"),
@@ -263,9 +263,9 @@ class TestGetPluginRegistry:
         registry = get_plugin_registry()
         assert set(registry.keys()) == {"cat_a", "cat_b"}
 
-    @patch("app.core.plugin_registry._discover_implementations")
+    @patch("app.core.plugin_discovery.plugin_registry._discover_implementations")
     @patch(
-        "app.core.plugin_registry.PLUGIN_CATEGORIES",
+        "app.core.plugin_discovery.plugin_registry.PLUGIN_CATEGORIES",
         {
             "cat_a": CategoryInfo(order=0, type=CategoryType.ONE_TIME, display_name="Cat A"),
         },
@@ -277,9 +277,9 @@ class TestGetPluginRegistry:
         for entry in registry.values():
             assert isinstance(entry, CategoryRegistryEntry)
 
-    @patch("app.core.plugin_registry._discover_implementations")
+    @patch("app.core.plugin_discovery.plugin_registry._discover_implementations")
     @patch(
-        "app.core.plugin_registry.PLUGIN_CATEGORIES",
+        "app.core.plugin_discovery.plugin_registry.PLUGIN_CATEGORIES",
         {
             "cat_a": CategoryInfo(order=0, type=CategoryType.ONE_TIME, display_name="Cat A"),
         },

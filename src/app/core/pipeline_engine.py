@@ -2,7 +2,7 @@ import datetime
 
 import mlflow
 
-from app.core.plugin_manager import PluginManager
+from app.core.plugin_discovery.plugin_manager import PluginManager
 
 
 class PipelineEngine:

@@ -8,15 +8,15 @@ registry consumable by the frontend.
 import inspect
 from pathlib import Path
 
-from app.core.plugin_categories import PLUGIN_CATEGORIES
-from app.core.plugin_manager import PluginManager
+from app.core.plugin_discovery.plugin_categories import PLUGIN_CATEGORIES
+from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.models.plugin import (
     CategoryRegistryEntry,
     ImplementationInfo,
     ParameterInfo,
 )
 
-PLUGINS_DIR = Path(__file__).resolve().parents[1].parent / "plugins"
+PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
 SKIP_PARAMS = {"self", "context"}
 
