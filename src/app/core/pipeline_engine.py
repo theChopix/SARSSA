@@ -2,6 +2,7 @@ import datetime
 
 import mlflow
 
+from app.config.config import EXPERIMENT_NAME
 from app.core.plugin_discovery.plugin_manager import PluginManager
 
 
@@ -10,7 +11,7 @@ class PipelineEngine:
         self.steps = steps
 
     def run(self, context):
-        mlflow.set_experiment("pipeline_experiments_01")
+        mlflow.set_experiment(EXPERIMENT_NAME)
 
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         with mlflow.start_run(run_name=f"pipeline_run_{timestamp}") as _:
