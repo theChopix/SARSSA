@@ -1,0 +1,291 @@
+"""Unit tests for app.core.plugin_registry.
+
+All tests use mock filesystem structures and mock plugin instances
+to avoid coupling to the real src/plugins/ directory.
+"""
+
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.core.plugin_registry import (
+    _extract_parameters,
+    _find_plugin_modules,
+    _make_display_name,
+    get_plugin_registry,
+)
+from app.models.plugin import (
+    CategoryInfo,
+    CategoryRegistryEntry,
+    CategoryType,
+    ParameterInfo,
+)
+
+# ── Helpers for building mock plugin directory trees ──────────────
+
+
+def _build_flat_category(tmp_path: Path, category: str, impls: list[str]) -> Path:
+    """Create a flat category tree: ``<category>/<impl>/<impl>.py``.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+        category: Category folder name.
+        impls: List of implementation folder/file names.
+
+    Returns:
+        Path: The category directory.
+    """
+    cat_dir = tmp_path / category
+    cat_dir.mkdir()
+    for impl in impls:
+        impl_dir = cat_dir / impl
+        impl_dir.mkdir()
+        (impl_dir / f"{impl}.py").touch()
+    return cat_dir
+
+
+def _build_nested_category(
+    tmp_path: Path,
+    category: str,
+    subtypes: dict[str, list[str]],
+) -> Path:
+    """Create a nested category tree: ``<category>/<sub>/<impl>/<impl>.py``.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+        category: Category folder name.
+        subtypes: Mapping of subtype dirs to implementation names.
+
+    Returns:
+        Path: The category directory.
+    """
+    cat_dir = tmp_path / category
+    cat_dir.mkdir()
+    for subtype, impls in subtypes.items():
+        sub_dir = cat_dir / subtype
+        sub_dir.mkdir()
+        for impl in impls:
+            impl_dir = sub_dir / impl
+            impl_dir.mkdir()
+            (impl_dir / f"{impl}.py").touch()
+    return cat_dir
+
+
+def _make_mock_plugin(
+    params: dict[str, tuple[type, Any]],
+) -> MagicMock:
+    """Create a mock plugin whose run() has the given signature params.
+
+    Args:
+        params: Mapping of param name to (type, default).
+            Use ``inspect.Parameter.empty`` for required params.
+
+    Returns:
+        MagicMock: A mock with a ``run`` method with proper signature.
+    """
+    import inspect
+
+    parameters = [
+        inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        inspect.Parameter(
+            "context",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=dict,
+        ),
+    ]
+    for name, (ann, default) in params.items():
+        parameters.append(
+            inspect.Parameter(
+                name,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=ann,
+                default=default,
+            )
+        )
+
+    sig = inspect.Signature(parameters)
+    mock_plugin = MagicMock()
+    mock_plugin.run = MagicMock()
+    mock_plugin.run.__signature__ = sig
+    return mock_plugin
+
+
+# ── Tests ─────────────────────────────────────────────────────────
+
+
+class TestFindPluginModules:
+    """Tests for _find_plugin_modules with mock directory trees."""
+
+    def test_flat_structure(self, tmp_path: Path) -> None:
+        """Verify discovery of plugins in a flat category layout."""
+        cat_dir = _build_flat_category(tmp_path, "my_cat", ["alpha", "beta"])
+        modules = _find_plugin_modules(cat_dir, "my_cat")
+        assert modules == ["my_cat.alpha.alpha", "my_cat.beta.beta"]
+
+    def test_nested_structure(self, tmp_path: Path) -> None:
+        """Verify discovery of plugins in a nested category layout."""
+        cat_dir = _build_nested_category(
+            tmp_path, "my_cat", {"sub_a": ["impl_x"], "sub_b": ["impl_y"]}
+        )
+        modules = _find_plugin_modules(cat_dir, "my_cat")
+        assert "my_cat.sub_a.impl_x.impl_x" in modules
+        assert "my_cat.sub_b.impl_y.impl_y" in modules
+
+    def test_skips_dunder_directories(self, tmp_path: Path) -> None:
+        """Verify __pycache__ and similar dirs are ignored."""
+        cat_dir = _build_flat_category(tmp_path, "my_cat", ["good_impl"])
+        (cat_dir / "__pycache__").mkdir()
+        (cat_dir / ".hidden").mkdir()
+        modules = _find_plugin_modules(cat_dir, "my_cat")
+        assert modules == ["my_cat.good_impl.good_impl"]
+
+    def test_empty_category_returns_empty(self, tmp_path: Path) -> None:
+        """Verify an empty category directory yields no modules."""
+        cat_dir = tmp_path / "empty_cat"
+        cat_dir.mkdir()
+        modules = _find_plugin_modules(cat_dir, "empty_cat")
+        assert modules == []
+
+    def test_dir_without_matching_py_is_traversed(self, tmp_path: Path) -> None:
+        """Verify intermediate dirs without a matching .py are traversed."""
+        cat_dir = _build_nested_category(tmp_path, "my_cat", {"intermediate": ["leaf"]})
+        modules = _find_plugin_modules(cat_dir, "my_cat")
+        assert modules == ["my_cat.intermediate.leaf.leaf"]
+
+
+class TestExtractParameters:
+    """Tests for _extract_parameters with mocked PluginManager."""
+
+    @patch("app.core.plugin_registry.PluginManager")
+    def test_extracts_optional_params(self, mock_pm: MagicMock) -> None:
+        """Verify params with defaults are marked as not required."""
+
+        mock_pm.load.return_value = _make_mock_plugin(
+            {"batch_size": (int, 64), "lr": (float, 0.01)}
+        )
+        params = _extract_parameters("fake.module.module")
+
+        assert len(params) == 2
+        for p in params:
+            assert not p.required
+        assert params[0].name == "batch_size"
+        assert params[0].default == 64
+        assert params[0].type == "int"
+
+    @patch("app.core.plugin_registry.PluginManager")
+    def test_extracts_required_params(self, mock_pm: MagicMock) -> None:
+        """Verify params without defaults are marked as required."""
+        import inspect
+
+        mock_pm.load.return_value = _make_mock_plugin({"tag": (str, inspect.Parameter.empty)})
+        params = _extract_parameters("fake.module.module")
+
+        assert len(params) == 1
+        assert params[0].required is True
+        assert params[0].default is None
+
+    @patch("app.core.plugin_registry.PluginManager")
+    def test_excludes_self_and_context(self, mock_pm: MagicMock) -> None:
+        """Verify self and context are filtered out."""
+        mock_pm.load.return_value = _make_mock_plugin({"epochs": (int, 10)})
+        params = _extract_parameters("fake.module.module")
+        names = {p.name for p in params}
+        assert "self" not in names
+        assert "context" not in names
+
+    @patch("app.core.plugin_registry.PluginManager")
+    def test_unannotated_param_defaults_to_str(self, mock_pm: MagicMock) -> None:
+        """Verify params without type annotations default to 'str'."""
+        import inspect
+
+        mock_plugin = _make_mock_plugin({})
+        # Manually add unannotated param
+        sig = inspect.signature(mock_plugin.run)
+        new_params = list(sig.parameters.values()) + [
+            inspect.Parameter(
+                "mystery",
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default="hello",
+            )
+        ]
+        mock_plugin.run.__signature__ = sig.replace(parameters=new_params)
+        mock_pm.load.return_value = mock_plugin
+
+        params = _extract_parameters("fake.module.module")
+        assert params[0].type == "str"
+
+    @patch("app.core.plugin_registry.PluginManager")
+    def test_returns_parameter_info_instances(self, mock_pm: MagicMock) -> None:
+        """Verify returned items are ParameterInfo models."""
+        mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
+        params = _extract_parameters("fake.module.module")
+        for p in params:
+            assert isinstance(p, ParameterInfo)
+
+
+class TestMakeDisplayName:
+    """Tests for _make_display_name (pure function, no mocking needed)."""
+
+    @pytest.mark.parametrize(
+        ("module_path", "expected"),
+        [
+            ("cat.my_impl.my_impl", "My Impl"),
+            ("cat.sub.deep_impl.deep_impl", "Deep Impl"),
+            ("cat.single_word.single_word", "Single Word"),
+        ],
+    )
+    def test_produces_expected_display_name(self, module_path: str, expected: str) -> None:
+        """Verify display name derivation from module path.
+
+        Args:
+            module_path: Dotted plugin module path.
+            expected: Expected human-readable display name.
+        """
+        assert _make_display_name(module_path) == expected
+
+
+class TestGetPluginRegistry:
+    """Tests for get_plugin_registry with mocked internals."""
+
+    @patch("app.core.plugin_registry._discover_implementations")
+    @patch(
+        "app.core.plugin_registry.PLUGIN_CATEGORIES",
+        {
+            "cat_a": CategoryInfo(order=0, type=CategoryType.ONE_TIME, display_name="Cat A"),
+            "cat_b": CategoryInfo(order=1, type=CategoryType.MULTI_RUN, display_name="Cat B"),
+        },
+    )
+    def test_returns_entry_for_every_category(self, mock_discover: MagicMock) -> None:
+        """Verify registry contains all mocked categories."""
+        mock_discover.return_value = []
+        registry = get_plugin_registry()
+        assert set(registry.keys()) == {"cat_a", "cat_b"}
+
+    @patch("app.core.plugin_registry._discover_implementations")
+    @patch(
+        "app.core.plugin_registry.PLUGIN_CATEGORIES",
+        {
+            "cat_a": CategoryInfo(order=0, type=CategoryType.ONE_TIME, display_name="Cat A"),
+        },
+    )
+    def test_entries_are_category_registry_entry(self, mock_discover: MagicMock) -> None:
+        """Verify each value is a CategoryRegistryEntry."""
+        mock_discover.return_value = []
+        registry = get_plugin_registry()
+        for entry in registry.values():
+            assert isinstance(entry, CategoryRegistryEntry)
+
+    @patch("app.core.plugin_registry._discover_implementations")
+    @patch(
+        "app.core.plugin_registry.PLUGIN_CATEGORIES",
+        {
+            "cat_a": CategoryInfo(order=0, type=CategoryType.ONE_TIME, display_name="Cat A"),
+        },
+    )
+    def test_passes_category_info_through(self, mock_discover: MagicMock) -> None:
+        """Verify the category_info field matches the source."""
+        mock_discover.return_value = []
+        registry = get_plugin_registry()
+        assert registry["cat_a"].category_info.display_name == "Cat A"
