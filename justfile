@@ -14,6 +14,18 @@ install-dev:
 run:
     cd src && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+# Run tests
+test *ARGS:
+    cd src && uv run pytest {{ARGS}}
+
+# Run unit tests only
+test-unit:
+    cd src && uv run pytest tests/app/unit
+
+# Run integration tests only
+test-integration:
+    cd src && uv run pytest tests/app/integration
+
 # Format code with ruff
 format:
     uv run ruff format .
