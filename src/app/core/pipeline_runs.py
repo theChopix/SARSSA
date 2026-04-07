@@ -6,7 +6,7 @@ from typing import Any, cast
 import mlflow
 from mlflow.entities import Run
 
-EXPERIMENT_NAME = "pipeline_experiments_01"
+from app.config.config import EXPERIMENT_NAME
 
 
 def get_pipeline_runs() -> list[dict[str, Any]]:

@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
+from app.config.config import EXPERIMENT_NAME
 from app.core.pipeline_runs import (
-    EXPERIMENT_NAME,
     get_pipeline_runs,
     get_run_context,
 )
