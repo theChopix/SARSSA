@@ -1,48 +1,282 @@
 /**
  * Root application component.
  *
- * React components are **functions that return JSX** (HTML-like syntax).
- * This file is the top-level component rendered by `main.tsx`.
+ * This is the top-level React component rendered by `main.tsx`.
+ * It orchestrates the full page layout matching the UI mockup:
  *
- * The `className` strings (e.g. `"bg-gray-950"`) are **TailwindCSS
- * utility classes**. Each one maps to a single CSS property:
+ *   ┌──────────────────────────────────────────────────┐
+ *   │  SARSSAe               mlflow … Results (link)   │  ← header
+ *   ├──────────────────────────────────────────────────┤
+ *   │  "Run new pipeline experiment"                   │  ← title
+ *   │                                                  │
+ *   │  ┌────┐ ┌────┐ ┌────┐ ┌────┐                    │  ← row 1
+ *   │  │Card│ │Card│ │Card│ │Card│   (one_time)        │    (4 cols)
+ *   │  └────┘ └────┘ └────┘ └────┘                    │
+ *   │                                                  │
+ *   │  ┌────┐ ┌────┐ ┌────┐                            │  ← row 2
+ *   │  │Card│ │Card│ │Card│          (multi_run)       │    (3 cols)
+ *   │  └────┘ └────┘ └────┘                            │
+ *   │                                                  │
+ *   │  [ Run full pipeline ]                           │  ← bottom bar
+ *   └──────────────────────────────────────────────────┘
  *
- *   bg-gray-950   → background-color: #030712
- *   min-h-screen  → min-height: 100vh
- *   text-white    → color: #fff
- *   p-8           → padding: 2rem  (8 × 0.25rem)
- *   text-3xl      → font-size: 1.875rem
- *   font-bold     → font-weight: 700
- *   text-gray-400 → color: #9ca3af
- *
- * You chain them together to style elements without writing CSS files.
+ * ┌──────────────────────────────────────────────────────┐
+ * │  React hooks refresher                                │
+ * │                                                       │
+ * │  `useEffect(fn, [])` — runs `fn` once when the       │
+ * │  component first appears ("mounts"). The empty `[]`   │
+ * │  means "no dependencies — don't re-run".              │
+ * │  We use it to fetch the registry on page load.        │
+ * │                                                       │
+ * │  `useMemo(fn, [deps])` — caches the return value     │
+ * │  of `fn` and only recalculates when `deps` change.   │
+ * │  We use it to split categories into rows.             │
+ * └──────────────────────────────────────────────────────┘
  */
+
+import { useEffect, useMemo } from "react";
+import { Loader2 } from "lucide-react";
+
+import PipelineCard from "./components/PipelineCard";
+import { usePipelineStore } from "./store/pipelineStore";
+import type { StepDefinition } from "./types/pipeline";
 
 /**
  * App — the top-level React component.
  *
- * Right now it renders a placeholder header. In later phases we will
- * add the pipeline card grid, SSE streaming status, and run history.
+ * On mount, it fetches the plugin registry from the backend.
+ * Then it splits categories into two rows (one_time vs multi_run)
+ * and renders a grid of PipelineCard components.
  */
 function App() {
+  // ── Read state from store ───────────────────────────
+  const registry = usePipelineStore((s) => s.registry);
+  const cards = usePipelineStore((s) => s.cards);
+  const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
+  const loadRegistry = usePipelineStore((s) => s.loadRegistry);
+  const runPipeline = usePipelineStore((s) => s.runPipeline);
+  const currentRunId = usePipelineStore((s) => s.currentRunId);
+  const runSingleStep = usePipelineStore((s) => s.runSingleStep);
+
+  // ── Load registry on mount ──────────────────────────
+  // This runs ONCE when the page loads. It calls the backend
+  // to fetch all available plugins and categories.
+  useEffect(() => {
+    loadRegistry();
+  }, [loadRegistry]);
+
+  // ── Split categories into two rows ──────────────────
+  // `useMemo` caches this computation so it only re-runs
+  // when the registry changes, not on every render.
+  const { oneTimeKeys, multiRunKeys } = useMemo(() => {
+    if (!registry) return { oneTimeKeys: [], multiRunKeys: [] };
+
+    const oneTime: string[] = [];
+    const multiRun: string[] = [];
+
+    // Sort categories by their `order` field, then split by type.
+    const sorted = Object.entries(registry).sort(
+      ([, a], [, b]) => a.category_info.order - b.category_info.order
+    );
+
+    for (const [key, entry] of sorted) {
+      if (entry.category_info.type === "one_time") {
+        oneTime.push(key);
+      } else {
+        multiRun.push(key);
+      }
+    }
+
+    return { oneTimeKeys: oneTime, multiRunKeys: multiRun };
+  }, [registry]);
+
+  // ── Handler: "Run up to this step" ──────────────────
+  // Collects all one_time steps from the first card up to
+  // (and including) the clicked card, then starts the pipeline.
+  const handleRunUpTo = (targetCategoryKey: string) => {
+    if (!registry) return;
+
+    const steps: StepDefinition[] = [];
+
+    for (const key of oneTimeKeys) {
+      const card = cards[key];
+      if (!card?.selectedPlugin) continue;
+
+      // Build params: start from defaults, override with user input.
+      const entry = registry[key];
+      const impl = entry.implementations.find(
+        (i) => i.plugin_name === card.selectedPlugin
+      );
+      const params: Record<string, unknown> = {};
+      if (impl) {
+        for (const p of impl.params) {
+          const userVal = card.params[p.name];
+          if (userVal !== undefined && userVal !== "") {
+            params[p.name] = userVal;
+          } else if (p.default != null) {
+            params[p.name] = p.default;
+          }
+        }
+      }
+
+      steps.push({ plugin: card.selectedPlugin, params });
+
+      // Stop after the target category.
+      if (key === targetCategoryKey) break;
+    }
+
+    if (steps.length > 0) {
+      runPipeline(steps);
+    }
+  };
+
+  // ── Handler: "Execute step" (multi_run) ─────────────
+  // Runs a single plugin step on the current pipeline run.
+  const handleExecuteStep = (categoryKey: string) => {
+    if (!currentRunId || !registry) return;
+
+    const card = cards[categoryKey];
+    if (!card?.selectedPlugin) return;
+
+    const entry = registry[categoryKey];
+    const impl = entry.implementations.find(
+      (i) => i.plugin_name === card.selectedPlugin
+    );
+    const params: Record<string, unknown> = {};
+    if (impl) {
+      for (const p of impl.params) {
+        const userVal = card.params[p.name];
+        if (userVal !== undefined && userVal !== "") {
+          params[p.name] = userVal;
+        } else if (p.default != null) {
+          params[p.name] = p.default;
+        }
+      }
+    }
+
+    runSingleStep(currentRunId, { plugin: card.selectedPlugin, params });
+  };
+
+  // ── Handler: "Run full pipeline" ────────────────────
+  // Collects ALL one_time steps and runs them.
+  const handleRunFullPipeline = () => {
+    if (!registry) return;
+
+    const steps: StepDefinition[] = [];
+
+    for (const key of oneTimeKeys) {
+      const card = cards[key];
+      if (!card?.selectedPlugin) continue;
+
+      const entry = registry[key];
+      const impl = entry.implementations.find(
+        (i) => i.plugin_name === card.selectedPlugin
+      );
+      const params: Record<string, unknown> = {};
+      if (impl) {
+        for (const p of impl.params) {
+          const userVal = card.params[p.name];
+          if (userVal !== undefined && userVal !== "") {
+            params[p.name] = userVal;
+          } else if (p.default != null) {
+            params[p.name] = p.default;
+          }
+        }
+      }
+
+      steps.push({ plugin: card.selectedPlugin, params });
+    }
+
+    if (steps.length > 0) {
+      runPipeline(steps);
+    }
+  };
+
+  // ── Loading state ───────────────────────────────────
+  if (!registry) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Render ──────────────────────────────────────────
   return (
-    <div className="bg-gray-950 min-h-screen text-white">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Header ─────────────────────────────────── */}
-      <header className="border-b border-gray-800 px-8 py-6">
-        <h1 className="text-2xl font-bold tracking-tight">
-          SARSSA
-        </h1>
-        <p className="text-sm text-gray-400 mt-1">
-          SAE-based Recommender System Steering &amp; Analysis
-        </p>
+      <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-gray-900">SARSSAe</h1>
+        <a
+          href="http://localhost:5000"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-700"
+        >
+          <img
+            src="/mlflow-logo.png"
+            alt="mlflow"
+            className="h-5"
+          />
+          Pipeline Experiments Results
+        </a>
       </header>
 
-      {/* ── Main content area (placeholder) ────────── */}
-      <main className="p-8">
-        <p className="text-gray-500">
-          Pipeline cards will appear here.
-        </p>
-      </main>
+      {/* ── Page title ─────────────────────────────── */}
+      <div className="px-8 pt-8 pb-4">
+        <h2 className="text-xl font-bold text-gray-900 text-center">
+          Run new pipeline experiment
+        </h2>
+      </div>
+
+      {/* ── Row 1: one_time cards ──────────────────── */}
+      <section className="px-8 pb-4">
+        <div className="grid grid-cols-4 gap-4">
+          {oneTimeKeys.map((key) => (
+            <PipelineCard
+              key={key}
+              categoryKey={key}
+              onRunUpTo={handleRunUpTo}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* ── Row 2: multi_run cards ─────────────────── */}
+      <section className="px-8 pb-8">
+        <div className="grid grid-cols-3 gap-4">
+          {multiRunKeys.map((key) => (
+            <PipelineCard
+              key={key}
+              categoryKey={key}
+              onExecuteStep={handleExecuteStep}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* ── Spacer pushes bottom bar down ──────────── */}
+      <div className="flex-1" />
+
+      {/* ── Bottom bar: Run full pipeline ──────────── */}
+      <div className="px-8 pb-8">
+        <button
+          disabled={pipelineRunning}
+          onClick={handleRunFullPipeline}
+          className="w-full py-3 rounded-lg text-white font-medium text-sm
+                     bg-blue-500 hover:bg-blue-600 disabled:opacity-70
+                     disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          {pipelineRunning ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Running pipeline...
+            </span>
+          ) : (
+            "Run full pipeline"
+          )}
+        </button>
+      </div>
     </div>
   );
 }

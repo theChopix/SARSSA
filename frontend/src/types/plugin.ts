@@ -83,7 +83,7 @@ export interface ImplementationInfo {
  * - `implementations` – All available plugins for this category.
  */
 export interface CategoryRegistryEntry {
-  category: CategoryInfo;
+  category_info: CategoryInfo;
   implementations: ImplementationInfo[];
 }
 

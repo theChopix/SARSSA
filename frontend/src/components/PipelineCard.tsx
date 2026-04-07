@@ -1,0 +1,323 @@
+/**
+ * PipelineCard — a single pipeline category card.
+ *
+ * This is the main UI building block. One card is rendered for each
+ * category in the plugin registry (e.g. "Dataset Loading", "Training CFM").
+ *
+ * The card is **data-driven**: it receives a category key and reads
+ * everything it needs from the Zustand store + registry. This means
+ * the same component works for both "one_time" and "multi_run" cards.
+ *
+ * ┌──────────────────────────────────────────────────────────┐
+ * │  React component anatomy                                 │
+ * │                                                          │
+ * │  A component is a function that returns JSX.             │
+ * │  "Props" are the arguments passed to the component:      │
+ * │                                                          │
+ * │    <PipelineCard categoryKey="dataset_loading" />        │
+ * │                  ↑ this becomes props.categoryKey         │
+ * │                                                          │
+ * │  Inside the component, we read from the store using      │
+ * │  selectors, and call store actions on user interaction.  │
+ * └──────────────────────────────────────────────────────────┘
+ *
+ * Visual structure of one card (from the UI mockup):
+ *
+ *   ┌─────────────────────────────────────┐
+ *   │  Category Title          ✓ / ⟳ / ✗ │  ← header + status
+ *   │                                     │
+ *   │  ◉ Plugin A          ⚙ Configure   │  ← radio + config toggle
+ *   │  ○ Plugin B          ⚙ Configure   │
+ *   │                                     │
+ *   │  ┌─ Parameter form (if open) ────┐  │
+ *   │  │  epochs  (int)    [100]       │  │
+ *   │  │  lr      (float)  [0.0001]    │  │
+ *   │  └──────────────────────────────-┘  │
+ *   │                                     │
+ *   │  [ Run up to this step ]            │  ← action button
+ *   └─────────────────────────────────────┘
+ */
+
+import { Settings, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+
+import { usePipelineStore } from "../store/pipelineStore";
+import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
+import type { CardStatus } from "../store/pipelineStore";
+
+// ── Props ───────────────────────────────────────────────
+
+/**
+ * Props accepted by PipelineCard.
+ *
+ * - `categoryKey`  – The registry key (e.g. "dataset_loading").
+ * - `onRunUpTo`    – Called when user clicks "Run up to this step".
+ *                     Only provided for one_time cards.
+ * - `onExecuteStep`– Called when user clicks "Execute step".
+ *                     Only provided for multi_run cards.
+ */
+interface PipelineCardProps {
+  categoryKey: string;
+  onRunUpTo?: (categoryKey: string) => void;
+  onExecuteStep?: (categoryKey: string) => void;
+}
+
+// ── Status icon helper ──────────────────────────────────
+
+/**
+ * Renders a small icon in the card header based on execution status.
+ *
+ * - idle    → nothing
+ * - running → spinning loader
+ * - done    → green checkmark
+ * - error   → red alert
+ */
+function StatusIcon({ status }: { status: CardStatus }) {
+  switch (status) {
+    case "running":
+      return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
+    case "done":
+      return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+    case "error":
+      return <AlertCircle className="h-5 w-5 text-red-500" />;
+    default:
+      return null;
+  }
+}
+
+// ── Parameter form row ──────────────────────────────────
+
+/**
+ * A single row in the parameter configuration form.
+ *
+ * Shows: param name, type badge, and an input field with the
+ * default value pre-filled.
+ *
+ * ┌──────────────────────────────────────────────┐
+ * │  epochs  (int)    [ 100                    ] │
+ * └──────────────────────────────────────────────┘
+ */
+function ParamRow({
+  param,
+  value,
+  onChange,
+}: {
+  param: ParameterInfo;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      {/* Parameter name */}
+      <span className="text-sm text-gray-700 min-w-[100px]">
+        {param.name}
+      </span>
+
+      {/* Type badge */}
+      <span className="text-xs text-gray-400 min-w-[40px]">
+        ({param.type})
+      </span>
+
+      {/* Input field */}
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={param.required ? "required" : ""}
+        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
+                   focus:outline-none focus:ring-2 focus:ring-blue-400
+                   text-gray-800 bg-white"
+      />
+    </div>
+  );
+}
+
+// ── Plugin row ──────────────────────────────────────────
+
+/**
+ * A single plugin implementation row.
+ *
+ * Shows a radio button, plugin display name, and a "Configure"
+ * button that toggles the parameter form.
+ *
+ * ┌──────────────────────────────────────────────┐
+ * │  ◉ ELSA Trainer                 ⚙ Configure │
+ * └──────────────────────────────────────────────┘
+ */
+function PluginRow({
+  impl,
+  isSelected,
+  onSelect,
+  onToggleConfig,
+}: {
+  impl: ImplementationInfo;
+  isSelected: boolean;
+  onSelect: () => void;
+  onToggleConfig: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      {/* Radio button + name */}
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="radio"
+          checked={isSelected}
+          onChange={onSelect}
+          className="accent-blue-500"
+        />
+        <span className="text-sm text-gray-800">{impl.display_name}</span>
+      </label>
+
+      {/* Configure button (only if plugin has params) */}
+      {impl.params.length > 0 && (
+        <button
+          onClick={onToggleConfig}
+          className="flex items-center gap-1 text-xs text-blue-500
+                     hover:text-blue-700 transition-colors cursor-pointer"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Configure
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ──────────────────────────────────────
+
+/**
+ * PipelineCard — renders one category card.
+ *
+ * This is the main export. It composes the sub-components above
+ * and connects them to the Zustand store.
+ */
+export default function PipelineCard({
+  categoryKey,
+  onRunUpTo,
+  onExecuteStep,
+}: PipelineCardProps) {
+  // ── Read from store ─────────────────────────────────
+  // Each selector picks one slice → component only re-renders
+  // when that specific slice changes.
+
+  const entry = usePipelineStore((s) => s.registry?.[categoryKey]);
+  const card = usePipelineStore((s) => s.cards[categoryKey]);
+  const selectPlugin = usePipelineStore((s) => s.selectPlugin);
+  const setParam = usePipelineStore((s) => s.setParam);
+  const toggleConfig = usePipelineStore((s) => s.toggleConfig);
+  const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
+
+  // Guard: if registry hasn't loaded yet, render nothing.
+  if (!entry || !card) return null;
+
+  const { category_info, implementations } = entry;
+
+  // Find the currently selected implementation object.
+  const selectedImpl = implementations.find(
+    (impl) => impl.plugin_name === card.selectedPlugin
+  );
+
+  // Is this a multi_run card?
+  const isMultiRun = category_info.type === "multi_run";
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
+      {/* ── Card header ──────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-gray-900">
+          {category_info.display_name}
+        </h3>
+        <StatusIcon status={card.status} />
+      </div>
+
+      {/* ── Multi-run target info ────────────────────── */}
+      {isMultiRun && (
+        <div className="text-sm text-gray-500">
+          <span className="text-blue-500 cursor-pointer hover:underline">
+            Target pipeline run
+          </span>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Run a one-time pipeline first.
+          </p>
+        </div>
+      )}
+
+      {/* ── Plugin list ──────────────────────────────── */}
+      <div className="flex flex-col gap-0.5">
+        {implementations.map((impl) => (
+          <PluginRow
+            key={impl.plugin_name}
+            impl={impl}
+            isSelected={card.selectedPlugin === impl.plugin_name}
+            onSelect={() => selectPlugin(categoryKey, impl.plugin_name)}
+            onToggleConfig={() => {
+              // Select the plugin first if not already selected.
+              if (card.selectedPlugin !== impl.plugin_name) {
+                selectPlugin(categoryKey, impl.plugin_name);
+              }
+              toggleConfig(categoryKey);
+            }}
+          />
+        ))}
+      </div>
+
+      {/* ── Parameter form (expandable) ──────────────── */}
+      {card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
+        <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
+          {selectedImpl.params.map((param) => (
+            <ParamRow
+              key={param.name}
+              param={param}
+              value={
+                card.params[param.name] ??
+                (param.default != null ? String(param.default) : "")
+              }
+              onChange={(val) => setParam(categoryKey, param.name, val)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Action button ────────────────────────────── */}
+      <div className="mt-auto pt-2">
+        {isMultiRun ? (
+          <button
+            disabled={!card.selectedPlugin || card.status === "running"}
+            onClick={() => onExecuteStep?.(categoryKey)}
+            className="w-full py-2 rounded-md text-sm font-medium text-white
+                       bg-blue-500 hover:bg-blue-600 disabled:opacity-50
+                       disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            {card.status === "running" ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Running...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                ▷ Execute step
+              </span>
+            )}
+          </button>
+        ) : (
+          <button
+            disabled={pipelineRunning}
+            onClick={() => onRunUpTo?.(categoryKey)}
+            className="w-full py-2 rounded-md text-sm font-medium
+                       border border-gray-300 text-gray-700
+                       hover:bg-gray-50 disabled:opacity-50
+                       disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            {card.status === "running" ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Running...
+              </span>
+            ) : (
+              "Run up to this step"
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
