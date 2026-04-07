@@ -1,0 +1,11 @@
+/**
+ * Global stylesheet.
+ *
+ * The single `@import` below activates TailwindCSS v4.
+ * All utility classes (e.g. `bg-gray-900`, `text-white`, `p-4`) are
+ * generated automatically — you never need to edit this file.
+ *
+ * If you need custom base styles, add them below the import using
+ * standard CSS or Tailwind's `@layer base { ... }` directive.
+ */
+@import "tailwindcss";
