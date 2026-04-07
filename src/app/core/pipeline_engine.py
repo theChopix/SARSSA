@@ -105,6 +105,27 @@ class PipelineEngine:
 
         self._parent_run_id = None
 
+    def resume_run(self, run_id: str) -> None:
+        """Attach to an existing parent pipeline run.
+
+        Use this to execute additional steps on a previously
+        completed run (e.g. phase-2 multi-run plugins).
+
+        Args:
+            run_id: MLflow run ID of the parent run to resume.
+
+        Raises:
+            RuntimeError: If a run is already in progress.
+        """
+        if self._parent_run_id is not None:
+            raise RuntimeError(
+                "A pipeline run is already in progress. "
+                "Call finalize_run() before resuming another."
+            )
+
+        mlflow.set_experiment(EXPERIMENT_NAME)
+        self._parent_run_id = run_id
+
     # ── Batch mode (original) ─────────────────────────
 
     def run(self, context: dict[str, Any]) -> dict[str, Any]:

@@ -186,6 +186,43 @@ class TestFinalizeRun:
         assert run_id == "run_2"
 
 
+class TestResumeRun:
+    """Tests for PipelineEngine.resume_run."""
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_sets_parent_run_id(self, _mock_mlflow: MagicMock) -> None:
+        """Verify _parent_run_id is set to the given run_id."""
+        engine = PipelineEngine()
+        engine.resume_run("existing_run_42")
+
+        assert engine._parent_run_id == "existing_run_42"
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_raises_if_run_already_active(self, mock_mlflow: MagicMock) -> None:
+        """Verify RuntimeError when a run is already in progress."""
+        mock_mlflow.start_run.return_value = _mock_start_run()
+
+        engine = PipelineEngine()
+        engine.start_run()
+
+        with pytest.raises(RuntimeError, match="already in progress"):
+            engine.resume_run("other_run")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_allows_execute_step_after_resume(self, mock_mlflow: MagicMock) -> None:
+        """Verify execute_step works after resume_run."""
+        mock_mlflow.start_run.return_value = _mock_start_run("step_id")
+
+        engine = PipelineEngine()
+        engine.resume_run("parent_id")
+
+        with patch("app.core.pipeline_engine.PluginManager"):
+            ctx: dict[str, Any] = {}
+            engine.execute_step("cat.impl.impl", {}, ctx)
+
+        assert "cat" in ctx
+
+
 class TestBatchRun:
     """Tests for PipelineEngine.run (batch mode)."""
 
