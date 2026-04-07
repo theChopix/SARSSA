@@ -8,7 +8,7 @@ registry consumable by the frontend.
 import inspect
 from pathlib import Path
 
-from app.core.plugin_discovery.plugin_categories import PLUGIN_CATEGORIES
+from app.config.config import PLUGIN_CATEGORIES
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.models.plugin import (
     CategoryRegistryEntry,

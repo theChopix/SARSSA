@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from app.models.plugin import CategoryInfo
+
 _CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
 
 
@@ -19,6 +21,21 @@ def _load_config() -> dict[str, Any]:
     return config
 
 
+def _load_plugin_categories(
+    raw: dict[str, Any],
+) -> dict[str, CategoryInfo]:
+    """Parse the plugin_categories section into typed models.
+
+    Args:
+        raw: Raw dict from the YAML ``plugin_categories`` key.
+
+    Returns:
+        dict[str, CategoryInfo]: Validated category metadata.
+    """
+    return {key: CategoryInfo(**value) for key, value in raw.items()}
+
+
 _config = _load_config()
 
 EXPERIMENT_NAME: str = _config["mlflow"]["experiment_name"]
+PLUGIN_CATEGORIES: dict[str, CategoryInfo] = _load_plugin_categories(_config["plugin_categories"])
