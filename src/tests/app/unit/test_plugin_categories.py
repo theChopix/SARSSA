@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from app.core.plugin_discovery.plugin_categories import PLUGIN_CATEGORIES
+from app.config.config import PLUGIN_CATEGORIES
 
 PLUGINS_DIR = Path(__file__).resolve().parents[3] / "plugins"
 

@@ -8,7 +8,7 @@ Tests are written to be resilient to plugin changes — they discover
 plugins dynamically rather than hard-coding specific names or params.
 """
 
-from app.core.plugin_discovery.plugin_categories import PLUGIN_CATEGORIES
+from app.config.config import PLUGIN_CATEGORIES
 from app.core.plugin_discovery.plugin_registry import (
     PLUGINS_DIR,
     _find_plugin_modules,

@@ -6,7 +6,7 @@ full stack from route → registry → filesystem plugin discovery.
 
 from fastapi.testclient import TestClient
 
-from app.core.plugin_discovery.plugin_categories import PLUGIN_CATEGORIES
+from app.config.config import PLUGIN_CATEGORIES
 
 
 class TestGetPluginRegistry:
