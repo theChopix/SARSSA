@@ -1,12 +1,9 @@
 """API routes for pipeline execution and run management."""
 
-import asyncio
-import json
 import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sse_starlette.sse import EventSourceResponse
 
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs, get_run_context
@@ -89,69 +86,6 @@ def get_task_status(task_id: str) -> TaskStatusResponse:
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found.")
     return task_to_response(task)
-
-
-@router.post("/run-stream")
-async def run_pipeline_stream(
-    pipeline_request: PipelineRequest,
-) -> EventSourceResponse:
-    """Execute a pipeline with SSE progress events.
-
-    Emits the following event types:
-
-    - ``run_started``: ``{"run_id": "..."}``
-    - ``step_started``: ``{"category": "...", "plugin": "..."}``
-    - ``step_completed``: ``{"category": "...", "run_id": "..."}``
-    - ``run_completed``: ``{"run_id": "...", "context": {...}}``
-
-    Args:
-        pipeline_request: Steps to execute.
-
-    Returns:
-        EventSourceResponse: SSE stream of pipeline progress.
-    """
-    engine = PipelineEngine()
-
-    async def event_generator() -> Any:
-        run_id = await asyncio.to_thread(engine.start_run)
-        yield {
-            "event": "run_started",
-            "data": json.dumps({"run_id": run_id}),
-        }
-
-        context: dict[str, Any] = {}
-
-        for step in pipeline_request.steps:
-            category = step.plugin.split(".")[0]
-            yield {
-                "event": "step_started",
-                "data": json.dumps({"category": category, "plugin": step.plugin}),
-            }
-
-            await asyncio.to_thread(
-                engine.execute_step,
-                step.plugin,
-                step.params or {},
-                context,
-            )
-
-            yield {
-                "event": "step_completed",
-                "data": json.dumps(
-                    {
-                        "category": category,
-                        "run_id": context[category]["run_id"],
-                    }
-                ),
-            }
-
-        await asyncio.to_thread(engine.finalize_run, context)
-        yield {
-            "event": "run_completed",
-            "data": json.dumps({"run_id": run_id, "context": context}),
-        }
-
-    return EventSourceResponse(event_generator())
 
 
 @router.post("/runs/{run_id}/execute-step")

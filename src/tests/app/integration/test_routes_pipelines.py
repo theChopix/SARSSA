@@ -4,7 +4,6 @@ GET /runs and GET /runs/{run_id}/context hit the real MLflow tracking
 store. POST endpoints mock the engine to avoid running actual plugins.
 """
 
-import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -174,60 +173,6 @@ class TestGetTaskStatus:
         assert data["current_step_index"] == 0
         assert data["total_steps"] == 2
         assert len(data["completed_steps"]) == 1
-
-
-class TestRunStream:
-    """Tests for POST /pipelines/run-stream (SSE)."""
-
-    @patch("app.api.routes_pipelines.PipelineEngine")
-    def test_emits_sse_events(self, mock_engine_cls: MagicMock, client: TestClient) -> None:
-        """Verify the SSE stream emits expected event types."""
-        mock_engine = MagicMock()
-        mock_engine_cls.return_value = mock_engine
-        mock_engine.start_run.return_value = "parent_id"
-
-        def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
-        ) -> dict[str, Any]:
-            category = plugin.split(".")[0]
-            ctx[category] = {"run_id": f"{category}_run"}
-            return ctx
-
-        mock_engine.execute_step.side_effect = fake_execute
-
-        response = client.post(
-            "/pipelines/run-stream",
-            json={
-                "steps": [
-                    {"plugin": "cat_a.impl.impl", "params": {}},
-                    {"plugin": "cat_b.impl.impl", "params": {}},
-                ]
-            },
-        )
-
-        assert response.status_code == 200
-
-        lines = [line for line in response.text.split("\n") if line.startswith("data:")]
-        events_data = [json.loads(line[len("data:") :]) for line in lines]
-
-        assert any("run_id" in e and e["run_id"] == "parent_id" for e in events_data)
-        assert any("category" in e and e["category"] == "cat_a" for e in events_data)
-        assert any("category" in e and e["category"] == "cat_b" for e in events_data)
-        assert any("context" in e for e in events_data)
-
-    @patch("app.api.routes_pipelines.PipelineEngine")
-    def test_calls_finalize(self, mock_engine_cls: MagicMock, client: TestClient) -> None:
-        """Verify finalize_run is called after all steps."""
-        mock_engine = MagicMock()
-        mock_engine_cls.return_value = mock_engine
-        mock_engine.start_run.return_value = "parent_id"
-
-        client.post(
-            "/pipelines/run-stream",
-            json={"steps": []},
-        )
-
-        mock_engine.finalize_run.assert_called_once()
 
 
 class TestExecuteStep:
