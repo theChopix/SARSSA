@@ -69,6 +69,52 @@ class TestGetContext:
         assert response.status_code == 404
 
 
+class TestRunAsync:
+    """Tests for POST /pipelines/run-async."""
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_returns_200_with_task_id(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify the endpoint returns 200 and a task_id."""
+        response = client.post(
+            "/pipelines/run-async",
+            json={
+                "steps": [
+                    {"plugin": "cat_a.impl.impl", "params": {}},
+                ]
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "task_id" in data
+        assert isinstance(data["task_id"], str)
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_task_exists_in_store(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify the task is retrievable from the store after creation."""
+        response = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = response.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.status == "running"
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_spawns_worker(self, mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify run_pipeline_worker is called with the task."""
+        client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+
+        mock_worker.assert_called_once()
+
+
 class TestRunStream:
     """Tests for POST /pipelines/run-stream (SSE)."""
 

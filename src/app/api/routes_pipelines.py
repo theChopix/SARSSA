@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -9,6 +10,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs, get_run_context
+from app.core.pipeline_worker import run_pipeline_worker
+from app.core.task_store import create_task
 from app.models.pipeline import PipelineRequest, StepDefinition
 
 router = APIRouter()
@@ -42,6 +45,31 @@ def get_context(run_id: str) -> dict[str, Any]:
         return get_run_context(run_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/run-async")
+def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
+    """Start a pipeline in a background thread and return the task ID.
+
+    The caller should poll ``GET /tasks/{task_id}`` to track progress.
+
+    Args:
+        pipeline_request: Steps to execute.
+
+    Returns:
+        dict[str, str]: ``{"task_id": "..."}``.
+    """
+    steps = [step.model_dump() for step in pipeline_request.steps]
+    task = create_task(steps, initial_context=pipeline_request.context)
+
+    thread = threading.Thread(
+        target=run_pipeline_worker,
+        args=(task,),
+        daemon=True,
+    )
+    thread.start()
+
+    return {"task_id": task.task_id}
 
 
 @router.post("/run-stream")
@@ -135,12 +163,11 @@ def execute_step(run_id: str, step: StepDefinition) -> dict[str, Any]:
 
 
 @router.post("/run")
-def run_pipeline(context: dict[str, Any], pipeline_request: PipelineRequest) -> dict[str, Any]:
+def run_pipeline(pipeline_request: PipelineRequest) -> dict[str, Any]:
     """Execute all pipeline steps synchronously (legacy endpoint).
 
     Args:
-        context: Initial pipeline context.
-        pipeline_request: Steps to execute.
+        pipeline_request: Steps and optional initial context.
 
     Returns:
         dict[str, Any]: Completion message and final context.
@@ -148,6 +175,6 @@ def run_pipeline(context: dict[str, Any], pipeline_request: PipelineRequest) -> 
     steps = [step.model_dump() for step in pipeline_request.steps]
 
     engine = PipelineEngine(steps)
-    result = engine.run(context)
+    result = engine.run(dict(pipeline_request.context))
 
     return {"message": "Pipeline finished", "result": result}

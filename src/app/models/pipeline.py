@@ -17,6 +17,7 @@ class PipelineRequest(BaseModel):
     """Request body for pipeline execution endpoints."""
 
     steps: list[StepDefinition]
+    context: dict[str, Any] = {}
 
 
 # ── Task state (in-memory, mutated by background worker) ──
@@ -36,6 +37,7 @@ class TaskState:
         status: One of ``"running"``, ``"completed"``, ``"error"``.
         run_id: MLflow parent run ID (set after ``engine.start_run()``).
         steps_requested: The original step dicts submitted by the user.
+        initial_context: Pre-populated context from a previous run (empty for fresh runs).
         current_step: Category key of the step currently executing.
         current_step_index: 0-based index into *steps_requested*.
         completed_steps: Steps that have finished so far.
@@ -47,6 +49,7 @@ class TaskState:
     status: str = "running"
     run_id: str | None = None
     steps_requested: list[dict[str, Any]] = field(default_factory=list)
+    initial_context: dict[str, Any] = field(default_factory=dict)
     current_step: str | None = None
     current_step_index: int = 0
     completed_steps: list[dict[str, Any]] = field(default_factory=list)
