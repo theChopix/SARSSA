@@ -115,6 +115,67 @@ class TestRunAsync:
         mock_worker.assert_called_once()
 
 
+class TestGetTaskStatus:
+    """Tests for GET /pipelines/tasks/{task_id}."""
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_returns_200_with_status(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify the endpoint returns 200 with all expected fields."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        response = client.get(f"/pipelines/tasks/{task_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["task_id"] == task_id
+        assert data["status"] == "running"
+        assert data["total_steps"] == 1
+        assert data["completed_steps"] == []
+        assert data["current_step"] is None
+        assert data["error"] is None
+
+    def test_returns_404_for_unknown_task(self, client: TestClient) -> None:
+        """Verify 404 when the task ID does not exist."""
+        response = client.get("/pipelines/tasks/nonexistent-id")
+        assert response.status_code == 404
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_reflects_task_mutations(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify the response reflects in-place mutations to the task."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={
+                "steps": [
+                    {"plugin": "cat_a.p.p", "params": {}},
+                    {"plugin": "cat_b.p.p", "params": {}},
+                ]
+            },
+        )
+        task_id = create_resp.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        task.run_id = "mlflow_123"
+        task.current_step = "cat_a"
+        task.current_step_index = 0
+        task.completed_steps.append({"category": "cat_a", "run_id": "r1"})
+
+        response = client.get(f"/pipelines/tasks/{task_id}")
+        data = response.json()
+
+        assert data["run_id"] == "mlflow_123"
+        assert data["current_step"] == "cat_a"
+        assert data["current_step_index"] == 0
+        assert data["total_steps"] == 2
+        assert len(data["completed_steps"]) == 1
+
+
 class TestRunStream:
     """Tests for POST /pipelines/run-stream (SSE)."""
 
