@@ -6,13 +6,11 @@ be the ``target`` of a :class:`threading.Thread`.  It receives a shared
 as it progresses through the requested steps.
 """
 
-import logging
 from typing import Any
 
 from app.core.pipeline_engine import PipelineEngine
 from app.models.pipeline import TaskState
-
-logger = logging.getLogger(__name__)
+from app.utils.logger import logger
 
 
 def run_pipeline_worker(task: TaskState) -> None:
