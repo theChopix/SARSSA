@@ -37,7 +37,7 @@ export type PipelineContext = Record<string, { run_id: string }>;
 /**
  * Defines a single plugin step to execute.
  *
- * Sent to `POST /pipelines/run-stream` (as part of an array)
+ * Sent to `POST /pipelines/run-async` (as part of an array)
  * or `POST /pipelines/runs/{run_id}/execute-step` (single step).
  *
  * - `plugin` – Dotted module path (e.g. "steering.sae_steering.sae_steering").
@@ -48,33 +48,31 @@ export interface StepDefinition {
   params: Record<string, unknown>;
 }
 
-// ── SSE event payloads (from POST /pipelines/run-stream) ──
+// ── Task status (from GET /pipelines/tasks/{task_id}) ───
 
 /**
- * The SSE stream emits four event types. Each has a specific payload:
+ * Response from `GET /pipelines/tasks/{task_id}`.
  *
- * 1. `run_started`    → { run_id: string }
- * 2. `step_started`   → { category: string, plugin: string }
- * 3. `step_completed` → { category: string, run_id: string }
- * 4. `run_completed`  → { run_id: string, context: PipelineContext }
+ * Returned by the polling endpoint to track background pipeline progress.
+ *
+ * - `status`             – One of `"running"`, `"completed"`, `"error"`.
+ * - `current_step`       – Category key of the step currently executing.
+ * - `current_step_index` – 0-based index into the requested steps.
+ * - `total_steps`        – Total number of steps in the pipeline.
+ * - `completed_steps`    – Steps that have finished so far.
+ * - `context`            – Final pipeline context (set on completion).
+ * - `error`              – Error message (set on failure).
  */
-export interface RunStartedEvent {
-  run_id: string;
-}
-
-export interface StepStartedEvent {
-  category: string;
-  plugin: string;
-}
-
-export interface StepCompletedEvent {
-  category: string;
-  run_id: string;
-}
-
-export interface RunCompletedEvent {
-  run_id: string;
-  context: PipelineContext;
+export interface TaskStatusResponse {
+  task_id: string;
+  status: "running" | "completed" | "error";
+  run_id: string | null;
+  current_step: string | null;
+  current_step_index: number;
+  total_steps: number;
+  completed_steps: { category: string; run_id: string }[];
+  context: PipelineContext | null;
+  error: string | null;
 }
 
 // ── Execute-step response ───────────────────────────────
