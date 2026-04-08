@@ -35,7 +35,7 @@ def run_pipeline_worker(task: TaskState) -> None:
         task.run_id = run_id
         logger.info("[WORKER] Pipeline run started: %s", run_id)
 
-        context: dict[str, Any] = {}
+        context: dict[str, Any] = dict(task.initial_context)
 
         for i, step in enumerate(task.steps_requested):
             plugin = step["plugin"]

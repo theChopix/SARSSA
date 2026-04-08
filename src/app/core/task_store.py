@@ -14,17 +14,25 @@ from app.models.pipeline import TaskState, TaskStatusResponse
 _tasks: dict[str, TaskState] = {}
 
 
-def create_task(steps: list[dict[str, Any]]) -> TaskState:
+def create_task(
+    steps: list[dict[str, Any]],
+    initial_context: dict[str, Any] | None = None,
+) -> TaskState:
     """Create a new task, store it, and return it.
 
     Args:
         steps: Serialised step dicts (each has ``plugin`` and ``params``).
+        initial_context: Optional pre-populated context from a previous run.
 
     Returns:
         TaskState: The newly created task with status ``"running"``.
     """
     task_id = uuid.uuid4().hex
-    task = TaskState(task_id=task_id, steps_requested=steps)
+    task = TaskState(
+        task_id=task_id,
+        steps_requested=steps,
+        initial_context=initial_context or {},
+    )
     _tasks[task_id] = task
     return task
 
