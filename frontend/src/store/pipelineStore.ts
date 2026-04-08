@@ -31,7 +31,8 @@ import { fetchPluginRegistry } from "../api/plugins";
 import {
   fetchPipelineRuns,
   fetchRunContext,
-  subscribeToPipelineStream,
+  startPipelineTask,
+  getTaskStatus,
   executeStep,
 } from "../api/pipelines";
 import type { PluginRegistry } from "../types/plugin";
@@ -98,7 +99,7 @@ interface PipelineStore {
   /** Per-category card state, keyed by category name. */
   cards: Record<string, CardState>;
 
-  /** Whether the full pipeline is currently streaming. */
+  /** Whether the full pipeline is currently running. */
   pipelineRunning: boolean;
 
   /** MLflow run ID of the current/last pipeline run. */
@@ -112,6 +113,15 @@ interface PipelineStore {
 
   /** The run ID selected in "Load from previous run" mode. */
   targetRunId: string | null;
+
+  /** Error message from the last failed pipeline run. */
+  errorMessage: string | null;
+
+  /** 0-based index of the step currently executing. */
+  currentStepIndex: number;
+
+  /** Total number of steps in the current pipeline run. */
+  totalSteps: number;
 
   // ── Actions ─────────────────────────────────────────
 
@@ -140,10 +150,13 @@ interface PipelineStore {
   toggleConfig: (category: string) => void;
 
   /**
-   * Run the full pipeline (all one_time steps) via SSE streaming.
-   * Updates card statuses in real time as events arrive.
+   * Run the full pipeline (all one_time steps) via background task + polling.
+   * Updates card statuses as polling responses arrive.
    */
   runPipeline: (steps: StepDefinition[]) => Promise<void>;
+
+  /** Clear the error message banner. */
+  clearError: () => void;
 
   /**
    * Execute a single step on an existing pipeline run.
@@ -189,6 +202,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   context: null,
   pastRuns: [],
   targetRunId: null,
+  errorMessage: null,
+  currentStepIndex: 0,
+  totalSteps: 0,
 
   // ── Actions ─────────────────────────────────────────
 
@@ -257,53 +273,109 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   },
 
   runPipeline: async (steps: StepDefinition[]) => {
-    set({ pipelineRunning: true });
-
-    // Reset all cards to idle before starting.
+    // Reset cards that will be executed to idle.
     const cards = { ...get().cards };
-    for (const key of Object.keys(cards)) {
-      cards[key] = { ...cards[key], status: "idle", stepRunId: null };
+    for (const step of steps) {
+      const cat = step.plugin.split(".")[0];
+      if (cards[cat]) {
+        cards[cat] = { ...cards[cat], status: "idle", stepRunId: null };
+      }
     }
-    set({ cards, context: null, currentRunId: null });
-
-    await subscribeToPipelineStream(steps, {
-      onRunStarted: (data) => {
-        set({ currentRunId: data.run_id });
-      },
-
-      onStepStarted: (data) => {
-        const c = { ...get().cards };
-        if (c[data.category]) {
-          c[data.category] = { ...c[data.category], status: "running" };
-          set({ cards: c });
-        }
-      },
-
-      onStepCompleted: (data) => {
-        const c = { ...get().cards };
-        if (c[data.category]) {
-          c[data.category] = {
-            ...c[data.category],
-            status: "done",
-            stepRunId: data.run_id,
-          };
-          set({ cards: c });
-        }
-      },
-
-      onRunCompleted: (data) => {
-        set({
-          pipelineRunning: false,
-          context: data.context,
-          currentRunId: data.run_id,
-        });
-      },
-
-      onError: (error) => {
-        console.error("Pipeline stream error:", error);
-        set({ pipelineRunning: false });
-      },
+    set({
+      cards,
+      pipelineRunning: true,
+      currentRunId: null,
+      errorMessage: null,
+      currentStepIndex: 0,
+      totalSteps: steps.length,
     });
+
+    try {
+      // Start the background task, passing any pre-loaded context.
+      const existingContext = get().context ?? {};
+      const { task_id } = await startPipelineTask(steps, existingContext);
+
+      // Poll every 2 seconds until the task finishes.
+      await new Promise<void>((resolve, reject) => {
+        const interval = setInterval(async () => {
+          try {
+            const status = await getTaskStatus(task_id);
+
+            // Update run ID as soon as it's available.
+            if (status.run_id) {
+              set({ currentRunId: status.run_id });
+            }
+
+            // Update progress counters.
+            set({
+              currentStepIndex: status.current_step_index,
+              totalSteps: status.total_steps,
+            });
+
+            // Mark completed steps as "done".
+            const c = { ...get().cards };
+            for (const completed of status.completed_steps) {
+              if (c[completed.category]) {
+                c[completed.category] = {
+                  ...c[completed.category],
+                  status: "done",
+                  stepRunId: completed.run_id,
+                };
+              }
+            }
+
+            // Mark the currently executing step as "running".
+            if (status.current_step && c[status.current_step]) {
+              c[status.current_step] = {
+                ...c[status.current_step],
+                status: "running",
+              };
+            }
+            set({ cards: c });
+
+            // Check terminal states.
+            if (status.status === "completed") {
+              clearInterval(interval);
+              set({
+                pipelineRunning: false,
+                context: status.context as PipelineContext | null,
+                currentRunId: status.run_id,
+              });
+              resolve();
+            } else if (status.status === "error") {
+              clearInterval(interval);
+              // Mark any currently-running cards as error.
+              const ec = { ...get().cards };
+              for (const key of Object.keys(ec)) {
+                if (ec[key].status === "running") {
+                  ec[key] = { ...ec[key], status: "error" };
+                }
+              }
+              set({
+                cards: ec,
+                pipelineRunning: false,
+                errorMessage: status.error ?? "Pipeline failed",
+              });
+              resolve();
+            }
+          } catch (pollError) {
+            clearInterval(interval);
+            reject(pollError);
+          }
+        }, 2000);
+      });
+    } catch (error) {
+      console.error("Pipeline error:", error);
+      set({
+        pipelineRunning: false,
+        errorMessage:
+          error instanceof Error ? error.message : "Pipeline failed",
+      });
+    }
+  },
+
+  clearError: () => {
+    set({ errorMessage: null });
   },
 
   runSingleStep: async (runId: string, step: StepDefinition) => {
@@ -350,6 +422,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       currentRunId: null,
       context: null,
       targetRunId: null,
+      errorMessage: null,
+      currentStepIndex: 0,
+      totalSteps: 0,
     });
   },
 }));
