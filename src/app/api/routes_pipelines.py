@@ -11,8 +11,8 @@ from sse_starlette.sse import EventSourceResponse
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs, get_run_context
 from app.core.pipeline_worker import run_pipeline_worker
-from app.core.task_store import create_task
-from app.models.pipeline import PipelineRequest, StepDefinition
+from app.core.task_store import create_task, get_task, task_to_response
+from app.models.pipeline import PipelineRequest, StepDefinition, TaskStatusResponse
 
 router = APIRouter()
 
@@ -70,6 +70,25 @@ def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
     thread.start()
 
     return {"task_id": task.task_id}
+
+
+@router.get("/tasks/{task_id}")
+def get_task_status(task_id: str) -> TaskStatusResponse:
+    """Return the current status of a background pipeline task.
+
+    Args:
+        task_id: Unique task identifier returned by ``POST /run-async``.
+
+    Returns:
+        TaskStatusResponse: Current task state including progress info.
+
+    Raises:
+        HTTPException: 404 if the task ID is not found.
+    """
+    task = get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found.")
+    return task_to_response(task)
 
 
 @router.post("/run-stream")
