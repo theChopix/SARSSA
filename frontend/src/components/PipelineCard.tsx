@@ -41,12 +41,11 @@
  *   └─────────────────────────────────────┘
  */
 
-import { useState } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
 import { usePipelineStore } from "../store/pipelineStore";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
-import type { CardStatus } from "../store/pipelineStore";
+import type { CardStatus, CardMode } from "../store/pipelineStore";
 
 // ── Props ───────────────────────────────────────────────
 
@@ -214,6 +213,7 @@ export default function PipelineCard({
   const setParam = usePipelineStore((s) => s.setParam);
   const toggleConfig = usePipelineStore((s) => s.toggleConfig);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
+  const setCardMode = usePipelineStore((s) => s.setCardMode);
 
   // Guard: if registry hasn't loaded yet, render nothing.
   if (!entry || !card) return null;
@@ -228,9 +228,8 @@ export default function PipelineCard({
   // Is this a multi_run card?
   const isMultiRun = category_info.type === "multi_run";
 
-  // Local toggle: "setup" (default) or "load" (load from previous run).
-  // Only used by one_time cards.
-  const [cardMode, setCardMode] = useState<"setup" | "load">("setup");
+  // Card mode from the store ("setup" or "load").
+  const cardMode: CardMode = card.mode;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
@@ -251,7 +250,7 @@ export default function PipelineCard({
       {!isMultiRun && (
         <div className="flex rounded-md overflow-hidden border border-gray-300">
           <button
-            onClick={() => setCardMode("setup")}
+            onClick={() => setCardMode(categoryKey, "setup")}
             disabled={pipelineRunning}
             className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer
                         disabled:cursor-not-allowed ${
@@ -263,7 +262,7 @@ export default function PipelineCard({
             Set up new
           </button>
           <button
-            onClick={() => setCardMode("load")}
+            onClick={() => setCardMode(categoryKey, "load")}
             disabled={pipelineRunning}
             className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer
                         disabled:cursor-not-allowed border-l border-gray-300 ${

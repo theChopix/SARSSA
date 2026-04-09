@@ -60,6 +60,9 @@ export type CardStatus = "idle" | "running" | "done" | "error";
  * Each card tracks which plugin the user selected, what parameter
  * values they entered, and whether the plugin is currently running.
  */
+/** Card input mode: "setup" for new config, "load" for loading a past run. */
+export type CardMode = "setup" | "load";
+
 export interface CardState {
   /** Dotted plugin name selected by the user (e.g. "training_cfm.elsa_trainer.elsa_trainer"). */
   selectedPlugin: string | null;
@@ -71,6 +74,8 @@ export interface CardState {
   status: CardStatus;
   /** MLflow run ID of the nested run (set after step completes). */
   stepRunId: string | null;
+  /** Whether the card is in "Set up new" or "Load from previous run" mode. */
+  mode: CardMode;
 }
 
 // ── Store shape ─────────────────────────────────────────
@@ -150,6 +155,13 @@ interface PipelineStore {
   toggleConfig: (category: string) => void;
 
   /**
+   * Set the card mode ("setup" or "load") for a category.
+   * When switching to "setup", all chronologically following one_time
+   * cards are also reset to "setup" with no selected plugin.
+   */
+  setCardMode: (category: string, mode: CardMode) => void;
+
+  /**
    * Run the full pipeline (all one_time steps) via background task + polling.
    * Updates card statuses as polling responses arrive.
    */
@@ -180,6 +192,7 @@ const defaultCard = (): CardState => ({
   configOpen: false,
   status: "idle",
   stepRunId: null,
+  mode: "setup",
 });
 
 // ── Store implementation ────────────────────────────────
@@ -269,6 +282,32 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       ...cards[category],
       configOpen: !cards[category].configOpen,
     };
+    set({ cards });
+  },
+
+  setCardMode: (category: string, mode: CardMode) => {
+    const { registry, cards: prev } = get();
+    const cards = { ...prev };
+    cards[category] = { ...cards[category], mode };
+
+    // When switching to "setup", reset all following one_time cards.
+    if (mode === "setup" && registry) {
+      const sorted = Object.entries(registry)
+        .filter(([, e]) => e.category_info.type === "one_time")
+        .sort(([, a], [, b]) => a.category_info.order - b.category_info.order);
+
+      let pastTarget = false;
+      for (const [key] of sorted) {
+        if (key === category) {
+          pastTarget = true;
+          continue;
+        }
+        if (pastTarget && cards[key]) {
+          cards[key] = { ...defaultCard() };
+        }
+      }
+    }
+
     set({ cards });
   },
 
