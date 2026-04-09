@@ -140,10 +140,12 @@ interface PipelineStore {
   loadPastRuns: () => Promise<void>;
 
   /**
-   * Load context from a past run and populate card states.
-   * Used by "Load from previous run" buttons.
+   * Load context from a past run and populate card states
+   * up to and including the given category.
+   *
+   * Categories chronologically after `upToCategory` are left untouched.
    */
-  loadFromPreviousRun: (runId: string) => Promise<void>;
+  loadFromPreviousRun: (runId: string, upToCategory: string) => Promise<void>;
 
   /** Select a plugin implementation for a category card. */
   selectPlugin: (category: string, pluginName: string) => void;
@@ -238,22 +240,45 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     set({ pastRuns });
   },
 
-  loadFromPreviousRun: async (runId: string) => {
-    const context = await fetchRunContext(runId);
+  loadFromPreviousRun: async (runId: string, upToCategory: string) => {
+    const fullContext = await fetchRunContext(runId);
+    const { registry, cards: prev } = get();
 
-    // Update cards: mark categories that were in the loaded run as "done".
-    const cards = { ...get().cards };
-    for (const [category, data] of Object.entries(context)) {
-      if (cards[category]) {
-        cards[category] = {
-          ...cards[category],
+    if (!registry) return;
+
+    // Determine which one_time categories are at or before the target.
+    const sorted = Object.entries(registry)
+      .filter(([, e]) => e.category_info.type === "one_time")
+      .sort(([, a], [, b]) => a.category_info.order - b.category_info.order);
+
+    const allowedCategories = new Set<string>();
+    for (const [key] of sorted) {
+      allowedCategories.add(key);
+      if (key === upToCategory) break;
+    }
+
+    // Build scoped context with only the allowed categories.
+    const scopedContext: PipelineContext = {};
+    for (const [cat, data] of Object.entries(fullContext)) {
+      if (allowedCategories.has(cat)) {
+        scopedContext[cat] = data;
+      }
+    }
+
+    // Update cards: mark allowed categories as "done" + "load" mode.
+    const cards = { ...prev };
+    for (const cat of allowedCategories) {
+      if (cards[cat] && scopedContext[cat]) {
+        cards[cat] = {
+          ...cards[cat],
           status: "done",
-          stepRunId: data.run_id,
+          stepRunId: scopedContext[cat].run_id,
+          mode: "load",
         };
       }
     }
 
-    set({ context, currentRunId: runId, targetRunId: runId, cards });
+    set({ context: scopedContext, currentRunId: runId, targetRunId: runId, cards });
   },
 
   selectPlugin: (category: string, pluginName: string) => {
@@ -288,9 +313,14 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   setCardMode: (category: string, mode: CardMode) => {
     const { registry, cards: prev } = get();
     const cards = { ...prev };
-    cards[category] = { ...cards[category], mode };
+    if (mode === "setup") {
+      // Fully reset the clicked card when switching away from "load".
+      cards[category] = { ...defaultCard() };
+    } else {
+      cards[category] = { ...cards[category], mode };
+    }
 
-    // When switching to "setup", reset all following one_time cards.
+    // When switching to "setup", also reset all following one_time cards.
     if (mode === "setup" && registry) {
       const sorted = Object.entries(registry)
         .filter(([, e]) => e.category_info.type === "one_time")
