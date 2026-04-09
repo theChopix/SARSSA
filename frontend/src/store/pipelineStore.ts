@@ -410,6 +410,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
                 context: status.context as PipelineContext | null,
                 currentRunId: status.run_id,
               });
+              // Refresh past runs so the new run name is available.
+              get().loadPastRuns();
               resolve();
             } else if (status.status === "error") {
               clearInterval(interval);

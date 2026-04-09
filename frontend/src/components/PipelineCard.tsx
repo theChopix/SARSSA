@@ -219,6 +219,7 @@ export default function PipelineCard({
   const loadPastRuns = usePipelineStore((s) => s.loadPastRuns);
   const loadFromPreviousRun = usePipelineStore((s) => s.loadFromPreviousRun);
   const targetRunId = usePipelineStore((s) => s.targetRunId);
+  const currentRunId = usePipelineStore((s) => s.currentRunId);
   const allOneTimeDone = usePipelineStore((s) => {
     if (!s.registry) return false;
     return Object.entries(s.registry)
@@ -299,6 +300,12 @@ export default function PipelineCard({
         <p className="text-xs text-gray-400">
           Run or load a one-time pipeline first.
         </p>
+      )}
+      {isMultiRun && allOneTimeDone && currentRunId && (
+        <div className="w-full px-3 py-2 text-xs border border-gray-200 rounded-md
+                        bg-gray-50 text-gray-600 font-mono truncate">
+          {pastRuns.find((r) => r.run_id === currentRunId)?.run_name ?? currentRunId}
+        </div>
       )}
 
       {/* ── "Load from previous run" dropdown / label ──── */}
