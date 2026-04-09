@@ -148,20 +148,23 @@ function PluginRow({
   isSelected,
   onSelect,
   onToggleConfig,
+  disabled,
 }: {
   impl: ImplementationInfo;
   isSelected: boolean;
   onSelect: () => void;
   onToggleConfig: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between py-1">
       {/* Radio button + name */}
-      <label className="flex items-center gap-2 cursor-pointer">
+      <label className={`flex items-center gap-2 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
         <input
           type="radio"
           checked={isSelected}
           onChange={onSelect}
+          disabled={disabled}
           className="accent-blue-500"
         />
         <span className="text-sm text-gray-800">{impl.display_name}</span>
@@ -171,8 +174,10 @@ function PluginRow({
       {impl.params.length > 0 && (
         <button
           onClick={onToggleConfig}
+          disabled={disabled}
           className="flex items-center gap-1 text-xs text-blue-500
-                     hover:text-blue-700 transition-colors cursor-pointer"
+                     hover:text-blue-700 disabled:opacity-50
+                     disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <Settings className="h-3.5 w-3.5" />
           Configure
@@ -229,6 +234,11 @@ export default function PipelineCard({
         <StatusIcon status={card.status} />
       </div>
 
+      {/* ── Error text ────────────────────────────────── */}
+      {card.status === "error" && (
+        <p className="text-xs text-red-500">Step failed during execution.</p>
+      )}
+
       {/* ── Multi-run target info ────────────────────── */}
       {isMultiRun && (
         <div className="text-sm text-gray-500">
@@ -256,6 +266,7 @@ export default function PipelineCard({
               }
               toggleConfig(categoryKey);
             }}
+            disabled={pipelineRunning}
           />
         ))}
       </div>

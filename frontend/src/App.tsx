@@ -35,7 +35,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 import PipelineCard from "./components/PipelineCard";
 import { usePipelineStore } from "./store/pipelineStore";
@@ -77,6 +77,10 @@ function App() {
   const runPipeline = usePipelineStore((s) => s.runPipeline);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
   const runSingleStep = usePipelineStore((s) => s.runSingleStep);
+  const errorMessage = usePipelineStore((s) => s.errorMessage);
+  const clearError = usePipelineStore((s) => s.clearError);
+  const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
+  const totalSteps = usePipelineStore((s) => s.totalSteps);
 
   // ── Load registry on mount ──────────────────────────
   // This runs ONCE when the page loads. It calls the backend
@@ -242,6 +246,20 @@ function App() {
         </a>
       </header>
 
+      {/* ── Error banner ─────────────────────────────── */}
+      {errorMessage && (
+        <div className="mx-8 mt-4 flex items-center justify-between gap-3 rounded-lg
+                        border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-700">{errorMessage}</p>
+          <button
+            onClick={clearError}
+            className="shrink-0 text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* ── Page title ─────────────────────────────── */}
       <div className="px-8 pt-8 pb-4">
         <h2 className="text-xl font-bold text-gray-900 text-center">
@@ -290,7 +308,7 @@ function App() {
           {pipelineRunning ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Running pipeline...
+              Running pipeline... Step {currentStepIndex + 1} / {totalSteps}
             </span>
           ) : (
             "Run full pipeline"
