@@ -41,6 +41,7 @@
  *   └─────────────────────────────────────┘
  */
 
+import { useEffect } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
 import { usePipelineStore } from "../store/pipelineStore";
@@ -214,6 +215,10 @@ export default function PipelineCard({
   const toggleConfig = usePipelineStore((s) => s.toggleConfig);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
   const setCardMode = usePipelineStore((s) => s.setCardMode);
+  const pastRuns = usePipelineStore((s) => s.pastRuns);
+  const loadPastRuns = usePipelineStore((s) => s.loadPastRuns);
+  const loadFromPreviousRun = usePipelineStore((s) => s.loadFromPreviousRun);
+  const targetRunId = usePipelineStore((s) => s.targetRunId);
 
   // Guard: if registry hasn't loaded yet, render nothing.
   if (!entry || !card) return null;
@@ -230,6 +235,13 @@ export default function PipelineCard({
 
   // Card mode from the store ("setup" or "load").
   const cardMode: CardMode = card.mode;
+
+  // Fetch past runs when any card switches to "load" mode.
+  useEffect(() => {
+    if (cardMode === "load") {
+      loadPastRuns();
+    }
+  }, [cardMode, loadPastRuns]);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
@@ -288,16 +300,36 @@ export default function PipelineCard({
         </div>
       )}
 
-      {/* ── "Load from previous run" dropdown ─────────── */}
+      {/* ── "Load from previous run" dropdown / label ──── */}
       {!isMultiRun && cardMode === "load" && (
-        <select
-          disabled={pipelineRunning}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md
-                     bg-white text-gray-700 focus:outline-none focus:ring-2
-                     focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <option value="">Select a previous run...</option>
-        </select>
+        card.status === "done" && targetRunId ? (
+          // Locked: show the loaded run name as a read-only label.
+          <div className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md
+                          bg-gray-50 text-gray-600">
+            {pastRuns.find((r) => r.run_id === targetRunId)?.run_name ?? targetRunId}
+          </div>
+        ) : (
+          // Interactive: let the user pick a run.
+          <select
+            disabled={pipelineRunning}
+            onChange={(e) => {
+              const runId = e.target.value;
+              if (runId) {
+                loadFromPreviousRun(runId, categoryKey);
+              }
+            }}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md
+                       bg-white text-gray-700 focus:outline-none focus:ring-2
+                       focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="">Select a previous run...</option>
+            {pastRuns.map((run) => (
+              <option key={run.run_id} value={run.run_id}>
+                {run.run_name} ({run.status})
+              </option>
+            ))}
+          </select>
+        )
       )}
 
       {/* ── Plugin list ("Set up new" mode or multi_run) ── */}
