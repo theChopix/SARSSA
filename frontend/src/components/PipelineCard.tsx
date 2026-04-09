@@ -21,23 +21,27 @@
  * │  selectors, and call store actions on user interaction.  │
  * └──────────────────────────────────────────────────────────┘
  *
- * Visual structure of one card (from the UI mockup):
+ * Visual structure of a one_time card:
  *
  *   ┌─────────────────────────────────────┐
  *   │  Category Title          ✓ / ⟳ / ✗ │  ← header + status
  *   │                                     │
- *   │  ◉ Plugin A          ⚙ Configure   │  ← radio + config toggle
- *   │  ○ Plugin B          ⚙ Configure   │
+ *   │  [Set up new] [Load from prev run]  │  ← mode toggle (one_time only)
  *   │                                     │
+ *   │  ◉ Plugin A          ⚙ Configure   │  ← "Set up new" mode
+ *   │  ○ Plugin B          ⚙ Configure   │
  *   │  ┌─ Parameter form (if open) ────┐  │
  *   │  │  epochs  (int)    [100]       │  │
- *   │  │  lr      (float)  [0.0001]    │  │
  *   │  └──────────────────────────────-┘  │
+ *   │  [ Run up to this step ]            │
  *   │                                     │
- *   │  [ Run up to this step ]            │  ← action button
+ *   │  OR                                 │
+ *   │                                     │
+ *   │  ▾ Select a previous run            │  ← "Load from prev" mode
  *   └─────────────────────────────────────┘
  */
 
+import { useState } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
 import { usePipelineStore } from "../store/pipelineStore";
@@ -224,6 +228,10 @@ export default function PipelineCard({
   // Is this a multi_run card?
   const isMultiRun = category_info.type === "multi_run";
 
+  // Local toggle: "setup" (default) or "load" (load from previous run).
+  // Only used by one_time cards.
+  const [cardMode, setCardMode] = useState<"setup" | "load">("setup");
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
       {/* ── Card header ──────────────────────────────── */}
@@ -239,6 +247,36 @@ export default function PipelineCard({
         <p className="text-xs text-red-500">Step failed during execution.</p>
       )}
 
+      {/* ── Mode toggle (one_time cards only) ────────── */}
+      {!isMultiRun && (
+        <div className="flex rounded-md overflow-hidden border border-gray-300">
+          <button
+            onClick={() => setCardMode("setup")}
+            disabled={pipelineRunning}
+            className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer
+                        disabled:cursor-not-allowed ${
+              cardMode === "setup"
+                ? "bg-blue-500 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Set up new
+          </button>
+          <button
+            onClick={() => setCardMode("load")}
+            disabled={pipelineRunning}
+            className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer
+                        disabled:cursor-not-allowed border-l border-gray-300 ${
+              cardMode === "load"
+                ? "bg-blue-500 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Load from previous run
+          </button>
+        </div>
+      )}
+
       {/* ── Multi-run target info ────────────────────── */}
       {isMultiRun && (
         <div className="text-sm text-gray-500">
@@ -251,28 +289,43 @@ export default function PipelineCard({
         </div>
       )}
 
-      {/* ── Plugin list ──────────────────────────────── */}
-      <div className="flex flex-col gap-0.5">
-        {implementations.map((impl) => (
-          <PluginRow
-            key={impl.plugin_name}
-            impl={impl}
-            isSelected={card.selectedPlugin === impl.plugin_name}
-            onSelect={() => selectPlugin(categoryKey, impl.plugin_name)}
-            onToggleConfig={() => {
-              // Select the plugin first if not already selected.
-              if (card.selectedPlugin !== impl.plugin_name) {
-                selectPlugin(categoryKey, impl.plugin_name);
-              }
-              toggleConfig(categoryKey);
-            }}
-            disabled={pipelineRunning}
-          />
-        ))}
-      </div>
+      {/* ── "Load from previous run" dropdown ─────────── */}
+      {!isMultiRun && cardMode === "load" && (
+        <select
+          disabled={pipelineRunning}
+          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md
+                     bg-white text-gray-700 focus:outline-none focus:ring-2
+                     focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <option value="">Select a previous run...</option>
+        </select>
+      )}
+
+      {/* ── Plugin list ("Set up new" mode or multi_run) ── */}
+      {(isMultiRun || cardMode === "setup") && (
+        <div className="flex flex-col gap-0.5">
+          {implementations.map((impl) => (
+            <PluginRow
+              key={impl.plugin_name}
+              impl={impl}
+              isSelected={card.selectedPlugin === impl.plugin_name}
+              onSelect={() => selectPlugin(categoryKey, impl.plugin_name)}
+              onToggleConfig={() => {
+                // Select the plugin first if not already selected.
+                if (card.selectedPlugin !== impl.plugin_name) {
+                  selectPlugin(categoryKey, impl.plugin_name);
+                }
+                toggleConfig(categoryKey);
+              }}
+              disabled={pipelineRunning}
+            />
+          ))}
+        </div>
+      )}
 
       {/* ── Parameter form (expandable) ──────────────── */}
-      {card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
+      {(isMultiRun || cardMode === "setup") &&
+        card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
         <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
           {selectedImpl.params.map((param) => (
             <ParamRow
@@ -309,7 +362,7 @@ export default function PipelineCard({
               </span>
             )}
           </button>
-        ) : (
+        ) : cardMode === "setup" ? (
           <button
             disabled={pipelineRunning}
             onClick={() => onRunUpTo?.(categoryKey)}
@@ -327,7 +380,7 @@ export default function PipelineCard({
               "Run up to this step"
             )}
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
