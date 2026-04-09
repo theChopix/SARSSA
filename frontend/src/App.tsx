@@ -42,6 +42,26 @@ import { usePipelineStore } from "./store/pipelineStore";
 import type { StepDefinition } from "./types/pipeline";
 
 /**
+ * Coerce a string value from an HTML input to the correct JS type
+ * based on the Python type string from the plugin registry.
+ *
+ * HTML inputs always produce strings, but the backend expects
+ * native types (int → number, float → number, bool → boolean).
+ */
+function coerceParamValue(value: string, pythonType: string): unknown {
+  switch (pythonType) {
+    case "int":
+      return parseInt(value, 10);
+    case "float":
+      return parseFloat(value);
+    case "bool":
+      return value.toLowerCase() === "true";
+    default:
+      return value;
+  }
+}
+
+/**
  * App — the top-level React component.
  *
  * On mount, it fetches the plugin registry from the backend.
@@ -112,7 +132,7 @@ function App() {
         for (const p of impl.params) {
           const userVal = card.params[p.name];
           if (userVal !== undefined && userVal !== "") {
-            params[p.name] = userVal;
+            params[p.name] = coerceParamValue(userVal, p.type);
           } else if (p.default != null) {
             params[p.name] = p.default;
           }
@@ -147,7 +167,7 @@ function App() {
       for (const p of impl.params) {
         const userVal = card.params[p.name];
         if (userVal !== undefined && userVal !== "") {
-          params[p.name] = userVal;
+          params[p.name] = coerceParamValue(userVal, p.type);
         } else if (p.default != null) {
           params[p.name] = p.default;
         }
@@ -177,7 +197,7 @@ function App() {
         for (const p of impl.params) {
           const userVal = card.params[p.name];
           if (userVal !== undefined && userVal !== "") {
-            params[p.name] = userVal;
+            params[p.name] = coerceParamValue(userVal, p.type);
           } else if (p.default != null) {
             params[p.name] = p.default;
           }
