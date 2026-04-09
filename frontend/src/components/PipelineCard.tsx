@@ -219,6 +219,12 @@ export default function PipelineCard({
   const loadPastRuns = usePipelineStore((s) => s.loadPastRuns);
   const loadFromPreviousRun = usePipelineStore((s) => s.loadFromPreviousRun);
   const targetRunId = usePipelineStore((s) => s.targetRunId);
+  const allOneTimeDone = usePipelineStore((s) => {
+    if (!s.registry) return false;
+    return Object.entries(s.registry)
+      .filter(([, e]) => e.category_info.type === "one_time")
+      .every(([key]) => s.cards[key]?.status === "done");
+  });
 
   // Guard: if registry hasn't loaded yet, render nothing.
   if (!entry || !card) return null;
@@ -289,15 +295,10 @@ export default function PipelineCard({
       )}
 
       {/* ── Multi-run target info ────────────────────── */}
-      {isMultiRun && (
-        <div className="text-sm text-gray-500">
-          <span className="text-blue-500 cursor-pointer hover:underline">
-            Target pipeline run
-          </span>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Run a one-time pipeline first.
-          </p>
-        </div>
+      {isMultiRun && !allOneTimeDone && (
+        <p className="text-xs text-gray-400">
+          Run or load a one-time pipeline first.
+        </p>
       )}
 
       {/* ── "Load from previous run" dropdown / label ──── */}
@@ -376,7 +377,7 @@ export default function PipelineCard({
       <div className="mt-auto pt-2">
         {isMultiRun ? (
           <button
-            disabled={!card.selectedPlugin || card.status === "running"}
+            disabled={!card.selectedPlugin || card.status === "running" || !allOneTimeDone}
             onClick={() => onExecuteStep?.(categoryKey)}
             className="w-full py-2 rounded-md text-sm font-medium text-white
                        bg-blue-500 hover:bg-blue-600 disabled:opacity-50
