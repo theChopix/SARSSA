@@ -74,6 +74,7 @@ function App() {
   const cards = usePipelineStore((s) => s.cards);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
   const loadRegistry = usePipelineStore((s) => s.loadRegistry);
+  const resetCards = usePipelineStore((s) => s.resetCards);
   const runPipeline = usePipelineStore((s) => s.runPipeline);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
   const runSingleStep = usePipelineStore((s) => s.runSingleStep);
@@ -181,40 +182,6 @@ function App() {
     runSingleStep(currentRunId, { plugin: card.selectedPlugin, params });
   };
 
-  // ── Handler: "Run full pipeline" ────────────────────
-  // Collects ALL one_time steps and runs them.
-  const handleRunFullPipeline = () => {
-    if (!registry) return;
-
-    const steps: StepDefinition[] = [];
-
-    for (const key of oneTimeKeys) {
-      const card = cards[key];
-      if (!card?.selectedPlugin) continue;
-
-      const entry = registry[key];
-      const impl = entry.implementations.find(
-        (i) => i.plugin_name === card.selectedPlugin
-      );
-      const params: Record<string, unknown> = {};
-      if (impl) {
-        for (const p of impl.params) {
-          const userVal = card.params[p.name];
-          if (userVal !== undefined && userVal !== "") {
-            params[p.name] = coerceParamValue(userVal, p.type);
-          } else if (p.default != null) {
-            params[p.name] = p.default;
-          }
-        }
-      }
-
-      steps.push({ plugin: card.selectedPlugin, params });
-    }
-
-    if (steps.length > 0) {
-      runPipeline(steps);
-    }
-  };
 
   // ── Loading state ───────────────────────────────────
   if (!registry) {
@@ -296,24 +263,26 @@ function App() {
       {/* ── Spacer pushes bottom bar down ──────────── */}
       <div className="flex-1" />
 
-      {/* ── Bottom bar: Run full pipeline ──────────── */}
+      {/* ── Bottom bar: Reset / Running indicator ──── */}
       <div className="px-8 pb-8">
-        <button
-          disabled={pipelineRunning}
-          onClick={handleRunFullPipeline}
-          className="w-full py-3 rounded-lg text-white font-medium text-sm
-                     bg-blue-500 hover:bg-blue-600 disabled:opacity-70
-                     disabled:cursor-not-allowed transition-colors cursor-pointer"
-        >
-          {pipelineRunning ? (
+        {pipelineRunning ? (
+          <div className="w-full py-3 rounded-lg text-white font-medium text-sm
+                          bg-blue-500 opacity-70 text-center">
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
               Running pipeline... Step {currentStepIndex + 1} / {totalSteps}
             </span>
-          ) : (
-            "Run full pipeline"
-          )}
-        </button>
+          </div>
+        ) : (
+          <button
+            onClick={resetCards}
+            className="w-full py-3 rounded-lg text-sm font-medium
+                       bg-blue-500 text-white
+                       hover:bg-blue-600 transition-colors cursor-pointer"
+          >
+            Reset pipeline settings
+          </button>
+        )}
       </div>
     </div>
   );
