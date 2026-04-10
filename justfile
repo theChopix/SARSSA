@@ -68,6 +68,18 @@ clean:
     find . -type d -name ".pytest_cache" -exec rm -rf {} +
     find . -type d -name ".ruff_cache" -exec rm -rf {} +
 
+# Install frontend dependencies
+frontend-install:
+    cd frontend && npm install
+
+# Run frontend dev server
+frontend-dev:
+    cd frontend && npm run dev
+
+# Build frontend for production
+frontend-build:
+    cd frontend && npm run build
+
 # Start MLflow server
 mlflow:
     cd src && uv run mlflow server --host 127.0.0.1 --port 8006
