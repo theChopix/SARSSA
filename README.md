@@ -25,6 +25,7 @@ The platform generalizes prior SAE-based recommender research to enable systemat
 ### Prerequisites
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) - Fast Python package installer and resolver
+- [Node.js](https://nodejs.org/) 18+ and npm - For the frontend
 - [just](https://github.com/casey/just) - Command runner (optional but recommended)
 
 ### Tooling
@@ -49,11 +50,20 @@ just install-hooks
 # or: uv run pre-commit install
 ```
 
-Run the application:
+Run the backend:
 ```bash
 just run
 # or: cd src && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+Install and run the frontend:
+```bash
+just frontend-install
+just frontend-dev
+# or: cd frontend && npm install && npm run dev
+```
+
+The backend runs on `http://localhost:8000` and the frontend on `http://localhost:5173`.
 
 ### Common Commands
 
@@ -72,6 +82,9 @@ just check            # Run all checks (lint + type-check)
 just fix              # Format and fix all issues
 just pre-commit-fix   # Install hooks and run pre-commit
 just clean            # Clean up generated files
+just frontend-install # Install frontend dependencies
+just frontend-dev     # Run frontend dev server (Vite)
+just frontend-build   # Build frontend for production
 just mlflow           # Start MLflow server
 just download-movielens  # Download MovieLens dataset
 just download-lastfm     # Download LastFM dataset
