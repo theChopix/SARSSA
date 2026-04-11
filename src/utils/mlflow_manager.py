@@ -6,7 +6,6 @@ from MLflow runs, including support for JSON, NPY, and NPZ file formats.
 """
 
 import json
-from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -44,7 +43,6 @@ class MLflowRunLoader:
         """
         self.run_id = run_id
         self._run = None
-        self._artifact_uri = None
 
     @property
     def run(self) -> mlflow.entities.Run:
@@ -53,38 +51,43 @@ class MLflowRunLoader:
             self._run = mlflow.get_run(self.run_id)
         return self._run
 
-    @property
-    def artifact_uri(self) -> str:
-        """Get the base artifact URI for this run."""
-        if self._artifact_uri is None:
-            base_uri = self.run.info.artifact_uri
-            # Convert to local path if needed
-            if base_uri.startswith("file://"):
-                base_uri = base_uri[7:]
-            elif "mlruns" in base_uri:
-                base_uri = "./" + base_uri[base_uri.find("mlruns") :]
-            self._artifact_uri = base_uri
-        return self._artifact_uri
-
-    def get_artifact_path(
-        self, filename: str | None = None, artifact_path: str | None = None
-    ) -> str:
+    def download_artifact(self, filename: str, artifact_path: str | None = None) -> str:
         """
-        Construct the full path to an artifact file or directory.
+        Download an artifact and return its local filesystem path.
+
+        Uses ``mlflow.artifacts.download_artifacts`` so the code is
+        independent of the underlying storage backend.
 
         Args:
-            filename: Name of the artifact file. If None, returns the base artifact directory.
-            artifact_path: Optional subdirectory within artifacts (e.g., "dataset", "model")
+            filename: Name of the artifact file (e.g., "embeddings.npy").
+            artifact_path: Optional subdirectory within artifacts
+                (e.g., "model").  The final artifact path sent to MLflow
+                becomes ``artifact_path/filename``.
 
         Returns:
-            Full path to the artifact file or directory
+            Local filesystem path to the downloaded artifact.
         """
-        base = self.artifact_uri
-        if artifact_path:
-            base = f"{base}/{artifact_path}"
-        if filename:
-            return f"{base}/{filename}"
-        return base
+        relative = f"{artifact_path}/{filename}" if artifact_path else filename
+        return mlflow.artifacts.download_artifacts(run_id=self.run_id, artifact_path=relative)
+
+    def download_artifact_dir(self, artifact_path: str | None = None) -> str:
+        """
+        Download an artifact directory and return its local filesystem path.
+
+        Uses ``mlflow.artifacts.download_artifacts`` so the code is
+        independent of the underlying storage backend.
+
+        Args:
+            artifact_path: Optional subdirectory within artifacts
+                (e.g., "model").  If None, downloads the entire
+                artifact directory for this run.
+
+        Returns:
+            Local filesystem path to the downloaded artifact directory.
+        """
+        return mlflow.artifacts.download_artifacts(
+            run_id=self.run_id, artifact_path=artifact_path or ""
+        )
 
     def get_parameters(self) -> dict[str, str]:
         """
@@ -145,8 +148,8 @@ class MLflowRunLoader:
             FileNotFoundError: If the artifact file doesn't exist
             json.JSONDecodeError: If the file is not valid JSON
         """
-        file_path = self.get_artifact_path(filename, artifact_path)
-        with open(file_path) as f:
+        local_path = self.download_artifact(filename, artifact_path)
+        with open(local_path) as f:
             return json.load(f)
 
     def get_npy_artifact(
@@ -165,8 +168,8 @@ class MLflowRunLoader:
         Raises:
             FileNotFoundError: If the artifact file doesn't exist
         """
-        file_path = self.get_artifact_path(filename, artifact_path)
-        return np.load(file_path, allow_pickle=allow_pickle)
+        local_path = self.download_artifact(filename, artifact_path)
+        return np.load(local_path, allow_pickle=allow_pickle)
 
     def get_npz_artifact(
         self, filename: str, artifact_path: str | None = None, return_sparse: bool = True
@@ -186,10 +189,10 @@ class MLflowRunLoader:
         Raises:
             FileNotFoundError: If the artifact file doesn't exist
         """
-        file_path = self.get_artifact_path(filename, artifact_path)
+        local_path = self.download_artifact(filename, artifact_path)
         if return_sparse:
-            return sp.load_npz(file_path)
-        return np.load(file_path)
+            return sp.load_npz(local_path)
+        return np.load(local_path)
 
     def artifact_exists(self, filename: str, artifact_path: str | None = None) -> bool:
         """
@@ -202,8 +205,11 @@ class MLflowRunLoader:
         Returns:
             True if the artifact exists, False otherwise
         """
-        file_path = self.get_artifact_path(filename, artifact_path)
-        return Path(file_path).exists()
+        try:
+            self.download_artifact(filename, artifact_path)
+            return True
+        except (FileNotFoundError, OSError):
+            return False
 
 
 def get_run_parameters(run_id: str) -> dict[str, str]:

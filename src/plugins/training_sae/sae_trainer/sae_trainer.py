@@ -362,7 +362,7 @@ class Plugin(BasePlugin):
         )
 
         # Load pre-trained base model from artifact (config.json + model.pt)
-        self.base_model = load_base_model(base_loader.get_artifact_path(), device)
+        self.base_model = load_base_model(base_loader.download_artifact_dir(), device)
 
         logger.info("Base model loaded successfully")
 

@@ -1,5 +1,7 @@
 mlflow:
   experiment_name: "pipeline_experiments_02"
+  tracking_uri: "sqlite:///mlflow.db"
+  artifact_root: "./mlartifacts"
 
 plugin_categories:
   dataset_loading:

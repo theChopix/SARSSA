@@ -41,7 +41,7 @@ class Plugin(BasePlugin):
         self.top_neuron_per_tag: dict = labeling_loader.get_json_artifact("top_neuron_per_tag.json")
         logger.info(f"Loaded {len(self.top_neuron_per_tag)} top-neuron-per-tag mappings")
 
-        item_acts_path = labeling_loader.get_artifact_path("item_acts.pt")
+        item_acts_path = labeling_loader.download_artifact("item_acts.pt")
         self.item_acts: torch.Tensor = torch.load(
             item_acts_path, map_location="cpu", weights_only=True
         )
