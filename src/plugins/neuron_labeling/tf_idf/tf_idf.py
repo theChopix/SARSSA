@@ -45,14 +45,14 @@ class Plugin(BasePlugin):
         logger.info("Loading base model")
         base_run_id = context["training_cfm"]["run_id"]
         base_loader = MLflowRunLoader(base_run_id)
-        self.base_model = load_base_model(base_loader.get_artifact_path(), device)
+        self.base_model = load_base_model(base_loader.download_artifact_dir(), device)
         logger.info("Base model loaded successfully")
 
         # Load SAE model via registry-based loader
         logger.info("Loading SAE model")
         sae_run_id = context["training_sae"]["run_id"]
         sae_loader = MLflowRunLoader(sae_run_id)
-        self.sae = load_sae_model(sae_loader.get_artifact_path(), device)
+        self.sae = load_sae_model(sae_loader.download_artifact_dir(), device)
         logger.info("SAE model loaded successfully")
 
     def run(

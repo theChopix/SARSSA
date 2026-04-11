@@ -43,6 +43,7 @@ dist/
 # =========================
 data/
 mlruns/
+mlartifacts/
 wandb/
 outputs/
 checkpoints/
