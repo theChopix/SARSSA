@@ -408,7 +408,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
             const status = await getTaskStatus(task_id);
 
             // Update run ID as soon as it's available.
-            if (status.run_id) {
+            if (status.run_id && !get().currentRunId) {
+              set({ currentRunId: status.run_id });
+              get().loadPastRuns();
+            } else if (status.run_id) {
               set({ currentRunId: status.run_id });
             }
 
