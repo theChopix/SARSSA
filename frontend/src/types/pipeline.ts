@@ -87,3 +87,19 @@ export interface ExecuteStepResponse {
   category: string;
   step_run_id: string;
 }
+
+// ── MLflow info (from GET /pipelines/mlflow-info) ────────
+
+/**
+ * Response from `GET /pipelines/mlflow-info`.
+ *
+ * Provides the MLflow UI base URL and experiment ID needed to
+ * construct deep links to experiment and run pages.
+ *
+ * - `ui_base_url`    – Base URL of the MLflow UI server (e.g. "http://localhost:5000").
+ * - `experiment_id`  – Numeric experiment ID assigned by MLflow.
+ */
+export interface MlflowInfo {
+  ui_base_url: string;
+  experiment_id: string;
+}

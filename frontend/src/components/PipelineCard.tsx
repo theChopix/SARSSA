@@ -44,8 +44,9 @@
 import { useEffect } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
-import { usePipelineStore } from "../store/pipelineStore";
+import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
+import type { MlflowInfo } from "../types/pipeline";
 import type { CardStatus, CardMode } from "../store/pipelineStore";
 
 // ── Props ───────────────────────────────────────────────
@@ -191,6 +192,70 @@ function PluginRow({
   );
 }
 
+// ── Run info block (locked label + deep links) ──────────
+
+/**
+ * Displays a locked run-name label and MLflow deep links.
+ *
+ * Shown on completed cards to identify which pipeline run
+ * produced the result and provide direct navigation to MLflow.
+ *
+ * ┌──────────────────────────────────────────────┐
+ * │  pipeline_run_2025-04-12_18-30...            │
+ * │  see pipeline run | see step run             │
+ * └──────────────────────────────────────────────┘
+ */
+function RunInfoBlock({
+  pipelineRunId,
+  stepRunId,
+  pipelineRunName,
+  mlflowInfo,
+}: {
+  pipelineRunId: string | null;
+  stepRunId: string | null;
+  pipelineRunName: string;
+  mlflowInfo: MlflowInfo | null;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {/* Locked run name label */}
+      <div className="w-full px-3 py-2 text-sm border border-gray-200
+                      rounded-md bg-gray-50 text-gray-600 font-mono truncate">
+        {pipelineRunName}
+      </div>
+
+      {/* Deep links */}
+      {mlflowInfo && (
+        <div className="flex items-center gap-1.5 text-sm">
+          {pipelineRunId && (
+            <a
+              href={mlflowRunUrl(mlflowInfo, pipelineRunId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-700 hover:underline"
+            >
+              See pipeline run
+            </a>
+          )}
+          {pipelineRunId && stepRunId && (
+            <span className="text-gray-300">|</span>
+          )}
+          {stepRunId && (
+            <a
+              href={mlflowRunUrl(mlflowInfo, stepRunId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-700 hover:underline"
+            >
+              See step run
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────
 
 /**
@@ -218,8 +283,8 @@ export default function PipelineCard({
   const pastRuns = usePipelineStore((s) => s.pastRuns);
   const loadPastRuns = usePipelineStore((s) => s.loadPastRuns);
   const loadFromPreviousRun = usePipelineStore((s) => s.loadFromPreviousRun);
-  const targetRunId = usePipelineStore((s) => s.targetRunId);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
+  const mlflowInfo = usePipelineStore((s) => s.mlflowInfo);
   const allOneTimeDone = usePipelineStore((s) => {
     if (!s.registry) return false;
     return Object.entries(s.registry)
@@ -265,8 +330,8 @@ export default function PipelineCard({
         <p className="text-xs text-red-500">Step failed during execution.</p>
       )}
 
-      {/* ── Mode toggle (one_time cards only) ────────── */}
-      {!isMultiRun && (
+      {/* ── Mode toggle (one_time cards only, hidden when done) ── */}
+      {!isMultiRun && card.status !== "done" && (
         <div className="flex rounded-md overflow-hidden border border-gray-300">
           <button
             onClick={() => setCardMode(categoryKey, "setup")}
@@ -295,6 +360,32 @@ export default function PipelineCard({
         </div>
       )}
 
+      {/* ── Completed state (one_time): show run info ── */}
+      {!isMultiRun && card.status === "done" && (
+        <>
+          <RunInfoBlock
+            pipelineRunId={currentRunId}
+            stepRunId={card.stepRunId}
+            pipelineRunName={
+              pastRuns.find((r) => r.run_id === currentRunId)?.run_name
+              ?? currentRunId
+              ?? "\u2014"
+            }
+            mlflowInfo={mlflowInfo}
+          />
+          <button
+            onClick={() => setCardMode(categoryKey, "setup")}
+            disabled={pipelineRunning}
+            className="w-full py-2 rounded-md text-sm font-medium
+                       border border-gray-300 text-gray-700
+                       hover:bg-gray-50 disabled:opacity-50
+                       disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            Set up new
+          </button>
+        </>
+      )}
+
       {/* ── Multi-run target info ────────────────────── */}
       {isMultiRun && !allOneTimeDone && (
         <p className="text-xs text-gray-400">
@@ -302,46 +393,42 @@ export default function PipelineCard({
         </p>
       )}
       {isMultiRun && allOneTimeDone && currentRunId && (
-        <div className="w-full px-3 py-2 text-xs border border-gray-200 rounded-md
-                        bg-gray-50 text-gray-600 font-mono truncate">
-          {pastRuns.find((r) => r.run_id === currentRunId)?.run_name ?? currentRunId}
-        </div>
+        <RunInfoBlock
+          pipelineRunId={currentRunId}
+          stepRunId={card.stepRunId}
+          pipelineRunName={
+            pastRuns.find((r) => r.run_id === currentRunId)?.run_name
+            ?? currentRunId
+          }
+          mlflowInfo={mlflowInfo}
+        />
       )}
 
-      {/* ── "Load from previous run" dropdown / label ──── */}
-      {!isMultiRun && cardMode === "load" && (
-        card.status === "done" && targetRunId ? (
-          // Locked: show the loaded run name as a read-only label.
-          <div className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md
-                          bg-gray-50 text-gray-600">
-            {pastRuns.find((r) => r.run_id === targetRunId)?.run_name ?? targetRunId}
-          </div>
-        ) : (
-          // Interactive: let the user pick a run.
-          <select
-            disabled={pipelineRunning}
-            onChange={(e) => {
-              const runId = e.target.value;
-              if (runId) {
-                loadFromPreviousRun(runId, categoryKey);
-              }
-            }}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md
-                       bg-white text-gray-700 focus:outline-none focus:ring-2
-                       focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <option value="">Select a previous run...</option>
-            {pastRuns.map((run) => (
-              <option key={run.run_id} value={run.run_id}>
-                {run.run_name} ({run.status})
-              </option>
-            ))}
-          </select>
-        )
+      {/* ── "Load from previous run" dropdown ──────────── */}
+      {!isMultiRun && cardMode === "load" && card.status !== "done" && (
+        <select
+          disabled={pipelineRunning}
+          onChange={(e) => {
+            const runId = e.target.value;
+            if (runId) {
+              loadFromPreviousRun(runId, categoryKey);
+            }
+          }}
+          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md
+                     bg-white text-gray-700 focus:outline-none focus:ring-2
+                     focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <option value="">Select a previous run...</option>
+          {pastRuns.map((run) => (
+            <option key={run.run_id} value={run.run_id}>
+              {run.run_name} ({run.status})
+            </option>
+          ))}
+        </select>
       )}
 
       {/* ── Plugin list ("Set up new" mode or multi_run) ── */}
-      {(isMultiRun || cardMode === "setup") && (
+      {(isMultiRun || (cardMode === "setup" && card.status !== "done")) && (
         <div className="flex flex-col gap-0.5">
           {implementations.map((impl) => (
             <PluginRow
@@ -363,7 +450,7 @@ export default function PipelineCard({
       )}
 
       {/* ── Parameter form (expandable) ──────────────── */}
-      {(isMultiRun || cardMode === "setup") &&
+      {(isMultiRun || (cardMode === "setup" && card.status !== "done")) &&
         card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
         <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
           {selectedImpl.params.map((param) => (
@@ -401,7 +488,7 @@ export default function PipelineCard({
               </span>
             )}
           </button>
-        ) : cardMode === "setup" ? (
+        ) : (cardMode === "setup" && card.status !== "done") ? (
           <button
             disabled={pipelineRunning}
             onClick={() => onRunUpTo?.(categoryKey)}

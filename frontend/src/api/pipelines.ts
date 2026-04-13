@@ -25,6 +25,7 @@
 import { API_BASE_URL } from "../constants";
 import type {
   ExecuteStepResponse,
+  MlflowInfo,
   PipelineContext,
   PipelineRun,
   StepDefinition,
@@ -201,4 +202,33 @@ export async function getTaskStatus(
   }
 
   return (await response.json()) as TaskStatusResponse;
+}
+
+// ── GET /pipelines/mlflow-info ───────────────────────────
+
+/**
+ * Fetch MLflow UI connection info for constructing deep links.
+ *
+ * Returns the MLflow UI base URL and the numeric experiment ID
+ * resolved from the configured experiment name.
+ *
+ * @returns MLflow UI base URL and experiment ID.
+ *
+ * @example
+ * ```ts
+ * const info = await fetchMlflowInfo();
+ * console.log(info.ui_base_url);    // "http://localhost:5000"
+ * console.log(info.experiment_id);  // "1"
+ * ```
+ */
+export async function fetchMlflowInfo(): Promise<MlflowInfo> {
+  const response = await fetch(`${API_BASE_URL}/pipelines/mlflow-info`);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch MLflow info: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return (await response.json()) as MlflowInfo;
 }

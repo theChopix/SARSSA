@@ -31,16 +31,41 @@ import { fetchPluginRegistry } from "../api/plugins";
 import {
   fetchPipelineRuns,
   fetchRunContext,
+  fetchMlflowInfo,
   startPipelineTask,
   getTaskStatus,
   executeStep,
 } from "../api/pipelines";
 import type { PluginRegistry } from "../types/plugin";
 import type {
+  MlflowInfo,
   PipelineContext,
   PipelineRun,
   StepDefinition,
 } from "../types/pipeline";
+
+// ── MLflow URL helpers ───────────────────────────────────
+
+/**
+ * Construct a deep link to a specific run in the MLflow UI.
+ *
+ * @param info  - MLflow connection info (base URL + experiment ID).
+ * @param runId - The MLflow run ID to link to.
+ * @returns Full URL to the run's detail page.
+ */
+export function mlflowRunUrl(info: MlflowInfo, runId: string): string {
+  return `${info.ui_base_url}/#/experiments/${info.experiment_id}/runs/${runId}`;
+}
+
+/**
+ * Construct a deep link to the experiment's run list in the MLflow UI.
+ *
+ * @param info - MLflow connection info (base URL + experiment ID).
+ * @returns Full URL to the experiment page.
+ */
+export function mlflowExperimentUrl(info: MlflowInfo): string {
+  return `${info.ui_base_url}/#/experiments/${info.experiment_id}`;
+}
 
 // ── Per-category card state ─────────────────────────────
 
@@ -122,6 +147,9 @@ interface PipelineStore {
   /** Error message from the last failed pipeline run. */
   errorMessage: string | null;
 
+  /** MLflow UI connection info for constructing deep links. */
+  mlflowInfo: MlflowInfo | null;
+
   /** 0-based index of the step currently executing. */
   currentStepIndex: number;
 
@@ -138,6 +166,9 @@ interface PipelineStore {
 
   /** Fetch the list of past pipeline runs from the backend. */
   loadPastRuns: () => Promise<void>;
+
+  /** Fetch MLflow UI base URL and experiment ID from the backend. */
+  loadMlflowInfo: () => Promise<void>;
 
   /**
    * Load context from a past run and populate card states
@@ -218,6 +249,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   pastRuns: [],
   targetRunId: null,
   errorMessage: null,
+  mlflowInfo: null,
   currentStepIndex: 0,
   totalSteps: 0,
 
@@ -238,6 +270,11 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   loadPastRuns: async () => {
     const pastRuns = await fetchPipelineRuns();
     set({ pastRuns });
+  },
+
+  loadMlflowInfo: async () => {
+    const mlflowInfo = await fetchMlflowInfo();
+    set({ mlflowInfo });
   },
 
   loadFromPreviousRun: async (runId: string, upToCategory: string) => {

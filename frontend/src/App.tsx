@@ -38,7 +38,7 @@ import { useEffect, useMemo } from "react";
 import { Loader2, X } from "lucide-react";
 
 import PipelineCard from "./components/PipelineCard";
-import { usePipelineStore } from "./store/pipelineStore";
+import { usePipelineStore, mlflowExperimentUrl } from "./store/pipelineStore";
 import type { StepDefinition } from "./types/pipeline";
 
 /**
@@ -82,13 +82,16 @@ function App() {
   const clearError = usePipelineStore((s) => s.clearError);
   const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
   const totalSteps = usePipelineStore((s) => s.totalSteps);
+  const mlflowInfo = usePipelineStore((s) => s.mlflowInfo);
+  const loadMlflowInfo = usePipelineStore((s) => s.loadMlflowInfo);
 
   // ── Load registry on mount ──────────────────────────
   // This runs ONCE when the page loads. It calls the backend
   // to fetch all available plugins and categories.
   useEffect(() => {
     loadRegistry();
-  }, [loadRegistry]);
+    loadMlflowInfo();
+  }, [loadRegistry, loadMlflowInfo]);
 
   // ── Split categories into two rows ──────────────────
   // `useMemo` caches this computation so it only re-runs
@@ -199,7 +202,7 @@ function App() {
       <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">SARSSAe</h1>
         <a
-          href="http://localhost:5000"
+          href={mlflowInfo ? mlflowExperimentUrl(mlflowInfo) : "#"}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-700"
