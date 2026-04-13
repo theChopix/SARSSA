@@ -40,4 +40,5 @@ _config = _load_config()
 EXPERIMENT_NAME: str = _config["mlflow"]["experiment_name"]
 TRACKING_URI: str = _config["mlflow"]["tracking_uri"]
 ARTIFACT_ROOT: str = _config["mlflow"]["artifact_root"]
+MLFLOW_UI_BASE_URL: str = _config["mlflow"]["ui_base_url"]
 PLUGIN_CATEGORIES: dict[str, CategoryInfo] = _load_plugin_categories(_config["plugin_categories"])

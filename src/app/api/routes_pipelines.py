@@ -3,8 +3,10 @@
 import threading
 from typing import Any
 
+import mlflow
 from fastapi import APIRouter, HTTPException
 
+from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs, get_run_context
 from app.core.pipeline_worker import run_pipeline_worker
@@ -12,6 +14,31 @@ from app.core.task_store import create_task, get_task, task_to_response
 from app.models.pipeline import PipelineRequest, StepDefinition, TaskStatusResponse
 
 router = APIRouter()
+
+
+@router.get("/mlflow-info")
+def get_mlflow_info() -> dict[str, str]:
+    """Return MLflow UI connection info for frontend deep links.
+
+    Resolves the configured experiment name to its numeric MLflow ID
+    and pairs it with the UI base URL from config.
+
+    Returns:
+        dict[str, str]: Contains ``ui_base_url`` and ``experiment_id``.
+
+    Raises:
+        HTTPException: 500 if the configured experiment is not found.
+    """
+    experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+    if experiment is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Experiment '{EXPERIMENT_NAME}' not found.",
+        )
+    return {
+        "ui_base_url": MLFLOW_UI_BASE_URL,
+        "experiment_id": experiment.experiment_id,
+    }
 
 
 @router.get("/runs")
