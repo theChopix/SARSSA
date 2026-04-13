@@ -64,7 +64,7 @@ export function mlflowRunUrl(info: MlflowInfo, runId: string): string {
  * @returns Full URL to the experiment page.
  */
 export function mlflowExperimentUrl(info: MlflowInfo): string {
-  return `${info.ui_base_url}/#/experiments/${info.experiment_id}`;
+  return `${info.ui_base_url}/#/experiments/${info.experiment_id}/runs`;
 }
 
 // ── Per-category card state ─────────────────────────────
