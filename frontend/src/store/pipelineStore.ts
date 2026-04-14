@@ -156,6 +156,12 @@ interface PipelineStore {
   /** Total number of steps in the current pipeline run. */
   totalSteps: number;
 
+  /**
+   * Steps waiting for modal confirmation before launching.
+   * When non-null the LaunchModal is visible.
+   */
+  pendingSteps: StepDefinition[] | null;
+
   // ── Actions ─────────────────────────────────────────
 
   /**
@@ -195,10 +201,29 @@ interface PipelineStore {
   setCardMode: (category: string, mode: CardMode) => void;
 
   /**
+   * Stage steps for launch — opens the LaunchModal.
+   * Pass `null` to close the modal without launching.
+   */
+  setPendingSteps: (steps: StepDefinition[] | null) => void;
+
+  /**
+   * Confirm launch from the modal: clears pendingSteps and
+   * runs the pipeline with the user-provided tags and description.
+   */
+  confirmLaunch: (
+    tags: Record<string, string>,
+    description: string
+  ) => Promise<void>;
+
+  /**
    * Run the full pipeline (all one_time steps) via background task + polling.
    * Updates card statuses as polling responses arrive.
    */
-  runPipeline: (steps: StepDefinition[]) => Promise<void>;
+  runPipeline: (
+    steps: StepDefinition[],
+    tags?: Record<string, string>,
+    description?: string
+  ) => Promise<void>;
 
   /** Clear the error message banner. */
   clearError: () => void;
@@ -252,6 +277,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   mlflowInfo: null,
   currentStepIndex: 0,
   totalSteps: 0,
+  pendingSteps: null,
 
   // ── Actions ─────────────────────────────────────────
 
@@ -378,7 +404,25 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     set({ cards });
   },
 
-  runPipeline: async (steps: StepDefinition[]) => {
+  setPendingSteps: (steps: StepDefinition[] | null) => {
+    set({ pendingSteps: steps });
+  },
+
+  confirmLaunch: async (
+    tags: Record<string, string>,
+    description: string
+  ) => {
+    const steps = get().pendingSteps;
+    if (!steps) return;
+    set({ pendingSteps: null });
+    await get().runPipeline(steps, tags, description);
+  },
+
+  runPipeline: async (
+    steps: StepDefinition[],
+    tags: Record<string, string> = {},
+    description: string = ""
+  ) => {
     // Reset cards that will be executed to idle.
     const cards = { ...get().cards };
     for (const step of steps) {
@@ -399,7 +443,12 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     try {
       // Start the background task, passing any pre-loaded context.
       const existingContext = get().context ?? {};
-      const { task_id } = await startPipelineTask(steps, existingContext);
+      const { task_id } = await startPipelineTask(
+        steps,
+        existingContext,
+        tags,
+        description
+      );
 
       // Poll every 2 seconds until the task finishes.
       await new Promise<void>((resolve, reject) => {
@@ -536,6 +585,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       errorMessage: null,
       currentStepIndex: 0,
       totalSteps: 0,
+      pendingSteps: null,
     });
   },
 }));

@@ -38,6 +38,7 @@ import { useEffect, useMemo } from "react";
 import { Loader2, X } from "lucide-react";
 
 import PipelineCard from "./components/PipelineCard";
+import LaunchModal from "./components/LaunchModal";
 import { usePipelineStore, mlflowExperimentUrl } from "./store/pipelineStore";
 import type { StepDefinition } from "./types/pipeline";
 
@@ -75,7 +76,7 @@ function App() {
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
   const loadRegistry = usePipelineStore((s) => s.loadRegistry);
   const resetCards = usePipelineStore((s) => s.resetCards);
-  const runPipeline = usePipelineStore((s) => s.runPipeline);
+  const setPendingSteps = usePipelineStore((s) => s.setPendingSteps);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
   const runSingleStep = usePipelineStore((s) => s.runSingleStep);
   const errorMessage = usePipelineStore((s) => s.errorMessage);
@@ -154,7 +155,7 @@ function App() {
     }
 
     if (steps.length > 0) {
-      runPipeline(steps);
+      setPendingSteps(steps);
     }
   };
 
@@ -198,6 +199,8 @@ function App() {
   // ── Render ──────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* ── Launch confirmation modal ────────── */}
+      <LaunchModal />
       {/* ── Header ─────────────────────────────────── */}
       <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">SARSSAe</h1>
