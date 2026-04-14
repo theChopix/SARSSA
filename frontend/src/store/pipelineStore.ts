@@ -328,16 +328,20 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       }
     }
 
-    // Update cards: mark allowed categories as "done" + "load" mode.
+    // Update cards: mark allowed categories as "done" + "load" mode,
+    // and reset any one_time cards that are NOT in the loaded context.
     const cards = { ...prev };
-    for (const cat of allowedCategories) {
-      if (cards[cat] && scopedContext[cat]) {
-        cards[cat] = {
-          ...cards[cat],
+    for (const [key] of sorted) {
+      if (!cards[key]) continue;
+      if (allowedCategories.has(key) && scopedContext[key]) {
+        cards[key] = {
+          ...cards[key],
           status: "done",
-          stepRunId: scopedContext[cat].run_id,
+          stepRunId: scopedContext[key].run_id,
           mode: "load",
         };
+      } else {
+        cards[key] = { ...defaultCard() };
       }
     }
 
