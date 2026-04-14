@@ -29,8 +29,21 @@ class PipelineEngine:
 
     # ── Step-by-step mode ─────────────────────────────
 
-    def start_run(self) -> str:
+    _TAG_PREFIX = "sarssa."
+
+    def start_run(
+        self,
+        tags: dict[str, str] | None = None,
+        description: str = "",
+    ) -> str:
         """Create a new parent pipeline run in MLflow.
+
+        Optionally annotates the run with user-provided key-value tags
+        (each key is prefixed with ``sarssa.``) and a description.
+
+        Args:
+            tags: User-provided key-value tags for the pipeline run.
+            description: User-provided free-text description.
 
         Returns:
             str: The parent run ID.
@@ -46,8 +59,18 @@ class PipelineEngine:
 
         mlflow.set_experiment(EXPERIMENT_NAME)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        run = mlflow.start_run(run_name=f"pipeline_run_{timestamp}")
+
+        mlflow_tags: dict[str, str] | None = None
+        if tags:
+            mlflow_tags = {f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()}
+
+        run = mlflow.start_run(
+            run_name=f"pipeline_run_{timestamp}",
+            tags=mlflow_tags,
+            description=description or None,
+        )
         self._parent_run_id = run.info.run_id
+
         mlflow.end_run()
         return self._parent_run_id
 

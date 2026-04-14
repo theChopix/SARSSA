@@ -84,7 +84,12 @@ def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
         dict[str, str]: ``{"task_id": "..."}``.
     """
     steps = [step.model_dump() for step in pipeline_request.steps]
-    task = create_task(steps, initial_context=pipeline_request.context)
+    task = create_task(
+        steps,
+        initial_context=pipeline_request.context,
+        tags=pipeline_request.tags,
+        description=pipeline_request.description,
+    )
 
     thread = threading.Thread(
         target=run_pipeline_worker,

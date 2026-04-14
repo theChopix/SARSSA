@@ -31,7 +31,7 @@ def run_pipeline_worker(task: TaskState) -> None:
     """
     engine = PipelineEngine()
     try:
-        run_id = engine.start_run()
+        run_id = engine.start_run(tags=task.tags, description=task.description)
         task.run_id = run_id
         logger.info("[WORKER] Pipeline run started: %s", run_id)
 

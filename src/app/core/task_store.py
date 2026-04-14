@@ -17,12 +17,16 @@ _tasks: dict[str, TaskState] = {}
 def create_task(
     steps: list[dict[str, Any]],
     initial_context: dict[str, Any] | None = None,
+    tags: dict[str, str] | None = None,
+    description: str = "",
 ) -> TaskState:
     """Create a new task, store it, and return it.
 
     Args:
         steps: Serialised step dicts (each has ``plugin`` and ``params``).
         initial_context: Optional pre-populated context from a previous run.
+        tags: User-provided key-value tags for the pipeline run.
+        description: User-provided free-text description.
 
     Returns:
         TaskState: The newly created task with status ``"running"``.
@@ -32,6 +36,8 @@ def create_task(
         task_id=task_id,
         steps_requested=steps,
         initial_context=initial_context or {},
+        tags=tags or {},
+        description=description,
     )
     _tasks[task_id] = task
     return task

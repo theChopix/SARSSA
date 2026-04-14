@@ -113,6 +113,44 @@ class TestRunAsync:
 
         mock_worker.assert_called_once()
 
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_forwards_tags_to_task(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify tags from the request body are stored on the task."""
+        response = client.post(
+            "/pipelines/run-async",
+            json={
+                "steps": [{"plugin": "cat.p.p", "params": {}}],
+                "tags": {"dataset": "MovieLens", "model": "ELSA"},
+            },
+        )
+        task_id = response.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.tags == {"dataset": "MovieLens", "model": "ELSA"}
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_forwards_description_to_task(
+        self, _mock_worker: MagicMock, client: TestClient
+    ) -> None:
+        """Verify description from the request body is stored on the task."""
+        response = client.post(
+            "/pipelines/run-async",
+            json={
+                "steps": [{"plugin": "cat.p.p", "params": {}}],
+                "description": "Baseline run",
+            },
+        )
+        task_id = response.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.description == "Baseline run"
+
 
 class TestGetTaskStatus:
     """Tests for GET /pipelines/tasks/{task_id}."""
