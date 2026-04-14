@@ -44,6 +44,36 @@ class TestCreateTask:
         task = create_task([])
         assert _tasks[task.task_id] is task
 
+    def test_stores_tags(self) -> None:
+        """Verify tags are forwarded to the TaskState."""
+        _clear_store()
+        task = create_task([], tags={"dataset": "MovieLens", "model": "ELSA"})
+        assert task.tags == {"dataset": "MovieLens", "model": "ELSA"}
+
+    def test_stores_description(self) -> None:
+        """Verify description is forwarded to the TaskState."""
+        _clear_store()
+        task = create_task([], description="Baseline run")
+        assert task.description == "Baseline run"
+
+    def test_tags_default_to_empty_dict(self) -> None:
+        """Verify tags default to an empty dict when not provided."""
+        _clear_store()
+        task = create_task([])
+        assert task.tags == {}
+
+    def test_description_defaults_to_empty_string(self) -> None:
+        """Verify description defaults to empty string when not provided."""
+        _clear_store()
+        task = create_task([])
+        assert task.description == ""
+
+    def test_tags_none_becomes_empty_dict(self) -> None:
+        """Verify passing None for tags results in an empty dict."""
+        _clear_store()
+        task = create_task([], tags=None)
+        assert task.tags == {}
+
 
 class TestGetTask:
     """Tests for get_task."""

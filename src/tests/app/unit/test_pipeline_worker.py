@@ -185,6 +185,75 @@ class TestWorkerSuccess:
         assert observed_steps == [("cat_a", 0), ("cat_b", 1)]
 
 
+class TestWorkerTags:
+    """Tests for tags/description forwarding to the engine."""
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_passes_tags_to_engine(self, mock_engine_cls: MagicMock) -> None:
+        """Verify tags are forwarded to engine.start_run()."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        task.tags = {"dataset": "MovieLens", "model": "ELSA"}
+        run_pipeline_worker(task)
+
+        mock_engine.start_run.assert_called_once_with(
+            tags={"dataset": "MovieLens", "model": "ELSA"},
+            description="",
+        )
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_passes_description_to_engine(self, mock_engine_cls: MagicMock) -> None:
+        """Verify description is forwarded to engine.start_run()."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        task.description = "Baseline run"
+        run_pipeline_worker(task)
+
+        mock_engine.start_run.assert_called_once_with(tags={}, description="Baseline run")
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_passes_empty_defaults_to_engine(self, mock_engine_cls: MagicMock) -> None:
+        """Verify empty tags/description are passed when not set."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        mock_engine.start_run.assert_called_once_with(tags={}, description="")
+
+
 class TestWorkerFailure:
     """Tests for pipeline execution failure."""
 

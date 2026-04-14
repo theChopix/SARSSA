@@ -70,6 +70,43 @@ class TestStartRun:
         with pytest.raises(RuntimeError, match="already in progress"):
             engine.start_run()
 
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_prefixes_tags_with_sarssa(self, mock_mlflow: MagicMock) -> None:
+        """Verify user tags are prefixed with sarssa. in mlflow.start_run()."""
+        mock_mlflow.start_run.return_value = _mock_start_run("run_42")
+
+        engine = PipelineEngine()
+        engine.start_run(tags={"dataset": "MovieLens", "model": "ELSA"})
+
+        _, kwargs = mock_mlflow.start_run.call_args
+        assert kwargs["tags"] == {
+            "sarssa.dataset": "MovieLens",
+            "sarssa.model": "ELSA",
+        }
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_passes_description_to_mlflow(self, mock_mlflow: MagicMock) -> None:
+        """Verify description is passed to mlflow.start_run()."""
+        mock_mlflow.start_run.return_value = _mock_start_run("run_42")
+
+        engine = PipelineEngine()
+        engine.start_run(description="Baseline run")
+
+        _, kwargs = mock_mlflow.start_run.call_args
+        assert kwargs["description"] == "Baseline run"
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_passes_none_when_no_tags_or_description(self, mock_mlflow: MagicMock) -> None:
+        """Verify tags=None and description=None when not provided."""
+        mock_mlflow.start_run.return_value = _mock_start_run("run_42")
+
+        engine = PipelineEngine()
+        engine.start_run()
+
+        _, kwargs = mock_mlflow.start_run.call_args
+        assert kwargs["tags"] is None
+        assert kwargs["description"] is None
+
 
 class TestExecuteStep:
     """Tests for PipelineEngine.execute_step."""
