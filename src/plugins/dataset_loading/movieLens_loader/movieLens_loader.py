@@ -71,6 +71,8 @@ class MovieLensLoader(DatasetLoader):
 
 
 class Plugin(BasePlugin):
+    name = "MovieLens Loader"
+
     def run(
         self,
         context: dict,  # noqa: ARG002

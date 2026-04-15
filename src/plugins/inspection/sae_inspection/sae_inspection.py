@@ -26,6 +26,8 @@ class Plugin(BasePlugin):
     the pipeline context.
     """
 
+    name = "SAE Inspection"
+
     def _load_artifacts(self, context: dict):
         """Load all required artifacts from previous pipeline steps."""
         dataset_run_id = context["dataset_loading"]["run_id"]

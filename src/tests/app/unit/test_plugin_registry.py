@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.core.plugin_discovery.plugin_registry import (
-    _extract_parameters,
+    _extract_parameters_from_instance,
     _find_plugin_modules,
     _make_display_name,
     get_plugin_registry,
@@ -75,12 +75,15 @@ def _build_nested_category(
 
 def _make_mock_plugin(
     params: dict[str, tuple[type, Any]],
+    plugin_name: str | None = None,
 ) -> MagicMock:
     """Create a mock plugin whose run() has the given signature params.
 
     Args:
         params: Mapping of param name to (type, default).
             Use ``inspect.Parameter.empty`` for required params.
+        plugin_name: Optional custom display name for the plugin.
+            Mirrors ``BasePlugin.name``.
 
     Returns:
         MagicMock: A mock with a ``run`` method with proper signature.
@@ -107,6 +110,7 @@ def _make_mock_plugin(
 
     sig = inspect.Signature(parameters)
     mock_plugin = MagicMock()
+    mock_plugin.name = plugin_name
     mock_plugin.run = MagicMock()
     mock_plugin.run.__signature__ = sig
     return mock_plugin
@@ -155,17 +159,13 @@ class TestFindPluginModules:
         assert modules == ["my_cat.intermediate.leaf.leaf"]
 
 
-class TestExtractParameters:
-    """Tests for _extract_parameters with mocked PluginManager."""
+class TestExtractParametersFromInstance:
+    """Tests for _extract_parameters_from_instance with mock plugins."""
 
-    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
-    def test_extracts_optional_params(self, mock_pm: MagicMock) -> None:
+    def test_extracts_optional_params(self) -> None:
         """Verify params with defaults are marked as not required."""
-
-        mock_pm.load.return_value = _make_mock_plugin(
-            {"batch_size": (int, 64), "lr": (float, 0.01)}
-        )
-        params = _extract_parameters("fake.module.module")
+        mock_plugin = _make_mock_plugin({"batch_size": (int, 64), "lr": (float, 0.01)})
+        params = _extract_parameters_from_instance(mock_plugin)
 
         assert len(params) == 2
         for p in params:
@@ -174,29 +174,26 @@ class TestExtractParameters:
         assert params[0].default == 64
         assert params[0].type == "int"
 
-    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
-    def test_extracts_required_params(self, mock_pm: MagicMock) -> None:
+    def test_extracts_required_params(self) -> None:
         """Verify params without defaults are marked as required."""
         import inspect
 
-        mock_pm.load.return_value = _make_mock_plugin({"tag": (str, inspect.Parameter.empty)})
-        params = _extract_parameters("fake.module.module")
+        mock_plugin = _make_mock_plugin({"tag": (str, inspect.Parameter.empty)})
+        params = _extract_parameters_from_instance(mock_plugin)
 
         assert len(params) == 1
         assert params[0].required is True
         assert params[0].default is None
 
-    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
-    def test_excludes_self_and_context(self, mock_pm: MagicMock) -> None:
+    def test_excludes_self_and_context(self) -> None:
         """Verify self and context are filtered out."""
-        mock_pm.load.return_value = _make_mock_plugin({"epochs": (int, 10)})
-        params = _extract_parameters("fake.module.module")
+        mock_plugin = _make_mock_plugin({"epochs": (int, 10)})
+        params = _extract_parameters_from_instance(mock_plugin)
         names = {p.name for p in params}
         assert "self" not in names
         assert "context" not in names
 
-    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
-    def test_unannotated_param_defaults_to_str(self, mock_pm: MagicMock) -> None:
+    def test_unannotated_param_defaults_to_str(self) -> None:
         """Verify params without type annotations default to 'str'."""
         import inspect
 
@@ -211,16 +208,14 @@ class TestExtractParameters:
             )
         ]
         mock_plugin.run.__signature__ = sig.replace(parameters=new_params)
-        mock_pm.load.return_value = mock_plugin
 
-        params = _extract_parameters("fake.module.module")
+        params = _extract_parameters_from_instance(mock_plugin)
         assert params[0].type == "str"
 
-    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
-    def test_returns_parameter_info_instances(self, mock_pm: MagicMock) -> None:
+    def test_returns_parameter_info_instances(self) -> None:
         """Verify returned items are ParameterInfo models."""
-        mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
-        params = _extract_parameters("fake.module.module")
+        mock_plugin = _make_mock_plugin({"x": (int, 1)})
+        params = _extract_parameters_from_instance(mock_plugin)
         for p in params:
             assert isinstance(p, ParameterInfo)
 
@@ -244,6 +239,78 @@ class TestMakeDisplayName:
             expected: Expected human-readable display name.
         """
         assert _make_display_name(module_path) == expected
+
+
+class TestDiscoverImplementationsDisplayName:
+    """Tests for custom name preference in _discover_implementations."""
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_uses_custom_name_when_set(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify plugin.name is used when the plugin defines it."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.sae_trainer.sae_trainer"]
+        mock_pm.load.return_value = _make_mock_plugin(
+            {"epochs": (int, 10)},
+            plugin_name="SAE Trainer",
+        )
+
+        impls = _discover_implementations("cat")
+
+        assert len(impls) == 1
+        assert impls[0].display_name == "SAE Trainer"
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_falls_back_to_auto_derived_name(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify auto-derived name is used when plugin.name is None."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.my_impl.my_impl"]
+        mock_pm.load.return_value = _make_mock_plugin(
+            {"x": (int, 1)},
+            plugin_name=None,
+        )
+
+        impls = _discover_implementations("cat")
+
+        assert len(impls) == 1
+        assert impls[0].display_name == "My Impl"
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_empty_string_name_falls_back(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify empty string name falls back to auto-derived name."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.my_impl.my_impl"]
+        mock_pm.load.return_value = _make_mock_plugin(
+            {"x": (int, 1)},
+            plugin_name="",
+        )
+
+        impls = _discover_implementations("cat")
+
+        assert impls[0].display_name == "My Impl"
 
 
 class TestGetPluginRegistry:

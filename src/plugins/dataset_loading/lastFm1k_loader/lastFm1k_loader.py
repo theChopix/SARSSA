@@ -50,6 +50,8 @@ class LastFm1kLoader(DatasetLoader):
 
 
 class Plugin(BasePlugin):
+    name = "LastFM-1K Loader"
+
     def run(
         self,
         context: dict,  # noqa: ARG002

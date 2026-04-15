@@ -209,6 +209,8 @@ class Plugin(BasePlugin):
     Expects a prior dataset_loading step in the pipeline context.
     """
 
+    name = "ELSA Trainer"
+
     def _load_artifacts(self, context):
         """Load dataset artifacts from the dataset_loading pipeline step."""
         dataset_run_id = context["dataset_loading"]["run_id"]

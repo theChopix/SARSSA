@@ -19,6 +19,8 @@ device = set_device()
 
 
 class Plugin(BasePlugin):
+    name = "TF-IDF Labeling"
+
     def _load_artifacts(self, context, device):
         """Load dataset, ELSA, and SAE artifacts from previous pipeline steps."""
         # Load dataset artifacts

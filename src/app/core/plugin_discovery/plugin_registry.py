@@ -7,6 +7,7 @@ registry consumable by the frontend.
 
 import inspect
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.config.config import PLUGIN_CATEGORIES
 from app.core.plugin_discovery.plugin_manager import PluginManager
@@ -16,26 +17,29 @@ from app.models.plugin import (
     ParameterInfo,
 )
 
+if TYPE_CHECKING:
+    from plugins.plugin_interface import BasePlugin
+
 PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
 SKIP_PARAMS = {"self", "context"}
 
 
-def _extract_parameters(plugin_module_path: str) -> list[ParameterInfo]:
+def _extract_parameters_from_instance(
+    plugin_instance: "BasePlugin",
+) -> list[ParameterInfo]:
     """Extract configurable parameters from a plugin's run() method.
 
-    Loads the plugin via ``PluginManager``, inspects the ``run()``
-    signature, and returns metadata for every parameter except
+    Inspects the ``run()`` signature of an already-loaded plugin
+    instance and returns metadata for every parameter except
     ``self`` and ``context``.
 
     Args:
-        plugin_module_path: Dotted module path relative to ``plugins/``
-            (e.g. ``dataset_loading.movieLens_loader.movieLens_loader``).
+        plugin_instance: An instantiated plugin object.
 
     Returns:
         list[ParameterInfo]: Ordered list of parameter descriptors.
     """
-    plugin_instance = PluginManager.load(plugin_module_path)
     sig = inspect.signature(plugin_instance.run)
 
     params: list[ParameterInfo] = []
@@ -128,11 +132,13 @@ def _discover_implementations(
 
     implementations: list[ImplementationInfo] = []
     for module_path in module_paths:
-        params = _extract_parameters(module_path)
+        plugin_instance = PluginManager.load(module_path)
+        params = _extract_parameters_from_instance(plugin_instance)
+        display_name = plugin_instance.name or _make_display_name(module_path)
         implementations.append(
             ImplementationInfo(
                 plugin_name=module_path,
-                display_name=_make_display_name(module_path),
+                display_name=display_name,
                 params=params,
             )
         )

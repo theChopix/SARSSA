@@ -30,6 +30,8 @@ class Plugin(BasePlugin):
     and ``neuron_labeling`` steps in the pipeline context.
     """
 
+    name = "SAE Steering"
+
     def _load_artifacts(self, context: dict, device):
         """Load all required artifacts from previous pipeline steps."""
         dataset_run_id = context["dataset_loading"]["run_id"]

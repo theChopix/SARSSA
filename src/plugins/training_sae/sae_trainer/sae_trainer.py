@@ -306,6 +306,8 @@ class Plugin(BasePlugin):
     Expects prior dataset_loading and training_cfm steps in the pipeline context.
     """
 
+    name = "SAE Trainer"
+
     def _load_artifacts(self, context, device):
         """Load dataset and base model artifacts from previous pipeline steps."""
         # Load dataset artifacts
