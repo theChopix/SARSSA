@@ -1,6 +1,10 @@
 """Unit tests for app.core.task_store."""
 
-from app.core.task_store import _tasks, create_task, get_task, task_to_response
+import threading
+
+import pytest
+
+from app.core.task_store import _tasks, cancel_task, create_task, get_task, task_to_response
 from app.models.pipeline import TaskState
 
 
@@ -74,6 +78,25 @@ class TestCreateTask:
         task = create_task([], tags=None)
         assert task.tags == {}
 
+    def test_cancel_event_is_threading_event(self) -> None:
+        """Verify cancel_event is a threading.Event instance."""
+        _clear_store()
+        task = create_task([])
+        assert isinstance(task.cancel_event, threading.Event)
+
+    def test_cancel_event_not_set_by_default(self) -> None:
+        """Verify cancel_event is not set on a new task."""
+        _clear_store()
+        task = create_task([])
+        assert not task.cancel_event.is_set()
+
+    def test_cancel_event_unique_per_task(self) -> None:
+        """Verify each task gets its own cancel_event instance."""
+        _clear_store()
+        t1 = create_task([])
+        t2 = create_task([])
+        assert t1.cancel_event is not t2.cancel_event
+
 
 class TestGetTask:
     """Tests for get_task."""
@@ -89,6 +112,50 @@ class TestGetTask:
         task = create_task([])
         retrieved = get_task(task.task_id)
         assert retrieved is task
+
+
+class TestCancelTask:
+    """Tests for cancel_task."""
+
+    def test_returns_none_for_unknown_id(self) -> None:
+        """Verify None is returned for a non-existent task ID."""
+        _clear_store()
+        assert cancel_task("does-not-exist") is None
+
+    def test_sets_cancel_event(self) -> None:
+        """Verify cancel_event is set on a running task."""
+        _clear_store()
+        task = create_task([])
+        result = cancel_task(task.task_id)
+        assert result is task
+        assert task.cancel_event.is_set()
+
+    def test_raises_for_completed_task(self) -> None:
+        """Verify ValueError when the task is already completed."""
+        _clear_store()
+        task = create_task([])
+        task.status = "completed"
+
+        with pytest.raises(ValueError, match="not cancellable"):
+            cancel_task(task.task_id)
+
+    def test_raises_for_errored_task(self) -> None:
+        """Verify ValueError when the task has errored."""
+        _clear_store()
+        task = create_task([])
+        task.status = "error"
+
+        with pytest.raises(ValueError, match="not cancellable"):
+            cancel_task(task.task_id)
+
+    def test_raises_for_already_cancelled_task(self) -> None:
+        """Verify ValueError when the task is already cancelled."""
+        _clear_store()
+        task = create_task([])
+        task.status = "cancelled"
+
+        with pytest.raises(ValueError, match="not cancellable"):
+            cancel_task(task.task_id)
 
 
 class TestTaskToResponse:

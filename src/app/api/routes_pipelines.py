@@ -10,7 +10,7 @@ from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs, get_run_context
 from app.core.pipeline_worker import run_pipeline_worker
-from app.core.task_store import create_task, get_task, task_to_response
+from app.core.task_store import cancel_task, create_task, get_task, task_to_response
 from app.models.pipeline import PipelineRequest, StepDefinition, TaskStatusResponse
 
 router = APIRouter()
@@ -118,6 +118,45 @@ def get_task_status(task_id: str) -> TaskStatusResponse:
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found.")
     return task_to_response(task)
+
+
+@router.post("/tasks/{task_id}/cancel")
+def cancel_task_endpoint(task_id: str) -> dict[str, str]:
+    """Request cancellation of a running pipeline task.
+
+    Sets the cancellation flag on the task. The worker thread
+    will stop after the currently executing step finishes.
+
+    Cancellation is not immediate — the current step runs to
+    completion. The task status will transition to ``"cancelled"``
+    once the worker acknowledges the flag.
+
+    Args:
+        task_id: Unique task identifier.
+
+    Returns:
+        dict[str, str]: Confirmation message.
+
+    Raises:
+        HTTPException: 404 if the task is not found.
+        HTTPException: 409 if the task is not in a cancellable state.
+    """
+    try:
+        task = cancel_task(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if task is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task '{task_id}' not found.",
+        )
+
+    return {
+        "message": (
+            "Cancellation requested. The current step will finish before the pipeline stops."
+        )
+    }
 
 
 @router.post("/runs/{run_id}/execute-step")

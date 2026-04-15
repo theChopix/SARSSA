@@ -55,6 +55,28 @@ def get_task(task_id: str) -> TaskState | None:
     return _tasks.get(task_id)
 
 
+def cancel_task(task_id: str) -> TaskState | None:
+    """Request cancellation of a task by setting its cancel event.
+
+    Args:
+        task_id: Unique task identifier.
+
+    Returns:
+        TaskState | None: The task if found and cancellation was
+            requested, ``None`` if not found.
+
+    Raises:
+        ValueError: If the task is not in a cancellable state.
+    """
+    task = _tasks.get(task_id)
+    if task is None:
+        return None
+    if task.status != "running":
+        raise ValueError(f"Task '{task_id}' is '{task.status}', not cancellable.")
+    task.cancel_event.set()
+    return task
+
+
 def task_to_response(task: TaskState) -> TaskStatusResponse:
     """Convert a TaskState to a serialisable API response.
 

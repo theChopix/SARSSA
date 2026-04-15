@@ -213,6 +213,66 @@ class TestGetTaskStatus:
         assert len(data["completed_steps"]) == 1
 
 
+class TestCancelTask:
+    """Tests for POST /pipelines/tasks/{task_id}/cancel."""
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_returns_200_on_success(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify 200 and confirmation message for a running task."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        response = client.post(f"/pipelines/tasks/{task_id}/cancel")
+
+        assert response.status_code == 200
+        assert "message" in response.json()
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_sets_cancel_event(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify cancel_event is set on the task after cancellation."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        client.post(f"/pipelines/tasks/{task_id}/cancel")
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.cancel_event.is_set()
+
+    def test_returns_404_for_unknown_task(self, client: TestClient) -> None:
+        """Verify 404 when the task ID does not exist."""
+        response = client.post("/pipelines/tasks/nonexistent-id/cancel")
+        assert response.status_code == 404
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_returns_409_for_completed_task(
+        self, _mock_worker: MagicMock, client: TestClient
+    ) -> None:
+        """Verify 409 when the task is already completed."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        task.status = "completed"
+
+        response = client.post(f"/pipelines/tasks/{task_id}/cancel")
+        assert response.status_code == 409
+
+
 class TestExecuteStep:
     """Tests for POST /pipelines/runs/{run_id}/execute-step."""
 

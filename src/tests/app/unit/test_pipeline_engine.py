@@ -260,6 +260,75 @@ class TestResumeRun:
         assert "cat" in ctx
 
 
+class TestFailRun:
+    """Tests for PipelineEngine.fail_run."""
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_logs_context_json(self, mock_mlflow: MagicMock) -> None:
+        """Verify context.json is logged to the parent run."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
+        mock_client = MagicMock()
+        mock_mlflow.tracking.MlflowClient.return_value = mock_client
+
+        engine = PipelineEngine()
+        engine.start_run()
+
+        context = {"dataset_loading": {"run_id": "abc"}}
+        engine.fail_run(context)
+
+        mock_mlflow.log_dict.assert_called_once_with(context, "context.json")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_sets_cancellation_tag(self, mock_mlflow: MagicMock) -> None:
+        """Verify cancellation tag is set on the parent run."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
+        mock_client = MagicMock()
+        mock_mlflow.tracking.MlflowClient.return_value = mock_client
+
+        engine = PipelineEngine()
+        engine.start_run()
+
+        engine.fail_run({})
+
+        mock_mlflow.set_tag.assert_called_once_with("cancellation", "cancelled_by_user")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_marks_run_as_failed(self, mock_mlflow: MagicMock) -> None:
+        """Verify the run is marked FAILED via MlflowClient."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
+        mock_client = MagicMock()
+        mock_mlflow.tracking.MlflowClient.return_value = mock_client
+
+        engine = PipelineEngine()
+        engine.start_run()
+        run_id = engine._parent_run_id
+
+        engine.fail_run({})
+
+        mock_client.set_terminated.assert_called_once_with(run_id, status="FAILED")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_clears_parent_run_id(self, mock_mlflow: MagicMock) -> None:
+        """Verify _parent_run_id is reset after fail_run."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
+        mock_client = MagicMock()
+        mock_mlflow.tracking.MlflowClient.return_value = mock_client
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.fail_run({})
+
+        assert engine._parent_run_id is None
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_raises_without_active_run(self, _mock_mlflow: MagicMock) -> None:
+        """Verify RuntimeError when no parent run is active."""
+        engine = PipelineEngine()
+
+        with pytest.raises(RuntimeError, match="start_run"):
+            engine.fail_run({})
+
+
 class TestBatchRun:
     """Tests for PipelineEngine.run (batch mode)."""
 

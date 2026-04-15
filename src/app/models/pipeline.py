@@ -1,5 +1,6 @@
 """Pydantic models and dataclasses for pipeline execution."""
 
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -36,7 +37,8 @@ class TaskState:
 
     Attributes:
         task_id: Unique identifier for this task.
-        status: One of ``"running"``, ``"completed"``, ``"error"``.
+        status: One of ``"running"``, ``"completed"``, ``"error"``,
+            ``"cancelled"``.
         run_id: MLflow parent run ID (set after ``engine.start_run()``).
         steps_requested: The original step dicts submitted by the user.
         initial_context: Pre-populated context from a previous run (empty for fresh runs).
@@ -47,10 +49,12 @@ class TaskState:
         completed_steps: Steps that have finished so far.
         context: Final pipeline context (set on completion).
         error: Error message (set on failure).
+        cancel_event: Thread-safe flag for cooperative cancellation.
     """
 
     task_id: str
     status: str = "running"
+    cancel_event: threading.Event = field(default_factory=threading.Event)
     run_id: str | None = None
     steps_requested: list[dict[str, Any]] = field(default_factory=list)
     initial_context: dict[str, Any] = field(default_factory=dict)

@@ -38,6 +38,15 @@ def run_pipeline_worker(task: TaskState) -> None:
         context: dict[str, Any] = dict(task.initial_context)
 
         for i, step in enumerate(task.steps_requested):
+            # ── Cancellation check ────────────────────
+            if task.cancel_event.is_set():
+                logger.info("[WORKER] Cancellation requested before step %d", i)
+                task.status = "cancelled"
+                task.error = "Pipeline cancelled by user."
+                engine.fail_run(context)
+                return
+            # ──────────────────────────────────────────
+
             plugin = step["plugin"]
             params = step.get("params") or {}
             category = plugin.split(".")[0]

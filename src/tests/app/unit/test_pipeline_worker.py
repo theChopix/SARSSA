@@ -254,6 +254,99 @@ class TestWorkerTags:
         mock_engine.start_run.assert_called_once_with(tags={}, description="")
 
 
+class TestWorkerCancellation:
+    """Tests for cooperative cancellation via cancel_event."""
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_cancel_before_first_step(self, mock_engine_cls: MagicMock) -> None:
+        """Verify immediate cancellation when cancel_event is set before start."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+
+        task = _make_task()
+        task.cancel_event.set()
+        run_pipeline_worker(task)
+
+        assert task.status == "cancelled"
+        assert task.error == "Pipeline cancelled by user."
+        mock_engine.execute_step.assert_not_called()
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_cancel_between_steps(self, mock_engine_cls: MagicMock) -> None:
+        """Verify cancellation after first step completes but before second."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            category = plugin.split(".")[0]
+            ctx[category] = {"run_id": f"{category}_run"}
+            # Set cancel after the first step executes.
+            task.cancel_event.set()
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        assert task.status == "cancelled"
+        assert len(task.completed_steps) == 1
+        assert task.completed_steps[0]["category"] == "cat_a"
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_cancel_calls_fail_run(self, mock_engine_cls: MagicMock) -> None:
+        """Verify fail_run is called with partial context on cancellation."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+
+        task = _make_task()
+        task.cancel_event.set()
+        run_pipeline_worker(task)
+
+        mock_engine.fail_run.assert_called_once()
+        mock_engine.finalize_run.assert_not_called()
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_cancel_does_not_set_context(self, mock_engine_cls: MagicMock) -> None:
+        """Verify task.context remains None after cancellation."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+
+        task = _make_task()
+        task.cancel_event.set()
+        run_pipeline_worker(task)
+
+        assert task.context is None
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_no_cancel_runs_normally(self, mock_engine_cls: MagicMock) -> None:
+        """Verify pipeline completes normally when cancel_event is never set."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        assert task.status == "completed"
+        mock_engine.fail_run.assert_not_called()
+        mock_engine.finalize_run.assert_called_once()
+
+
 class TestWorkerFailure:
     """Tests for pipeline execution failure."""
 
