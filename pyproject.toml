@@ -73,7 +73,8 @@ pythonpath = ["src"]
 include = [
     "src/utils/embedder/openai_embedder.py",
     "src/utils/llm/openai_llm.py",
-    "src/plugins/**/*.py"
+    "src/plugins/**/*.py",
+    "src/tests/plugins/**/*.py"
 ]
 
 [tool.ty.overrides.rules]
