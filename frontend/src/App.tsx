@@ -35,7 +35,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X, Ban } from "lucide-react";
 
 import PipelineCard from "./components/PipelineCard";
 import LaunchModal from "./components/LaunchModal";
@@ -85,6 +85,8 @@ function App() {
   const totalSteps = usePipelineStore((s) => s.totalSteps);
   const mlflowInfo = usePipelineStore((s) => s.mlflowInfo);
   const loadMlflowInfo = usePipelineStore((s) => s.loadMlflowInfo);
+  const cancellationPending = usePipelineStore((s) => s.cancellationPending);
+  const cancelPipeline = usePipelineStore((s) => s.cancelPipeline);
 
   // ── Load registry on mount ──────────────────────────
   // This runs ONCE when the page loads. It calls the backend
@@ -219,14 +221,32 @@ function App() {
         </a>
       </header>
 
-      {/* ── Error banner ─────────────────────────────── */}
+      {/* ── Error / cancellation banner ───────────────── */}
       {errorMessage && (
-        <div className="mx-8 mt-4 flex items-center justify-between gap-3 rounded-lg
-                        border border-red-200 bg-red-50 px-4 py-3">
-          <p className="text-sm text-red-700">{errorMessage}</p>
+        <div
+          className={`mx-8 mt-4 flex items-center justify-between gap-3 rounded-lg
+                      border px-4 py-3 ${
+                        errorMessage.toLowerCase().includes("cancelled")
+                          ? "border-amber-200 bg-amber-50"
+                          : "border-red-200 bg-red-50"
+                      }`}
+        >
+          <p
+            className={`text-sm ${
+              errorMessage.toLowerCase().includes("cancelled")
+                ? "text-amber-700"
+                : "text-red-700"
+            }`}
+          >
+            {errorMessage}
+          </p>
           <button
             onClick={clearError}
-            className="shrink-0 text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+            className={`shrink-0 transition-colors cursor-pointer ${
+              errorMessage.toLowerCase().includes("cancelled")
+                ? "text-amber-400 hover:text-amber-600"
+                : "text-red-400 hover:text-red-600"
+            }`}
           >
             <X className="h-4 w-4" />
           </button>
@@ -269,15 +289,32 @@ function App() {
       {/* ── Spacer pushes bottom bar down ──────────── */}
       <div className="flex-1" />
 
-      {/* ── Bottom bar: Reset / Running indicator ──── */}
+      {/* ── Bottom bar: Reset / Running + Cancel ────── */}
       <div className="px-8 pb-8">
         {pipelineRunning ? (
-          <div className="w-full py-3 rounded-lg text-white font-medium text-sm
-                          bg-blue-500 opacity-70 text-center">
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Running pipeline... Step {currentStepIndex + 1} / {totalSteps}
-            </span>
+          <div className="flex gap-3">
+            <div className="flex-1 py-3 rounded-lg text-white font-medium text-sm
+                            bg-blue-500 opacity-70 text-center">
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {cancellationPending
+                  ? "Cancelling... waiting for current step to finish"
+                  : `Running pipeline... Step ${currentStepIndex + 1} / ${totalSteps}`}
+              </span>
+            </div>
+            <button
+              onClick={cancelPipeline}
+              disabled={cancellationPending}
+              className="px-5 py-3 rounded-lg text-sm font-medium
+                         bg-red-500 text-white
+                         hover:bg-red-600 disabled:opacity-50
+                         disabled:cursor-not-allowed
+                         transition-colors cursor-pointer
+                         flex items-center gap-2"
+            >
+              <Ban className="h-4 w-4" />
+              {cancellationPending ? "Cancelling..." : "Cancel"}
+            </button>
           </div>
         ) : (
           <button

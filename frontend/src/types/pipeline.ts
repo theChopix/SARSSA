@@ -55,7 +55,7 @@ export interface StepDefinition {
  *
  * Returned by the polling endpoint to track background pipeline progress.
  *
- * - `status`             – One of `"running"`, `"completed"`, `"error"`.
+ * - `status`             – One of `"running"`, `"completed"`, `"error"`, `"cancelled"`.
  * - `current_step`       – Category key of the step currently executing.
  * - `current_step_index` – 0-based index into the requested steps.
  * - `total_steps`        – Total number of steps in the pipeline.
@@ -65,7 +65,7 @@ export interface StepDefinition {
  */
 export interface TaskStatusResponse {
   task_id: string;
-  status: "running" | "completed" | "error";
+  status: "running" | "completed" | "error" | "cancelled";
   run_id: string | null;
   current_step: string | null;
   current_step_index: number;

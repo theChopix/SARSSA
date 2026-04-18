@@ -35,6 +35,7 @@ import {
   startPipelineTask,
   getTaskStatus,
   executeStep,
+  cancelTask,
 } from "../api/pipelines";
 import type { PluginRegistry } from "../types/plugin";
 import type {
@@ -156,6 +157,12 @@ interface PipelineStore {
   /** Total number of steps in the current pipeline run. */
   totalSteps: number;
 
+  /** Task ID of the currently running background pipeline task. */
+  currentTaskId: string | null;
+
+  /** Whether a cancellation request has been sent but not yet acknowledged. */
+  cancellationPending: boolean;
+
   /**
    * Steps waiting for modal confirmation before launching.
    * When non-null the LaunchModal is visible.
@@ -237,6 +244,13 @@ interface PipelineStore {
     step: StepDefinition
   ) => Promise<void>;
 
+  /**
+   * Request cancellation of the currently running pipeline.
+   * Sets cancellationPending immediately; the polling loop will
+   * detect the "cancelled" status and update the UI.
+   */
+  cancelPipeline: () => Promise<void>;
+
   /** Reset all card statuses back to "idle". */
   resetCards: () => void;
 }
@@ -277,6 +291,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   mlflowInfo: null,
   currentStepIndex: 0,
   totalSteps: 0,
+  currentTaskId: null,
+  cancellationPending: false,
   pendingSteps: null,
 
   // ── Actions ─────────────────────────────────────────
@@ -453,6 +469,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         tags,
         description
       );
+      set({ currentTaskId: task_id });
 
       // Poll every 2 seconds until the task finishes.
       await new Promise<void>((resolve, reject) => {
@@ -506,6 +523,23 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
               // Refresh past runs so the new run name is available.
               get().loadPastRuns();
               resolve();
+            } else if (status.status === "cancelled") {
+              clearInterval(interval);
+              // Mark any currently-running cards as idle.
+              const cc = { ...get().cards };
+              for (const key of Object.keys(cc)) {
+                if (cc[key].status === "running") {
+                  cc[key] = { ...cc[key], status: "idle" };
+                }
+              }
+              set({
+                cards: cc,
+                pipelineRunning: false,
+                cancellationPending: false,
+                currentTaskId: null,
+                errorMessage: status.error ?? "Pipeline cancelled by user.",
+              });
+              resolve();
             } else if (status.status === "error") {
               clearInterval(interval);
               // Mark any currently-running cards as error.
@@ -518,6 +552,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
               set({
                 cards: ec,
                 pipelineRunning: false,
+                currentTaskId: null,
                 errorMessage: status.error ?? "Pipeline failed",
               });
               resolve();
@@ -575,6 +610,20 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     }
   },
 
+  cancelPipeline: async () => {
+    const taskId = get().currentTaskId;
+    if (!taskId) return;
+
+    set({ cancellationPending: true });
+
+    try {
+      await cancelTask(taskId);
+    } catch (error) {
+      console.error("Cancel pipeline error:", error);
+      set({ cancellationPending: false });
+    }
+  },
+
   resetCards: () => {
     const cards = { ...get().cards };
     for (const key of Object.keys(cards)) {
@@ -589,6 +638,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       errorMessage: null,
       currentStepIndex: 0,
       totalSteps: 0,
+      currentTaskId: null,
+      cancellationPending: false,
       pendingSteps: null,
     });
   },

@@ -7,6 +7,7 @@
  *   - `POST /pipelines/runs/{run_id}/execute-step`  → execute single step
  *   - `POST /pipelines/run-async`                  → start pipeline in background
  *   - `GET  /pipelines/tasks/{task_id}`            → poll task status
+ *   - `POST /pipelines/tasks/{task_id}/cancel`    → cancel running task
  *
  * ┌──────────────────────────────────────────────────────────┐
  * │  async / await refresher                                 │
@@ -208,6 +209,44 @@ export async function getTaskStatus(
   }
 
   return (await response.json()) as TaskStatusResponse;
+}
+
+// ── POST /pipelines/tasks/{task_id}/cancel ───────────────
+
+/**
+ * Request cancellation of a running pipeline task.
+ *
+ * The backend sets a cooperative cancellation flag. The currently
+ * executing step will finish, but no further steps will start.
+ * The task status will transition to `"cancelled"` once the
+ * worker acknowledges the flag.
+ *
+ * @param taskId - The task ID returned by {@link startPipelineTask}.
+ * @returns Confirmation message from the backend.
+ *
+ * @throws {Error} 404 if the task is not found.
+ * @throws {Error} 409 if the task is not in a cancellable state.
+ *
+ * @example
+ * ```ts
+ * await cancelTask("abc123");
+ * ```
+ */
+export async function cancelTask(
+  taskId: string
+): Promise<{ message: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/pipelines/tasks/${taskId}/cancel`,
+    { method: "POST" }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to cancel task: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return (await response.json()) as { message: string };
 }
 
 // ── GET /pipelines/mlflow-info ───────────────────────────
