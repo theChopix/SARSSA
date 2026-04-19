@@ -28,11 +28,10 @@ from plugins.plugin_interface import (
 class _StubPlugin(BasePlugin):
     """Minimal concrete plugin for testing base class methods."""
 
-    def run(self, context: dict, **params: Any) -> None:
+    def run(self, **params: Any) -> None:
         """No-op run implementation.
 
         Args:
-            context: Pipeline context.
             **params: Ignored.
         """
 
@@ -187,17 +186,61 @@ class TestLoadArtifact:
         loader.get_json_artifact.assert_called_once_with("d.json")
         assert result == expected
 
-    def test_model_dir_loader(self) -> None:
-        """Verify model_dir loader calls download_artifact_dir."""
+    @patch("utils.torch.models.model_loader.load_base_model")
+    def test_base_model_loader(self, mock_load: MagicMock) -> None:
+        """Verify base_model loader downloads dir and calls load_base_model."""
         plugin = _make_plugin()
         loader = MagicMock(spec=["download_artifact_dir"])
-        loader.download_artifact_dir.return_value = "/tmp/model"
+        loader.download_artifact_dir.return_value = "/tmp/base"
+        mock_load.return_value = MagicMock()
 
-        spec = ArtifactSpec("s", "", "a", "model_dir")
+        spec = ArtifactSpec("s", "", "a", "base_model")
         result = plugin._load_artifact(loader, spec)
 
         loader.download_artifact_dir.assert_called_once_with()
-        assert result == "/tmp/model"
+        mock_load.assert_called_once_with("/tmp/base", device="cpu")
+        assert result is mock_load.return_value
+
+    @patch("utils.torch.models.model_loader.load_base_model")
+    def test_base_model_loader_custom_device(self, mock_load: MagicMock) -> None:
+        """Verify base_model loader forwards device from loader_kwargs."""
+        plugin = _make_plugin()
+        loader = MagicMock(spec=["download_artifact_dir"])
+        loader.download_artifact_dir.return_value = "/tmp/base"
+        mock_load.return_value = MagicMock()
+
+        spec = ArtifactSpec("s", "", "a", "base_model", loader_kwargs={"device": "cuda"})
+        plugin._load_artifact(loader, spec)
+
+        mock_load.assert_called_once_with("/tmp/base", device="cuda")
+
+    @patch("utils.torch.models.model_loader.load_sae_model")
+    def test_sae_model_loader(self, mock_load: MagicMock) -> None:
+        """Verify sae_model loader downloads dir and calls load_sae_model."""
+        plugin = _make_plugin()
+        loader = MagicMock(spec=["download_artifact_dir"])
+        loader.download_artifact_dir.return_value = "/tmp/sae"
+        mock_load.return_value = MagicMock()
+
+        spec = ArtifactSpec("s", "", "a", "sae_model")
+        result = plugin._load_artifact(loader, spec)
+
+        loader.download_artifact_dir.assert_called_once_with()
+        mock_load.assert_called_once_with("/tmp/sae", device="cpu")
+        assert result is mock_load.return_value
+
+    @patch("utils.torch.models.model_loader.load_sae_model")
+    def test_sae_model_loader_custom_device(self, mock_load: MagicMock) -> None:
+        """Verify sae_model loader forwards device from loader_kwargs."""
+        plugin = _make_plugin()
+        loader = MagicMock(spec=["download_artifact_dir"])
+        loader.download_artifact_dir.return_value = "/tmp/sae"
+        mock_load.return_value = MagicMock()
+
+        spec = ArtifactSpec("s", "", "a", "sae_model", loader_kwargs={"device": "cuda"})
+        plugin._load_artifact(loader, spec)
+
+        mock_load.assert_called_once_with("/tmp/sae", device="cuda")
 
     @patch("torch.load")
     def test_pt_loader(self, mock_torch_load: MagicMock) -> None:
@@ -215,9 +258,32 @@ class TestLoadArtifact:
         mock_torch_load.assert_called_once_with(
             "/tmp/t.pt",
             map_location="cpu",
-            weights_only=False,
+            weights_only=True,
         )
         assert result is expected_tensor
+
+    @patch("torch.load")
+    def test_pt_loader_custom_kwargs(self, mock_torch_load: MagicMock) -> None:
+        """Verify pt loader forwards map_location and weights_only from loader_kwargs."""
+        plugin = _make_plugin()
+        loader = MagicMock(spec=["download_artifact"])
+        loader.download_artifact.return_value = "/tmp/t.pt"
+        mock_torch_load.return_value = MagicMock()
+
+        spec = ArtifactSpec(
+            "s",
+            "t.pt",
+            "a",
+            "pt",
+            loader_kwargs={"map_location": "cuda", "weights_only": False},
+        )
+        plugin._load_artifact(loader, spec)
+
+        mock_torch_load.assert_called_once_with(
+            "/tmp/t.pt",
+            map_location="cuda",
+            weights_only=False,
+        )
 
     def test_unknown_loader_raises(self) -> None:
         """Verify ValueError for unrecognised loader type."""
@@ -296,6 +362,41 @@ class TestSaveArtifact:
         mock_torch_save.assert_called_once_with(
             plugin.tensor,
             expected_path,
+        )
+
+    @patch("torch.save")
+    def test_model_saver(
+        self,
+        mock_torch_save: MagicMock,
+        tmp_path: Any,
+    ) -> None:
+        """Verify model saver writes config.json and calls torch.save for state_dict."""
+        plugin = _make_plugin()
+        mock_model = MagicMock()
+        mock_model.get_config.return_value = {
+            "model_type": "elsa",
+            "architecture": {"input_dim": 100, "embedding_dim": 64},
+        }
+        mock_model.state_dict.return_value = {"weight": "fake_tensor"}
+        plugin.trained_model = mock_model
+
+        spec = OutputArtifactSpec("trained_model", "", "model")
+        plugin._save_artifact(str(tmp_path), spec)
+
+        # config.json written correctly
+        config_path = tmp_path / "config.json"
+        assert config_path.exists()
+        with open(config_path) as f:
+            config = json.load(f)
+        assert config == {
+            "model_type": "elsa",
+            "architecture": {"input_dim": 100, "embedding_dim": 64},
+        }
+
+        # torch.save called with state_dict wrapper
+        mock_torch_save.assert_called_once_with(
+            {"state_dict": {"weight": "fake_tensor"}},
+            os.path.join(str(tmp_path), "model.pt"),
         )
 
     def test_unknown_saver_raises(self, tmp_path: Any) -> None:

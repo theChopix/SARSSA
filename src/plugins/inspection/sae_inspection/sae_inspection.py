@@ -51,15 +51,12 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         tag: str,
         k: int = 10,
     ):
         """Inspect which items activate a concept neuron the most.
 
         Args:
-            context: Pipeline context with run IDs from previous steps.
-                Required keys: ``dataset_loading``, ``neuron_labeling``.
             tag: Concept tag to inspect (must exist in top_neuron_per_tag).
             k: Number of top items to return.
 
@@ -67,7 +64,7 @@ class Plugin(BasePlugin):
             dict with keys ``neuron_id``, ``top_k_item_ids``, and
             ``top_k_activations`` (activation values for the returned items).
         """
-        self._load_artifacts(context)
+        self._load_artifacts(self._context)
 
         if tag not in self.top_neuron_per_tag:
             raise ValueError(f"Tag '{tag}' not found in top_neuron_per_tag mapping")

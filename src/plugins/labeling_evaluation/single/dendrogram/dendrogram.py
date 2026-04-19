@@ -30,14 +30,13 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         embedding_model: str = "text-embedding-3-small",
         linkage_method: str = "average",
         figure_width: int = 20,
         base_height: int = 10,
         label_font_size: int = 6,
     ):
-        self._load_artifacts(context)
+        self._load_artifacts(self._context)
 
         logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
 

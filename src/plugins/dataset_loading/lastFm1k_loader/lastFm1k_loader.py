@@ -54,7 +54,6 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,  # noqa: ARG002
         seed: int = 42,
         val_ratio: float = 0.1,
         test_ratio: float = 0.1,
@@ -66,7 +65,6 @@ class Plugin(BasePlugin):
         and storing all necessary artifacts to MLflow for downstream plugins.
 
         Args:
-            context: Plugin context dictionary
             seed: Random seed for reproducibility
             val_ratio: Validation set ratio (default 0.1)
             test_ratio: Test set ratio (default 0.1)

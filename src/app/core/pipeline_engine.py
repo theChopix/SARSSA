@@ -104,7 +104,9 @@ class PipelineEngine:
             mlflow.start_run(run_id=self._parent_run_id),
             mlflow.start_run(run_name=plugin_name, nested=True) as step_run,
         ):
-            plugin.run(context, **params)
+            plugin.load_context(context)
+            plugin.run(**params)
+            plugin.update_context()
 
             category = plugin_name.split(".")[0]
             context[category] = {"run_id": step_run.info.run_id}

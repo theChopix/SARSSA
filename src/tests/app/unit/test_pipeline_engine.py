@@ -132,7 +132,7 @@ class TestExecuteStep:
     @patch("app.core.pipeline_engine.PluginManager")
     @patch("app.core.pipeline_engine.mlflow")
     def test_calls_plugin_run_with_params(self, mock_mlflow: MagicMock, mock_pm: MagicMock) -> None:
-        """Verify plugin.run() is called with context and params."""
+        """Verify plugin.run() is called with only keyword params."""
         mock_mlflow.start_run.side_effect = [
             _mock_start_run("parent_id"),
             _mock_start_run("parent_id"),
@@ -147,7 +147,83 @@ class TestExecuteStep:
         context: dict[str, Any] = {}
         engine.execute_step("training_cfm.trainer.trainer", {"epochs": 10}, context)
 
-        mock_plugin.run.assert_called_once_with(context, epochs=10)
+        mock_plugin.run.assert_called_once_with(epochs=10)
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_calls_load_context_before_run(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify load_context(context) is called before run()."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        mock_plugin = MagicMock()
+        mock_pm.load.return_value = mock_plugin
+
+        engine = PipelineEngine()
+        engine.start_run()
+
+        context: dict[str, Any] = {"existing": {"run_id": "prev"}}
+        engine.execute_step("cat.impl.impl", {}, context)
+
+        mock_plugin.load_context.assert_called_once_with(context)
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_calls_update_context_after_run(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify update_context() is called after run()."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        mock_plugin = MagicMock()
+        mock_pm.load.return_value = mock_plugin
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("cat.impl.impl", {}, {})
+
+        mock_plugin.update_context.assert_called_once()
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_lifecycle_call_order(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify load_context → run → update_context ordering."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        call_order: list[str] = []
+        mock_plugin = MagicMock()
+        mock_plugin.load_context.side_effect = (
+            lambda ctx: call_order.append("load_context")  # noqa: ARG005
+        )
+        mock_plugin.run.side_effect = (
+            lambda **kw: call_order.append("run")  # noqa: ARG005
+        )
+        mock_plugin.update_context.side_effect = lambda: call_order.append("update_context")
+        mock_pm.load.return_value = mock_plugin
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("cat.impl.impl", {"x": 1}, {})
+
+        assert call_order == ["load_context", "run", "update_context"]
 
     @patch("app.core.pipeline_engine.mlflow")
     def test_raises_without_active_run(self, _mock_mlflow: MagicMock) -> None:

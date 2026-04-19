@@ -162,6 +162,7 @@ class BasePlugin(ABC):
             MissingContextError: If a required step or its
                 ``run_id`` is missing from *context*.
         """
+        self._context = context
         self._validate_required_steps(context)
         self._load_input_artifacts(context)
         self._load_input_params(context)
@@ -178,16 +179,17 @@ class BasePlugin(ABC):
         self._log_output_artifacts()
 
     @abstractmethod
-    def run(self, context: dict, **params: Any) -> None:
+    def run(self, **params: Any) -> None:
         """Execute the plugin's core logic.
 
         After ``load_context`` has been called, all declared inputs
         are available on ``self.*``.  The method should populate
         ``self.*`` output attributes for ``update_context``.
 
+        During migration, unmigrated plugins can access the pipeline
+        context via ``self._context`` (set by ``load_context``).
+
         Args:
-            context: Pipeline context (legacy parameter, will be
-                removed in a future subtask).
             **params: Plugin-specific keyword arguments.
         """
 
@@ -269,16 +271,30 @@ class BasePlugin(ABC):
                 return loader.get_npy_artifact(spec.filename, **spec.loader_kwargs)
             case "json":
                 return loader.get_json_artifact(spec.filename, **spec.loader_kwargs)
-            case "model_dir":
-                return loader.download_artifact_dir(**spec.loader_kwargs)
+            case "base_model":
+                from utils.torch.models.model_loader import load_base_model
+
+                path = loader.download_artifact_dir(**spec.loader_kwargs)
+                return load_base_model(
+                    path,
+                    device=spec.loader_kwargs.get("device", "cpu"),
+                )
+            case "sae_model":
+                from utils.torch.models.model_loader import load_sae_model
+
+                path = loader.download_artifact_dir(**spec.loader_kwargs)
+                return load_sae_model(
+                    path,
+                    device=spec.loader_kwargs.get("device", "cpu"),
+                )
             case "pt":
                 import torch
 
-                path = loader.download_artifact(spec.filename, **spec.loader_kwargs)
+                path = loader.download_artifact(spec.filename)
                 return torch.load(
                     path,
-                    map_location="cpu",
-                    weights_only=False,
+                    map_location=spec.loader_kwargs.get("map_location", "cpu"),
+                    weights_only=spec.loader_kwargs.get("weights_only", True),
                 )
             case _:
                 raise ValueError(f"Unknown loader type: {spec.loader}")
@@ -329,5 +345,18 @@ class BasePlugin(ABC):
                 import torch
 
                 torch.save(value, path)
+            case "model":
+                import torch
+
+                config = value.get_config()
+                with open(
+                    os.path.join(tmp_dir, "config.json"),
+                    "w",
+                ) as f:
+                    json.dump(config, f, indent=2)
+                torch.save(
+                    {"state_dict": value.state_dict()},
+                    os.path.join(tmp_dir, "model.pt"),
+                )
             case _:
                 raise ValueError(f"Unknown saver type: {spec.saver}")

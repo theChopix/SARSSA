@@ -29,7 +29,6 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         embedding_model: str = "text-embedding-3-small",
         umap_n_neighbors: int = 15,
         umap_min_dist: float = 0.1,
@@ -37,7 +36,7 @@ class Plugin(BasePlugin):
         umap_random_state: int = 42,
         point_size: int = 8,
     ) -> dict:
-        self._load_artifacts(context)
+        self._load_artifacts(self._context)
 
         logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
 
