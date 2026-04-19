@@ -1,16 +1,18 @@
-import json
-import os
 from copy import deepcopy
 
 import mlflow
 import numpy as np
-import scipy.sparse as sp
 import torch
 from tqdm import tqdm
 
-from plugins.plugin_interface import BasePlugin
+from plugins.plugin_interface import (
+    ArtifactSpec,
+    BasePlugin,
+    OutputArtifactSpec,
+    ParamSpec,
+    PluginIOSpec,
+)
 from utils.data_loading.data_loader import DataLoader
-from utils.mlflow_manager import MLflowRunLoader
 from utils.plugin_logger import get_logger
 from utils.torch.evalution import evaluate_dense_encoder
 from utils.torch.models.base_model.elsa import ELSA
@@ -180,23 +182,7 @@ def train(
         f"Test metrics - R@20: {test_metrics['R20']:.4f} - NDCG20: {test_metrics['NDCG20']:.4f}"
     )
 
-    # Export model artifact (config.json + model.pt)
-    artifact_dir = "model_artifact"
-    os.makedirs(artifact_dir, exist_ok=True)
-
-    config = model.get_config()
-    with open(os.path.join(artifact_dir, "config.json"), "w") as f:
-        json.dump(config, f, indent=2)
-
-    torch.save({"state_dict": model.state_dict()}, os.path.join(artifact_dir, "model.pt"))
-
-    mlflow.log_artifacts(artifact_dir)
-
-    # Cleanup
-    for fname in os.listdir(artifact_dir):
-        os.remove(os.path.join(artifact_dir, fname))
-    os.rmdir(artifact_dir)
-    logger.info("Model artifact successfully saved")
+    return model
 
 
 class Plugin(BasePlugin):
@@ -211,38 +197,26 @@ class Plugin(BasePlugin):
 
     name = "ELSA Trainer"
 
-    def _load_artifacts(self, context):
-        """Load dataset artifacts from the dataset_loading pipeline step."""
-        dataset_run_id = context["dataset_loading"]["run_id"]
-        dataset_loader = MLflowRunLoader(dataset_run_id)
-
-        logger.info(f"Loading dataset artifacts from run {dataset_run_id}")
-
-        train_npz = dataset_loader.get_npz_artifact("train_csr.npz")
-        valid_npz = dataset_loader.get_npz_artifact("valid_csr.npz")
-        test_npz = dataset_loader.get_npz_artifact("test_csr.npz")
-        self.train_csr: sp.csr_matrix = (
-            sp.csr_matrix(train_npz) if not isinstance(train_npz, sp.csr_matrix) else train_npz
-        )
-        self.valid_csr: sp.csr_matrix = (
-            sp.csr_matrix(valid_npz) if not isinstance(valid_npz, sp.csr_matrix) else valid_npz
-        )
-        self.test_csr: sp.csr_matrix = (
-            sp.csr_matrix(test_npz) if not isinstance(test_npz, sp.csr_matrix) else test_npz
-        )
-
-        dataset_params = dataset_loader.get_parameters()
-        self.num_users = int(dataset_params["num_users"])
-        self.num_items = int(dataset_params["num_items"])
-        self.min_user_interactions = int(dataset_params["min_user_interactions"])
-        self.min_item_interactions = int(dataset_params["min_item_interactions"])
-        self.dataset = dataset_params["dataset_name"]
-        self.val_ratio = float(dataset_params["val_ratio"])
-        self.test_ratio = float(dataset_params["test_ratio"])
-
-        logger.info(
-            f"Training data: {self.train_csr.shape}, Validation data: {self.valid_csr.shape}, Test data: {self.test_csr.shape}"
-        )
+    io_spec = PluginIOSpec(
+        required_steps=["dataset_loading"],
+        input_artifacts=[
+            ArtifactSpec("dataset_loading", "train_csr.npz", "train_csr", "npz"),
+            ArtifactSpec("dataset_loading", "valid_csr.npz", "valid_csr", "npz"),
+            ArtifactSpec("dataset_loading", "test_csr.npz", "test_csr", "npz"),
+        ],
+        input_params=[
+            ParamSpec("dataset_loading", "num_users", "num_users", int),
+            ParamSpec("dataset_loading", "num_items", "num_items", int),
+            ParamSpec("dataset_loading", "min_user_interactions", "min_user_interactions", int),
+            ParamSpec("dataset_loading", "min_item_interactions", "min_item_interactions", int),
+            ParamSpec("dataset_loading", "dataset_name", "dataset", str),
+            ParamSpec("dataset_loading", "val_ratio", "val_ratio", float),
+            ParamSpec("dataset_loading", "test_ratio", "test_ratio", float),
+        ],
+        output_artifacts=[
+            OutputArtifactSpec("trained_model", "", "model"),
+        ],
+    )
 
     def run(
         self,
@@ -278,13 +252,11 @@ class Plugin(BasePlugin):
 
         set_seed(seed)
 
-        self._load_artifacts(self._context)
-
         # Initialize ELSA model and optimizer
         model = ELSA(input_dim=self.num_items, embedding_dim=factors).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
 
-        train(
+        self.trained_model = train(
             model=model,
             optimizer=optimizer,
             train_csr=self.train_csr,
