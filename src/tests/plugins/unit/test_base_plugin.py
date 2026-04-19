@@ -473,6 +473,72 @@ class TestLoadContext:
         plugin.load_context({})
 
     @patch("plugins.plugin_interface.MLflowRunLoader")
+    def test_raises_on_artifact_load_failure(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify MissingContextError when artifact download fails."""
+        mock_loader = MagicMock()
+        mock_loader.get_npz_artifact.side_effect = FileNotFoundError("not found")
+        mock_loader_cls.return_value = mock_loader
+
+        io_spec = PluginIOSpec(
+            required_steps=["dataset_loading"],
+            input_artifacts=[
+                ArtifactSpec("dataset_loading", "train.npz", "train_csr", "npz"),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        context = {"dataset_loading": {"run_id": "run_abc"}}
+
+        with pytest.raises(MissingContextError, match="train.npz"):
+            plugin.load_context(context)
+
+    @patch("plugins.plugin_interface.MLflowRunLoader")
+    def test_raises_on_missing_param(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify MissingContextError when parameter is not found."""
+        mock_loader = MagicMock()
+        mock_loader.get_parameter.return_value = None
+        mock_loader_cls.return_value = mock_loader
+
+        io_spec = PluginIOSpec(
+            required_steps=["dataset_loading"],
+            input_params=[
+                ParamSpec("dataset_loading", "num_users", "num_users", int),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        context = {"dataset_loading": {"run_id": "run_abc"}}
+
+        with pytest.raises(MissingContextError, match="num_users"):
+            plugin.load_context(context)
+
+    @patch("plugins.plugin_interface.MLflowRunLoader")
+    def test_raises_on_param_cast_failure(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify MissingContextError when parameter cannot be cast."""
+        mock_loader = MagicMock()
+        mock_loader.get_parameter.return_value = "not_a_number"
+        mock_loader_cls.return_value = mock_loader
+
+        io_spec = PluginIOSpec(
+            required_steps=["dataset_loading"],
+            input_params=[
+                ParamSpec("dataset_loading", "num_users", "num_users", int),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        context = {"dataset_loading": {"run_id": "run_abc"}}
+
+        with pytest.raises(MissingContextError, match="Cannot cast"):
+            plugin.load_context(context)
+
+    @patch("plugins.plugin_interface.MLflowRunLoader")
     def test_creates_loader_per_step(
         self,
         mock_loader_cls: MagicMock,
