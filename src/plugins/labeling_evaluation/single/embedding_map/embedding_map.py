@@ -5,26 +5,48 @@ import numpy as np
 import plotly.graph_objects as go
 import umap
 
-from plugins.plugin_interface import BasePlugin
+from plugins.plugin_interface import (
+    ArtifactSpec,
+    BasePlugin,
+    OutputArtifactSpec,
+    OutputParamSpec,
+    PluginIOSpec,
+)
 from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
-from utils.mlflow_manager import MLflowRunLoader
 from utils.plugin_logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class Plugin(BasePlugin):
-    def _load_artifacts(self, context):
-        """Load neuron labeling artifacts from the neuron_labeling pipeline step."""
-        neuron_labeling_run_id = context["neuron_labeling"]["run_id"]
-        neuron_labeling_loader = MLflowRunLoader(neuron_labeling_run_id)
+    io_spec = PluginIOSpec(
+        required_steps=["neuron_labeling"],
+        input_artifacts=[
+            ArtifactSpec(
+                "neuron_labeling",
+                "neuron_labels.json",
+                "neuron_labels",
+                "json",
+            ),
+        ],
+        output_artifacts=[
+            OutputArtifactSpec("umap_coords", "umap_coords.npy", "npy"),
+        ],
+        output_params=[
+            OutputParamSpec("embedding_model", "embedding_model_param"),
+            OutputParamSpec("umap_n_neighbors", "umap_n_neighbors_param"),
+            OutputParamSpec("umap_min_dist", "umap_min_dist_param"),
+            OutputParamSpec("umap_metric", "umap_metric_param"),
+            OutputParamSpec("umap_random_state", "umap_random_state_param"),
+            OutputParamSpec("num_neurons", "num_neurons"),
+        ],
+    )
 
-        logger.info(f"Loading neuron labeling artifacts from run {neuron_labeling_run_id}")
-
-        self.neuron_labels = neuron_labeling_loader.get_json_artifact("neuron_labels.json")
+    def load_context(self, context: dict) -> None:
+        """Load neuron labels and derive sorted IDs and label texts."""
+        super().load_context(context)
         self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
         self.label_texts = [str(self.neuron_labels[nid]) for nid in self.neuron_ids]
-
         logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
 
     def run(
@@ -35,9 +57,7 @@ class Plugin(BasePlugin):
         umap_metric: str = "cosine",
         umap_random_state: int = 42,
         point_size: int = 8,
-    ) -> dict:
-        self._load_artifacts(self._context)
-
+    ) -> None:
         logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
 
         embedder = OpenAIEmbeddingLLM(model=embedding_model)
@@ -56,16 +76,16 @@ class Plugin(BasePlugin):
             metric=umap_metric,
             random_state=umap_random_state,
         )
-        coords = reducer.fit_transform(embeddings)
+        self.umap_coords = reducer.fit_transform(embeddings)
 
         hover_texts = [
             f"<b>Neuron {nid}</b><br>{self.neuron_labels[nid]}" for nid in self.neuron_ids
         ]
 
-        fig = go.Figure(
+        self._fig = go.Figure(
             go.Scatter(
-                x=coords[:, 0],
-                y=coords[:, 1],
+                x=self.umap_coords[:, 0],
+                y=self.umap_coords[:, 1],
                 mode="markers",
                 marker={"size": point_size, "opacity": 0.8, "colorscale": "Viridis"},
                 text=hover_texts,
@@ -74,7 +94,7 @@ class Plugin(BasePlugin):
             )
         )
 
-        fig.update_layout(
+        self._fig.update_layout(
             title={
                 "text": "Neuron label embedding map (UMAP 2-D projection)",
                 "font": {"size": 18},
@@ -85,25 +105,18 @@ class Plugin(BasePlugin):
             template="plotly_white",
         )
 
-        # 6. Log artifacts to MLflow
+        # output params
+        self.embedding_model_param = embedding_model
+        self.umap_n_neighbors_param = umap_n_neighbors
+        self.umap_min_dist_param = umap_min_dist
+        self.umap_metric_param = umap_metric
+        self.umap_random_state_param = umap_random_state
+        self.num_neurons = len(self.neuron_ids)
+
+    def update_context(self) -> None:
+        """Log standard artifacts via base class, then save interactive HTML."""
+        super().update_context()
         with tempfile.TemporaryDirectory() as tmp:
-            html_path = f"{tmp}/embedding_map.html"
-            fig.write_html(html_path)
-            mlflow.log_artifact(html_path)
-
-            coords_path = f"{tmp}/umap_coords.npy"
-            np.save(coords_path, coords)
-            mlflow.log_artifact(coords_path)
-
-        mlflow.log_params(
-            {
-                "embedding_model": embedding_model,
-                "umap_n_neighbors": umap_n_neighbors,
-                "umap_min_dist": umap_min_dist,
-                "umap_metric": umap_metric,
-                "umap_random_state": umap_random_state,
-                "num_neurons": len(self.neuron_ids),
-            }
-        )
-
+            self._fig.write_html(f"{tmp}/embedding_map.html")
+            mlflow.log_artifacts(tmp)
         logger.info("Embedding map saved to mlflow artifacts as interactive HTML")
