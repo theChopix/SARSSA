@@ -59,13 +59,12 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         batch_size: int = 1024,
         seed: int = 42,
     ):
         set_seed(seed)
 
-        self._load_artifacts(context, device)
+        self._load_artifacts(self._context, device)
 
         # compute SAE activations
         item_acts = compute_sae_item_activations(

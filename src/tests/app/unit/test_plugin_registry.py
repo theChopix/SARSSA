@@ -92,11 +92,6 @@ def _make_mock_plugin(
 
     parameters = [
         inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
-        inspect.Parameter(
-            "context",
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=dict,
-        ),
     ]
     for name, (ann, default) in params.items():
         parameters.append(
@@ -185,13 +180,12 @@ class TestExtractParametersFromInstance:
         assert params[0].required is True
         assert params[0].default is None
 
-    def test_excludes_self_and_context(self) -> None:
-        """Verify self and context are filtered out."""
+    def test_excludes_self(self) -> None:
+        """Verify self is filtered out."""
         mock_plugin = _make_mock_plugin({"epochs": (int, 10)})
         params = _extract_parameters_from_instance(mock_plugin)
         names = {p.name for p in params}
         assert "self" not in names
-        assert "context" not in names
 
     def test_unannotated_param_defaults_to_str(self) -> None:
         """Verify params without type annotations default to 'str'."""

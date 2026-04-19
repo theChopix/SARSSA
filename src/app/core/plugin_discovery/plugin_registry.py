@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
-SKIP_PARAMS = {"self", "context"}
+SKIP_PARAMS = {"self"}
 
 
 def _extract_parameters_from_instance(
@@ -32,7 +32,7 @@ def _extract_parameters_from_instance(
 
     Inspects the ``run()`` signature of an already-loaded plugin
     instance and returns metadata for every parameter except
-    ``self`` and ``context``.
+    ``self``.
 
     Args:
         plugin_instance: An instantiated plugin object.

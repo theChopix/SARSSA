@@ -65,7 +65,6 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         user_id: int,
         tag: str,
         alpha: float = 0.3,
@@ -74,9 +73,6 @@ class Plugin(BasePlugin):
         """Steer recommendations for a single user toward a concept.
 
         Args:
-            context: Pipeline context with run IDs from previous steps.
-                Required keys: ``dataset_loading``, ``training_cfm``,
-                ``training_sae``, ``neuron_labeling``.
             user_id: Index of the user in the dataset (0-based).
             tag: Concept tag to steer toward (must exist in top_neuron_per_tag).
             alpha: Steering strength in [0, 1].
@@ -89,7 +85,7 @@ class Plugin(BasePlugin):
         device = set_device()
         logger.info(f"Using device: {device}")
 
-        self._load_artifacts(context, device)
+        self._load_artifacts(self._context, device)
 
         if user_id < 0 or user_id >= self.full_csr.shape[0]:
             raise ValueError(f"user_id {user_id} out of range [0, {self.full_csr.shape[0] - 1}]")

@@ -370,7 +370,6 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         epochs: int = 4000,
         early_stop: int = 250,
         batch_size: int = 64,
@@ -396,9 +395,6 @@ class Plugin(BasePlugin):
         """Execute the SAE training pipeline.
 
         Args:
-            context: Pipeline context containing information from previous steps.
-                     Must contain context['dataset_loading']['run_id'] and
-                     context['training_cfm']['run_id'].
             epochs: Maximum number of training epochs.
             early_stop: Number of epochs without improvement before stopping.
             batch_size: Batch size for training.
@@ -430,7 +426,7 @@ class Plugin(BasePlugin):
 
         set_seed(seed)
 
-        self._load_artifacts(context, device)
+        self._load_artifacts(self._context, device)
 
         expansion_ratio = embedding_dim / self.base_factors
         reconstruction_coef = 1 - (auxiliary_coef + contrastive_coef + l1_coef)

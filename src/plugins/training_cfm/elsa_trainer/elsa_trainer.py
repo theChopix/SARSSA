@@ -246,7 +246,6 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        context: dict,
         epochs: int = 100,
         batch_size: int = 64,
         factors: int = 256,
@@ -260,8 +259,6 @@ class Plugin(BasePlugin):
         """Execute the ELSA training pipeline.
 
         Args:
-            context: Shared context dictionary for pipeline communication.
-                     Must contain context['dataset_loading']['run_id'].
             epochs: Maximum number of training epochs.
             batch_size: Number of samples per batch.
             factors: Number of latent factors (embedding dimension).
@@ -281,7 +278,7 @@ class Plugin(BasePlugin):
 
         set_seed(seed)
 
-        self._load_artifacts(context)
+        self._load_artifacts(self._context)
 
         # Initialize ELSA model and optimizer
         model = ELSA(input_dim=self.num_items, embedding_dim=factors).to(device)
