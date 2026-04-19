@@ -5,18 +5,16 @@ returns the user's interaction history, the base-model's top-K recommendations,
 and the SAE neuron-boosted top-K recommendations.
 """
 
-import json
-import tempfile
-
-import mlflow
-import numpy as np
-import scipy.sparse as sp
 import torch
 
-from plugins.plugin_interface import BasePlugin
-from utils.mlflow_manager import MLflowRunLoader
+from plugins.plugin_interface import (
+    ArtifactSpec,
+    BasePlugin,
+    OutputArtifactSpec,
+    OutputParamSpec,
+    PluginIOSpec,
+)
 from utils.plugin_logger import get_logger
-from utils.torch.models.model_loader import load_base_model, load_sae_model
 from utils.torch.models.steered_model import SteeredModel
 from utils.torch.runtime import set_device
 
@@ -32,36 +30,64 @@ class Plugin(BasePlugin):
 
     name = "SAE Steering"
 
-    def _load_artifacts(self, context: dict, device):
-        """Load all required artifacts from previous pipeline steps."""
-        dataset_run_id = context["dataset_loading"]["run_id"]
-        dataset_loader = MLflowRunLoader(dataset_run_id)
-        logger.info(f"Loading dataset artifacts from run {dataset_run_id}")
-
-        full_npz = dataset_loader.get_npz_artifact("full_csr.npz")
-        self.full_csr: sp.csr_matrix = (
-            sp.csr_matrix(full_npz) if not isinstance(full_npz, sp.csr_matrix) else full_npz
-        )
-        self.users: np.ndarray = dataset_loader.get_npy_artifact("users.npy", allow_pickle=True)
-        self.items: np.ndarray = dataset_loader.get_npy_artifact("items.npy", allow_pickle=True)
-        logger.info(f"Dataset: {self.full_csr.shape[0]} users, {self.full_csr.shape[1]} items")
-
-        base_run_id = context["training_cfm"]["run_id"]
-        base_loader = MLflowRunLoader(base_run_id)
-        logger.info("Loading base model")
-        self.base_model = load_base_model(base_loader.download_artifact_dir(), device)
-        logger.info("Base model loaded successfully")
-
-        sae_run_id = context["training_sae"]["run_id"]
-        sae_loader = MLflowRunLoader(sae_run_id)
-        logger.info("Loading SAE model")
-        self.sae = load_sae_model(sae_loader.download_artifact_dir(), device)
-        logger.info("SAE model loaded successfully")
-
-        labeling_run_id = context["neuron_labeling"]["run_id"]
-        labeling_loader = MLflowRunLoader(labeling_run_id)
-        self.top_neuron_per_tag: dict = labeling_loader.get_json_artifact("top_neuron_per_tag.json")
-        logger.info(f"Loaded {len(self.top_neuron_per_tag)} top-neuron-per-tag mappings")
+    io_spec = PluginIOSpec(
+        required_steps=[
+            "dataset_loading",
+            "training_cfm",
+            "training_sae",
+            "neuron_labeling",
+        ],
+        input_artifacts=[
+            ArtifactSpec("dataset_loading", "full_csr.npz", "full_csr", "npz"),
+            ArtifactSpec(
+                "dataset_loading",
+                "users.npy",
+                "users",
+                "npy",
+                loader_kwargs={"allow_pickle": True},
+            ),
+            ArtifactSpec(
+                "dataset_loading",
+                "items.npy",
+                "items",
+                "npy",
+                loader_kwargs={"allow_pickle": True},
+            ),
+            ArtifactSpec("training_cfm", "", "base_model", "base_model"),
+            ArtifactSpec("training_sae", "", "sae", "sae_model"),
+            ArtifactSpec(
+                "neuron_labeling",
+                "top_neuron_per_tag.json",
+                "top_neuron_per_tag",
+                "json",
+            ),
+        ],
+        output_artifacts=[
+            OutputArtifactSpec(
+                "interacted_items",
+                "interacted_items.json",
+                "json",
+            ),
+            OutputArtifactSpec(
+                "original_recommendations",
+                "original_recommendations.json",
+                "json",
+            ),
+            OutputArtifactSpec(
+                "steered_recommendations",
+                "steered_recommendations.json",
+                "json",
+            ),
+        ],
+        output_params=[
+            OutputParamSpec("user_id", "user_id_param"),
+            OutputParamSpec("user_original_id", "user_original_id"),
+            OutputParamSpec("tag", "tag_param"),
+            OutputParamSpec("neuron_id", "neuron_id"),
+            OutputParamSpec("alpha", "alpha_param"),
+            OutputParamSpec("k", "k_param"),
+        ],
+    )
 
     def run(
         self,
@@ -69,7 +95,7 @@ class Plugin(BasePlugin):
         tag: str,
         alpha: float = 0.3,
         k: int = 10,
-    ):
+    ) -> None:
         """Steer recommendations for a single user toward a concept.
 
         Args:
@@ -77,15 +103,12 @@ class Plugin(BasePlugin):
             tag: Concept tag to steer toward (must exist in top_neuron_per_tag).
             alpha: Steering strength in [0, 1].
             k: Number of recommendations to return.
-
-        Returns:
-            dict with keys ``interacted_items``, ``original_recommendations``,
-            and ``steered_recommendations`` (all lists of item IDs).
         """
         device = set_device()
         logger.info(f"Using device: {device}")
 
-        self._load_artifacts(self._context, device)
+        self.base_model.to(device)
+        self.sae.to(device)
 
         if user_id < 0 or user_id >= self.full_csr.shape[0]:
             raise ValueError(f"user_id {user_id} out of range [0, {self.full_csr.shape[0] - 1}]")
@@ -94,8 +117,8 @@ class Plugin(BasePlugin):
         if not (0.0 <= alpha <= 1.0):
             raise ValueError(f"alpha must be in [0, 1], got {alpha}")
 
-        neuron_id = self.top_neuron_per_tag[tag]
-        logger.info(f"Tag '{tag}' → neuron {neuron_id}")
+        self.neuron_id = self.top_neuron_per_tag[tag]
+        logger.info(f"Tag '{tag}' → neuron {self.neuron_id}")
 
         # User interaction vector — shape (1, num_items)
         interaction_vec = torch.tensor(
@@ -104,44 +127,29 @@ class Plugin(BasePlugin):
 
         # Interacted items
         interacted_indices = self.full_csr[user_id].indices.tolist()
-        interacted_items = self.items[interacted_indices].tolist()
+        self.interacted_items = self.items[interacted_indices].tolist()
 
         # Original recommendations (base model only, no SAE)
         self.base_model.eval()
         _, orig_indices = self.base_model.recommend(interaction_vec, k=k, mask_interactions=True)
-        original_recommendations = self.items[orig_indices[0]].tolist()
+        self.original_recommendations = self.items[orig_indices[0]].tolist()
 
         # Steered recommendations (base model + SAE + neuron boost)
         steered_model = SteeredModel(self.base_model, self.sae, alpha=alpha)
         steered_model.eval()
         _, steered_indices = steered_model.recommend(
-            interaction_vec, neuron_ids=[neuron_id], k=k, mask_interactions=True
+            interaction_vec, neuron_ids=[self.neuron_id], k=k, mask_interactions=True
         )
-        steered_recommendations = self.items[steered_indices[0]].tolist()
+        self.steered_recommendations = self.items[steered_indices[0]].tolist()
+
+        # output params
+        self.user_id_param = user_id
+        self.user_original_id = str(self.users[user_id])
+        self.tag_param = tag
+        self.alpha_param = alpha
+        self.k_param = k
 
         logger.info(
-            f"User {user_id} | tag='{tag}' | neuron={neuron_id} | alpha={alpha} | "
-            f"interacted={len(interacted_items)} items"
+            f"User {user_id} | tag='{tag}' | neuron={self.neuron_id} | alpha={alpha} | "
+            f"interacted={len(self.interacted_items)} items"
         )
-
-        mlflow.log_params(
-            {
-                "user_id": user_id,
-                "user_original_id": str(self.users[user_id]),
-                "tag": tag,
-                "neuron_id": neuron_id,
-                "alpha": alpha,
-                "k": k,
-            }
-        )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            with open(f"{tmp}/interacted_items.json", "w") as f:
-                json.dump(interacted_items, f, indent=2, default=str)
-            with open(f"{tmp}/original_recommendations.json", "w") as f:
-                json.dump(original_recommendations, f, indent=2, default=str)
-            with open(f"{tmp}/steered_recommendations.json", "w") as f:
-                json.dump(steered_recommendations, f, indent=2, default=str)
-            mlflow.log_artifacts(tmp)
-
-        logger.info("Steering complete — results logged to MLflow")
