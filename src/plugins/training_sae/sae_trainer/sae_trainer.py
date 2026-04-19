@@ -1,20 +1,21 @@
-import json
-import os
 from copy import deepcopy
 
 import mlflow
 import numpy as np
-import scipy.sparse as sp
 import torch
 from tqdm import tqdm
 
-from plugins.plugin_interface import BasePlugin
+from plugins.plugin_interface import (
+    ArtifactSpec,
+    BasePlugin,
+    OutputArtifactSpec,
+    ParamSpec,
+    PluginIOSpec,
+)
 from utils.data_loading.data_loader import DataLoader
-from utils.mlflow_manager import MLflowRunLoader
 from utils.plugin_logger import get_logger
 from utils.torch.evalution import evaluate_sparse_encoder
 from utils.torch.models.base_model import BaseModel
-from utils.torch.models.model_loader import load_base_model
 from utils.torch.models.model_registry import get_sae_model_class
 from utils.torch.models.sae_model import SAE
 from utils.torch.runtime import set_device, set_seed
@@ -277,23 +278,7 @@ def train(
         f"NDCG20 Degradation: {test_metrics['NDCG20_Degradation']:.4f}"
     )
 
-    # Export model artifact (config.json + model.pt)
-    artifact_dir = "model_artifact"
-    os.makedirs(artifact_dir, exist_ok=True)
-
-    config = model.get_config()
-    with open(os.path.join(artifact_dir, "config.json"), "w") as f:
-        json.dump(config, f, indent=2)
-
-    torch.save({"state_dict": model.state_dict()}, os.path.join(artifact_dir, "model.pt"))
-
-    mlflow.log_artifacts(artifact_dir)
-
-    # Cleanup
-    for fname in os.listdir(artifact_dir):
-        os.remove(os.path.join(artifact_dir, fname))
-    os.rmdir(artifact_dir)
-    logger.info("Model artifact successfully saved")
+    return model
 
 
 class Plugin(BasePlugin):
@@ -308,53 +293,69 @@ class Plugin(BasePlugin):
 
     name = "SAE Trainer"
 
-    def _load_artifacts(self, context, device):
-        """Load dataset and base model artifacts from previous pipeline steps."""
-        # Load dataset artifacts
-        dataset_run_id = context["dataset_loading"]["run_id"]
-        dataset_loader = MLflowRunLoader(dataset_run_id)
+    io_spec = PluginIOSpec(
+        required_steps=["dataset_loading", "training_cfm"],
+        input_artifacts=[
+            ArtifactSpec("dataset_loading", "train_csr.npz", "train_csr", "npz"),
+            ArtifactSpec("dataset_loading", "valid_csr.npz", "valid_csr", "npz"),
+            ArtifactSpec("dataset_loading", "test_csr.npz", "test_csr", "npz"),
+            ArtifactSpec("training_cfm", "", "base_model", "base_model"),
+        ],
+        input_params=[
+            ParamSpec("dataset_loading", "num_users", "num_users", int),
+            ParamSpec("dataset_loading", "num_items", "num_items", int),
+            ParamSpec(
+                "dataset_loading",
+                "min_user_interactions",
+                "min_user_interactions",
+                int,
+            ),
+            ParamSpec(
+                "dataset_loading",
+                "min_item_interactions",
+                "min_item_interactions",
+                int,
+            ),
+            ParamSpec("dataset_loading", "dataset_name", "dataset", str),
+            ParamSpec("dataset_loading", "val_ratio", "val_ratio", float),
+            ParamSpec("dataset_loading", "test_ratio", "test_ratio", float),
+            ParamSpec("training_cfm", "model", "base_model_name", str),
+            ParamSpec("training_cfm", "factors", "base_factors", int),
+            ParamSpec(
+                "training_cfm",
+                "min_user_interactions",
+                "base_min_user_interactions",
+                int,
+            ),
+            ParamSpec(
+                "training_cfm",
+                "min_item_interactions",
+                "base_min_item_interactions",
+                int,
+            ),
+            ParamSpec("training_cfm", "users", "base_users", int),
+            ParamSpec("training_cfm", "items", "base_items", int),
+        ],
+        output_artifacts=[
+            OutputArtifactSpec("trained_model", "", "model"),
+        ],
+    )
 
-        logger.info(f"Loading dataset artifacts from run {dataset_run_id}")
+    def load_context(self, context: dict) -> None:
+        """Load upstream artifacts and validate cross-step consistency.
 
-        train_npz = dataset_loader.get_npz_artifact("train_csr.npz")
-        valid_npz = dataset_loader.get_npz_artifact("valid_csr.npz")
-        test_npz = dataset_loader.get_npz_artifact("test_csr.npz")
-        self.train_csr: sp.csr_matrix = (
-            sp.csr_matrix(train_npz) if not isinstance(train_npz, sp.csr_matrix) else train_npz
-        )
-        self.valid_csr: sp.csr_matrix = (
-            sp.csr_matrix(valid_npz) if not isinstance(valid_npz, sp.csr_matrix) else valid_npz
-        )
-        self.test_csr: sp.csr_matrix = (
-            sp.csr_matrix(test_npz) if not isinstance(test_npz, sp.csr_matrix) else test_npz
-        )
+        Calls the base ``load_context()`` to hydrate all declared
+        inputs, then asserts that the dataset dimensions match the
+        base model dimensions.
 
-        dataset_params = dataset_loader.get_parameters()
-        self.dataset = dataset_params["dataset_name"]
-        self.num_users = int(dataset_params["num_users"])
-        self.num_items = int(dataset_params["num_items"])
-        self.min_user_interactions = int(dataset_params["min_user_interactions"])
-        self.min_item_interactions = int(dataset_params["min_item_interactions"])
-        self.val_ratio = float(dataset_params["val_ratio"])
-        self.test_ratio = float(dataset_params["test_ratio"])
+        Args:
+            context: Pipeline context dict.
 
-        logger.info(
-            f"Training data: {self.train_csr.shape}, Validation data: {self.valid_csr.shape}, Test data: {self.test_csr.shape}"
-        )
-
-        # Load base model via registry-based loader
-        base_run_id = context["training_cfm"]["run_id"]
-        base_loader = MLflowRunLoader(base_run_id)
-
-        base_params = base_loader.get_parameters()
-        self.base_model_name = base_params["model"]
-        self.base_factors = int(base_params["factors"])
-        self.base_min_user_interactions = int(base_params["min_user_interactions"])
-        self.base_min_item_interactions = int(base_params["min_item_interactions"])
-        self.base_users = int(base_params["users"])
-        self.base_items = int(base_params["items"])
-
-        logger.info(f"Base model: {self.base_model_name} with {self.base_factors} factors")
+        Raises:
+            AssertionError: If dataset and base model user/item
+                counts do not match.
+        """
+        super().load_context(context)
 
         assert self.num_items == self.base_items, (
             "Number of items in dataset does not match base model"
@@ -362,11 +363,7 @@ class Plugin(BasePlugin):
         assert self.num_users == self.base_users, (
             "Number of users in dataset does not match base model"
         )
-
-        # Load pre-trained base model from artifact (config.json + model.pt)
-        self.base_model = load_base_model(base_loader.download_artifact_dir(), device)
-
-        logger.info("Base model loaded successfully")
+        logger.info(f"Base model: {self.base_model_name} with {self.base_factors} factors")
 
     def run(
         self,
@@ -426,7 +423,7 @@ class Plugin(BasePlugin):
 
         set_seed(seed)
 
-        self._load_artifacts(self._context, device)
+        self.base_model.to(device)
 
         expansion_ratio = embedding_dim / self.base_factors
         reconstruction_coef = 1 - (auxiliary_coef + contrastive_coef + l1_coef)
@@ -500,7 +497,7 @@ class Plugin(BasePlugin):
         )
 
         # Train the model
-        train(
+        self.trained_model = train(
             model=sae,
             base_model=self.base_model,
             optimizer=optimizer,
