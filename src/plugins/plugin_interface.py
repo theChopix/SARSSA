@@ -224,11 +224,22 @@ class BasePlugin(ABC):
 
         Args:
             context: Pipeline context dict.
+
+        Raises:
+            MissingContextError: If an artifact cannot be retrieved
+                from the upstream MLflow run.
         """
         for spec in self.io_spec.input_artifacts:
             run_id = context[spec.step]["run_id"]
             loader = MLflowRunLoader(run_id)
-            value = self._load_artifact(loader, spec)
+            try:
+                value = self._load_artifact(loader, spec)
+            except Exception as exc:
+                raise MissingContextError(
+                    f"Failed to load artifact '{spec.filename}' "
+                    f"(loader='{spec.loader}') from step "
+                    f"'{spec.step}' (run_id='{run_id}'): {exc}"
+                ) from exc
             setattr(self, spec.attr, value)
 
     def _load_input_params(
@@ -239,12 +250,29 @@ class BasePlugin(ABC):
 
         Args:
             context: Pipeline context dict.
+
+        Raises:
+            MissingContextError: If a parameter is missing from the
+                upstream MLflow run or cannot be cast to the
+                declared type.
         """
         for spec in self.io_spec.input_params:
             run_id = context[spec.step]["run_id"]
             loader = MLflowRunLoader(run_id)
             raw = loader.get_parameter(spec.param_name)
-            setattr(self, spec.attr, spec.dtype(raw))
+            if raw is None:
+                raise MissingContextError(
+                    f"Parameter '{spec.param_name}' not found in "
+                    f"step '{spec.step}' (run_id='{run_id}')"
+                )
+            try:
+                setattr(self, spec.attr, spec.dtype(raw))
+            except (ValueError, TypeError) as exc:
+                raise MissingContextError(
+                    f"Cannot cast parameter '{spec.param_name}' "
+                    f"value '{raw}' to {spec.dtype.__name__} from "
+                    f"step '{spec.step}' (run_id='{run_id}'): {exc}"
+                ) from exc
 
     def _load_artifact(
         self,
