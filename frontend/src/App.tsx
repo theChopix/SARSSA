@@ -203,7 +203,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Toast notifications ──────────────── */}
-      <Toaster richColors position="bottom-right" />
+      <Toaster richColors position="top-center" duration={6000} />
       {/* ── Launch confirmation modal ────────── */}
       <LaunchModal />
       {/* ── Header ─────────────────────────────────── */}
