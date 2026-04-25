@@ -14,6 +14,7 @@ from plugins.plugin_interface import (
 )
 from utils.data_loading.data_loader import DataLoader
 from utils.plugin_logger import get_logger
+from utils.plugin_notifier import PluginNotifier
 from utils.torch.evalution import evaluate_sparse_encoder
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.model_registry import get_sae_model_class
@@ -39,6 +40,7 @@ def train(
     sample_users: bool,
     target_ratio: float,
     seed: int,
+    notifier: PluginNotifier | None = None,
 ):
     """Train a Sparse Autoencoder (SAE) model with early stopping and MLflow tracking.
 
@@ -245,6 +247,12 @@ def train(
                 f"Cosine: {valid_metrics['CosineSim']:.4f} - "
                 f"NDCG20 Degradation: {valid_metrics['NDCG20_Degradation']:.4f}"
             )
+            if notifier is not None:
+                notifier.info(
+                    f"Epoch {epoch}/{epochs} — loss: {valid_loss:.4f}"
+                    f" — cosine: {valid_metrics['CosineSim']:.4f}"
+                    f" — NDCG@20 degradation: {valid_metrics['NDCG20_Degradation']:.4f}"
+                )
 
             # Early stopping check
             if early_stop > 0:
@@ -258,6 +266,10 @@ def train(
                     epochs_without_improvement += 1
                     if epochs_without_improvement >= early_stop:
                         logger.info(f"Early stopping at epoch {epoch}")
+                        if notifier is not None:
+                            notifier.warning(
+                                f"Early stopping at epoch {epoch} (best was epoch {best_epoch})"
+                            )
                         break
     # Restore best model if early stopping was used
     if early_stop > 0:
@@ -277,6 +289,12 @@ def train(
         f"L0: {test_metrics['L0']:.1f} - "
         f"NDCG20 Degradation: {test_metrics['NDCG20_Degradation']:.4f}"
     )
+    if notifier is not None:
+        notifier.success(
+            f"SAE training done — cosine: {test_metrics['CosineSim']:.4f}"
+            f" — L0: {test_metrics['L0']:.1f}"
+            f" — NDCG@20 degradation: {test_metrics['NDCG20_Degradation']:.4f}"
+        )
 
     return model
 
@@ -420,6 +438,10 @@ class Plugin(BasePlugin):
         # Initialize device and set random seed
         device = set_device()
         logger.info(f"Using device: {device}")
+        self.notifier.info(
+            f"SAE training starting — {model} {embedding_dim}d, {epochs} epochs"
+            f", top_k={top_k}, device={device}"
+        )
 
         set_seed(seed)
 
@@ -513,4 +535,5 @@ class Plugin(BasePlugin):
             sample_users=sample_users,
             target_ratio=target_ratio,
             seed=seed,
+            notifier=self.notifier,
         )
