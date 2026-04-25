@@ -10,6 +10,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from utils.mlflow_manager import MLflowRunLoader
+from utils.plugin_notifier import NullNotifier, PluginNotifier
 
 
 class MissingContextError(Exception):
@@ -138,10 +139,16 @@ class BasePlugin(ABC):
             plugin registry uses this instead of the auto-derived
             name.
         io_spec: Declarative I/O contract for the plugin.
+        notifier: Notifier for pushing messages to the UI during
+            execution.  Defaults to :class:`~utils.plugin_notifier.NullNotifier`
+            (silent no-op).  The pipeline engine replaces this with a
+            real :class:`~utils.plugin_notifier.PluginNotifier` before
+            calling ``run()``.
     """
 
     name: str | None = None
     io_spec: PluginIOSpec = PluginIOSpec()
+    notifier: PluginNotifier = NullNotifier()
 
     def load_context(self, context: dict[str, Any]) -> None:
         """Validate required steps and hydrate inputs from MLflow.
