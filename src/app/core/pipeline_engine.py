@@ -7,6 +7,7 @@ import mlflow
 
 from app.config.config import EXPERIMENT_NAME
 from app.core.plugin_discovery.plugin_manager import PluginManager
+from utils.plugin_notifier import PluginNotifier
 
 
 class PipelineEngine:
@@ -79,6 +80,7 @@ class PipelineEngine:
         plugin_name: str,
         params: dict[str, Any],
         context: dict[str, Any],
+        notifier: PluginNotifier | None = None,
     ) -> dict[str, Any]:
         """Execute a single plugin step as a nested MLflow run.
 
@@ -87,6 +89,12 @@ class PipelineEngine:
                 (e.g. ``dataset_loading.movieLens_loader.movieLens_loader``).
             params: Keyword arguments forwarded to ``Plugin.run()``.
             context: Mutable pipeline context dict.
+            notifier: Optional notifier to inject into the plugin before
+                ``run()`` is called.  When provided, the plugin's
+                ``notifier`` attribute is replaced so that any
+                ``self.notifier.info(...)`` calls accumulate into the
+                shared message list.  When ``None``, the plugin's default
+                :class:`~utils.plugin_notifier.NullNotifier` is used.
 
         Returns:
             dict[str, Any]: The updated context with the new step's
@@ -99,6 +107,9 @@ class PipelineEngine:
             raise RuntimeError("No active pipeline run. Call start_run() first.")
 
         plugin = PluginManager.load(plugin_name)
+
+        if notifier is not None:
+            plugin.notifier = notifier
 
         with (
             mlflow.start_run(run_id=self._parent_run_id),

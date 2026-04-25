@@ -249,6 +249,84 @@ class TestExecuteStep:
 
         mock_pm.load.assert_called_once_with("inspection.inspector.inspector")
 
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_injects_notifier_when_provided(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify plugin.notifier is set to the provided notifier."""
+        from utils.plugin_notifier import PluginNotifier
+
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        mock_plugin = MagicMock()
+        mock_pm.load.return_value = mock_plugin
+        notifier = PluginNotifier()
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("cat.impl.impl", {}, {}, notifier=notifier)
+
+        assert mock_plugin.notifier is notifier
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_does_not_set_notifier_when_none(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify plugin.notifier is untouched when notifier=None."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        mock_plugin = MagicMock()
+        original_notifier = mock_plugin.notifier
+        mock_pm.load.return_value = mock_plugin
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("cat.impl.impl", {}, {}, notifier=None)
+
+        assert mock_plugin.notifier is original_notifier
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_notifier_injected_before_run(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify notifier is set before load_context/run() are called."""
+        from utils.plugin_notifier import PluginNotifier
+
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        notifier = PluginNotifier()
+        seen_notifier: list[Any] = []
+
+        mock_plugin = MagicMock()
+        mock_plugin.load_context.side_effect = lambda ctx: seen_notifier.append(  # noqa: ARG005
+            mock_plugin.notifier
+        )
+        mock_pm.load.return_value = mock_plugin
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("cat.impl.impl", {}, {}, notifier=notifier)
+
+        assert seen_notifier[0] is notifier
+
 
 class TestFinalizeRun:
     """Tests for PipelineEngine.finalize_run."""
