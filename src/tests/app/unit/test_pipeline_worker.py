@@ -38,7 +38,7 @@ class TestWorkerSuccess:
         mock_engine.start_run.return_value = "parent_id"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             category = plugin.split(".")[0]
             ctx[category] = {"run_id": f"{category}_run"}
@@ -59,7 +59,7 @@ class TestWorkerSuccess:
         mock_engine.start_run.return_value = "my_run_42"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -79,7 +79,7 @@ class TestWorkerSuccess:
         mock_engine.start_run.return_value = "p"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             category = plugin.split(".")[0]
             ctx[category] = {"run_id": f"{category}_run"}
@@ -102,7 +102,7 @@ class TestWorkerSuccess:
         mock_engine.start_run.return_value = "p"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             category = plugin.split(".")[0]
             ctx[category] = {"run_id": f"{category}_run"}
@@ -125,7 +125,7 @@ class TestWorkerSuccess:
         mock_engine.start_run.return_value = "p"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -145,7 +145,7 @@ class TestWorkerSuccess:
         mock_engine.start_run.return_value = "p"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -170,7 +170,7 @@ class TestWorkerSuccess:
         observed_steps: list[tuple[str | None, int]] = []
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             # Capture what current_step was set to before execute_step ran.
             observed_steps.append((task.current_step, task.current_step_index))
@@ -196,7 +196,7 @@ class TestWorkerTags:
         mock_engine.start_run.return_value = "run_123"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -220,7 +220,7 @@ class TestWorkerTags:
         mock_engine.start_run.return_value = "run_123"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -241,7 +241,7 @@ class TestWorkerTags:
         mock_engine.start_run.return_value = "run_123"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -280,7 +280,7 @@ class TestWorkerCancellation:
         mock_engine.start_run.return_value = "parent_id"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             category = plugin.split(".")[0]
             ctx[category] = {"run_id": f"{category}_run"}
@@ -332,7 +332,7 @@ class TestWorkerCancellation:
         mock_engine.start_run.return_value = "parent_id"
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -386,7 +386,7 @@ class TestWorkerFailure:
         call_count = {"n": 0}
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             call_count["n"] += 1
             if call_count["n"] == 2:
@@ -436,7 +436,7 @@ class TestStepWorkerSuccess:
         mock_get_ctx.return_value = {}
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "step_run_1"}
             return ctx
@@ -459,7 +459,7 @@ class TestStepWorkerSuccess:
         mock_get_ctx.return_value = {}
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             category = plugin.split(".")[0]
             ctx[category] = {"run_id": "step_run_42"}
@@ -486,7 +486,7 @@ class TestStepWorkerSuccess:
         mock_get_ctx.return_value = initial_ctx
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "new_run"}
             return ctx
@@ -511,7 +511,7 @@ class TestStepWorkerSuccess:
         mock_get_ctx.return_value = {}
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -532,7 +532,7 @@ class TestStepWorkerSuccess:
         mock_get_ctx.return_value = {}
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -555,7 +555,7 @@ class TestStepWorkerSuccess:
         mock_get_ctx.return_value = {}
 
         def fake_execute(
-            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
         ) -> dict[str, Any]:
             ctx[plugin.split(".")[0]] = {"run_id": "r"}
             return ctx
@@ -618,3 +618,162 @@ class TestStepWorkerFailure:
         run_step_worker(task)
 
         assert task.context is None
+
+
+class TestPipelineWorkerNotifier:
+    """Tests for notifier wiring in run_pipeline_worker."""
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_messages_shared_with_task(self, mock_engine_cls: MagicMock) -> None:
+        """Verify task.messages is the same list as the notifier's messages."""
+        from utils.plugin_notifier import PluginNotifier
+
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "p"
+
+        captured_notifier: list[PluginNotifier] = []
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **kwargs: Any
+        ) -> dict[str, Any]:
+            captured_notifier.append(kwargs["notifier"])
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task([{"plugin": "cat_a.impl.impl", "params": {}}])
+        run_pipeline_worker(task)
+
+        assert task.messages is captured_notifier[0].messages
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_notifier_passed_to_execute_step(self, mock_engine_cls: MagicMock) -> None:
+        """Verify execute_step is called with a PluginNotifier keyword arg."""
+        from utils.plugin_notifier import PluginNotifier
+
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "p"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task([{"plugin": "cat_a.impl.impl", "params": {}}])
+        run_pipeline_worker(task)
+
+        _, call_kwargs = mock_engine.execute_step.call_args
+        assert isinstance(call_kwargs["notifier"], PluginNotifier)
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_messages_visible_via_task_when_notifier_appends(
+        self, mock_engine_cls: MagicMock
+    ) -> None:
+        """Verify messages appended by the notifier are visible via task.messages."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "p"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **kwargs: Any
+        ) -> dict[str, Any]:
+            kwargs["notifier"].info("Epoch 1")
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task([{"plugin": "cat_a.impl.impl", "params": {}}])
+        run_pipeline_worker(task)
+
+        assert len(task.messages) == 1
+        assert task.messages[0]["text"] == "Epoch 1"
+
+
+class TestStepWorkerNotifier:
+    """Tests for notifier wiring in run_step_worker."""
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_messages_shared_with_task(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify task.messages is the same list as the notifier's messages."""
+        from utils.plugin_notifier import PluginNotifier
+
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        captured_notifier: list[PluginNotifier] = []
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **kwargs: Any
+        ) -> dict[str, Any]:
+            captured_notifier.append(kwargs["notifier"])
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.messages is captured_notifier[0].messages
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_notifier_passed_to_execute_step(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify execute_step is called with a PluginNotifier keyword arg."""
+        from utils.plugin_notifier import PluginNotifier
+
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        _, call_kwargs = mock_engine.execute_step.call_args
+        assert isinstance(call_kwargs["notifier"], PluginNotifier)
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_messages_visible_via_task_when_notifier_appends(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify messages appended by the notifier are visible via task.messages."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **kwargs: Any
+        ) -> dict[str, Any]:
+            kwargs["notifier"].success("Step done")
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert len(task.messages) == 1
+        assert task.messages[0]["level"] == "success"

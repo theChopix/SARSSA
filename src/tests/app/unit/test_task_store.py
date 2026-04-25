@@ -218,3 +218,57 @@ class TestTaskToResponse:
         resp = task_to_response(task)
         assert resp.status == "error"
         assert resp.error == "Something broke"
+
+    def test_messages_empty_by_default(self) -> None:
+        """Verify messages is an empty list when no notifications were emitted."""
+        _clear_store()
+        task = create_task([])
+
+        resp = task_to_response(task)
+
+        assert resp.messages == []
+
+    def test_messages_included_in_response(self) -> None:
+        """Verify messages on TaskState appear in the response."""
+        _clear_store()
+        task = create_task([])
+        task.messages.append({"timestamp": 1.0, "level": "info", "text": "Epoch 1"})
+        task.messages.append({"timestamp": 2.0, "level": "success", "text": "Done"})
+
+        resp = task_to_response(task)
+
+        assert len(resp.messages) == 2
+        assert resp.messages[0]["text"] == "Epoch 1"
+        assert resp.messages[1]["text"] == "Done"
+
+    def test_messages_is_snapshot_not_same_reference(self) -> None:
+        """Verify task_to_response returns a copy of messages, not the same list."""
+        _clear_store()
+        task = create_task([])
+        task.messages.append({"timestamp": 1.0, "level": "info", "text": "msg"})
+
+        resp = task_to_response(task)
+        task.messages.append({"timestamp": 2.0, "level": "info", "text": "late"})
+
+        assert len(resp.messages) == 1
+
+
+class TestTaskStateMessages:
+    """Tests for TaskState.messages field."""
+
+    def test_messages_defaults_to_empty_list(self) -> None:
+        """Verify new TaskState has an empty messages list."""
+        _clear_store()
+        task = create_task([])
+
+        assert task.messages == []
+
+    def test_messages_list_is_unique_per_task(self) -> None:
+        """Verify each task gets its own messages list instance."""
+        _clear_store()
+        t1 = create_task([])
+        t2 = create_task([])
+
+        t1.messages.append({"timestamp": 1.0, "level": "info", "text": "x"})
+
+        assert t2.messages == []

@@ -105,4 +105,5 @@ def task_to_response(task: TaskState) -> TaskStatusResponse:
         completed_steps=task.completed_steps,
         context=task.context,
         error=task.error,
+        messages=list(task.messages),
     )

@@ -50,6 +50,10 @@ class TaskState:
         context: Final pipeline context (set on completion).
         error: Error message (set on failure).
         cancel_event: Thread-safe flag for cooperative cancellation.
+        messages: Ordered list of notification dicts pushed by the
+            executing plugin via ``PluginNotifier``.  Shared with the
+            notifier's own list (same object) so new entries are
+            visible to the polling endpoint immediately.
     """
 
     task_id: str
@@ -65,6 +69,7 @@ class TaskState:
     completed_steps: list[dict[str, Any]] = field(default_factory=list)
     context: dict[str, Any] | None = None
     error: str | None = None
+    messages: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ── API response model ────────────────────────────────────
@@ -87,3 +92,4 @@ class TaskStatusResponse(BaseModel):
     completed_steps: list[dict[str, Any]] = []
     context: dict[str, Any] | None = None
     error: str | None = None
+    messages: list[dict[str, Any]] = []

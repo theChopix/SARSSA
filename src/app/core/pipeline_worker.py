@@ -12,6 +12,7 @@ from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_run_context
 from app.models.pipeline import TaskState
 from app.utils.logger import logger
+from utils.plugin_notifier import PluginNotifier
 
 
 def run_pipeline_worker(task: TaskState) -> None:
@@ -31,6 +32,8 @@ def run_pipeline_worker(task: TaskState) -> None:
         task: Shared mutable task state to update during execution.
     """
     engine = PipelineEngine()
+    notifier = PluginNotifier()
+    task.messages = notifier.messages
     try:
         run_id = engine.start_run(tags=task.tags, description=task.description)
         task.run_id = run_id
@@ -56,7 +59,7 @@ def run_pipeline_worker(task: TaskState) -> None:
             task.current_step_index = i
             logger.info("[WORKER] Step %d/%d: %s", i + 1, len(task.steps_requested), plugin)
 
-            engine.execute_step(plugin, params, context)
+            engine.execute_step(plugin, params, context, notifier=notifier)
 
             task.completed_steps.append(
                 {"category": category, "run_id": context[category]["run_id"]}
@@ -95,6 +98,8 @@ def run_step_worker(task: TaskState) -> None:
             ``task.steps_requested`` must be set before calling.
     """
     engine = PipelineEngine()
+    notifier = PluginNotifier()
+    task.messages = notifier.messages
     try:
         if task.run_id is None:
             raise ValueError("task.run_id must be set before calling run_step_worker.")
@@ -113,7 +118,7 @@ def run_step_worker(task: TaskState) -> None:
         task.current_step_index = 0
         logger.info("[STEP WORKER] Executing step: %s", plugin)
 
-        engine.execute_step(plugin, params, context)
+        engine.execute_step(plugin, params, context, notifier=notifier)
 
         task.completed_steps.append({"category": category, "run_id": context[category]["run_id"]})
         logger.info("[STEP WORKER] Step completed: %s", category)
