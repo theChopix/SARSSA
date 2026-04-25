@@ -4,7 +4,8 @@
  * Contains fetch wrappers for:
  *   - `GET  /pipelines/runs`                       → list past runs
  *   - `GET  /pipelines/runs/{run_id}/context`      → fetch run context
- *   - `POST /pipelines/runs/{run_id}/execute-step`  → execute single step
+ *   - `POST /pipelines/runs/{run_id}/execute-step`        → execute single step (sync)
+ *   - `POST /pipelines/runs/{run_id}/execute-step-async`  → fire-and-poll step
  *   - `POST /pipelines/run-async`                  → start pipeline in background
  *   - `GET  /pipelines/tasks/{task_id}`            → poll task status
  *   - `POST /pipelines/tasks/{task_id}/cancel`    → cancel running task
@@ -25,6 +26,7 @@
 
 import { API_BASE_URL } from "../constants";
 import type {
+  ExecuteStepAsyncResponse,
   ExecuteStepResponse,
   MlflowInfo,
   PipelineContext,
@@ -128,6 +130,50 @@ export async function executeStep(
   }
 
   return (await response.json()) as ExecuteStepResponse;
+}
+
+// ── POST /pipelines/runs/{run_id}/execute-step-async ────
+
+/**
+ * Start a single plugin step asynchronously on an existing pipeline run.
+ *
+ * The backend spawns a worker thread that resumes the MLflow parent run,
+ * executes the step, and re-persists `context.json`. Returns immediately
+ * with a `task_id`; use {@link getTaskStatus} to poll for completion.
+ *
+ * @param runId - The parent pipeline run to attach to.
+ * @param step  - Which plugin to run and with what parameters.
+ * @returns Object containing the `task_id` to poll.
+ *
+ * @example
+ * ```ts
+ * const { task_id } = await executeStepAsync("abc123", {
+ *   plugin: "steering.sae_steering.sae_steering",
+ *   params: { alpha: 0.5 },
+ * });
+ * // poll getTaskStatus(task_id) every 2 s …
+ * ```
+ */
+export async function executeStepAsync(
+  runId: string,
+  step: StepDefinition
+): Promise<ExecuteStepAsyncResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/pipelines/runs/${runId}/execute-step-async`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(step),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to start step async: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return (await response.json()) as ExecuteStepAsyncResponse;
 }
 
 // ── POST /pipelines/run-async ────────────────────────────

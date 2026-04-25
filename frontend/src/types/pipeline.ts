@@ -88,6 +88,20 @@ export interface ExecuteStepResponse {
   step_run_id: string;
 }
 
+// ── Execute-step-async response ────────────────────────
+
+/**
+ * Response from `POST /pipelines/runs/{run_id}/execute-step-async`.
+ *
+ * The backend spawns a worker thread and returns immediately.
+ * Poll `GET /pipelines/tasks/{task_id}` until the status is terminal.
+ *
+ * - `task_id` – Opaque ID to pass to {@link TaskStatusResponse} polling.
+ */
+export interface ExecuteStepAsyncResponse {
+  task_id: string;
+}
+
 // ── MLflow info (from GET /pipelines/mlflow-info) ────────
 
 /**

@@ -34,7 +34,7 @@ import {
   fetchMlflowInfo,
   startPipelineTask,
   getTaskStatus,
-  executeStep,
+  executeStepAsync,
   cancelTask,
 } from "../api/pipelines";
 import type { PluginRegistry } from "../types/plugin";
@@ -584,29 +584,71 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     const cards = { ...get().cards };
     if (cards[category]) {
       cards[category] = { ...cards[category], status: "running" };
-      set({ cards });
+      set({ cards, errorMessage: null });
     }
 
     try {
-      const result = await executeStep(runId, step);
+      const { task_id } = await executeStepAsync(runId, step);
 
-      // Mark card as done with the new step run ID.
-      const c = { ...get().cards };
-      if (c[result.category]) {
-        c[result.category] = {
-          ...c[result.category],
-          status: "done",
-          stepRunId: result.step_run_id,
-        };
-        set({ cards: c });
-      }
+      // Poll every 2 seconds until the task reaches a terminal state.
+      await new Promise<void>((resolve, reject) => {
+        const interval = setInterval(async () => {
+          try {
+            const status = await getTaskStatus(task_id);
+
+            if (status.status === "completed") {
+              clearInterval(interval);
+              const completed = status.completed_steps[0];
+              const c = { ...get().cards };
+              if (completed && c[completed.category]) {
+                c[completed.category] = {
+                  ...c[completed.category],
+                  status: "done",
+                  stepRunId: completed.run_id,
+                };
+                set({ cards: c });
+              }
+              resolve();
+            } else if (status.status === "error") {
+              clearInterval(interval);
+              const c = { ...get().cards };
+              if (c[category]) {
+                c[category] = { ...c[category], status: "error" };
+              }
+              set({
+                cards: c,
+                errorMessage: status.error ?? "Step execution failed.",
+              });
+              resolve();
+            } else if (status.status === "cancelled") {
+              clearInterval(interval);
+              const c = { ...get().cards };
+              if (c[category]) {
+                c[category] = { ...c[category], status: "idle" };
+              }
+              set({
+                cards: c,
+                errorMessage: status.error ?? "Step cancelled.",
+              });
+              resolve();
+            }
+          } catch (pollError) {
+            clearInterval(interval);
+            reject(pollError);
+          }
+        }, 2000);
+      });
     } catch (error) {
-      console.error("Execute step error:", error);
+      console.error("Execute step async error:", error);
       const c = { ...get().cards };
       if (c[category]) {
         c[category] = { ...c[category], status: "error" };
-        set({ cards: c });
       }
+      set({
+        cards: c,
+        errorMessage:
+          error instanceof Error ? error.message : "Step execution failed.",
+      });
     }
   },
 
