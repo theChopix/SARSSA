@@ -97,6 +97,18 @@ class TestCreateTask:
         t2 = create_task([])
         assert t1.cancel_event is not t2.cancel_event
 
+    def test_run_id_none_by_default(self) -> None:
+        """Verify run_id is None when not provided."""
+        _clear_store()
+        task = create_task([])
+        assert task.run_id is None
+
+    def test_run_id_set_when_provided(self) -> None:
+        """Verify run_id is pre-populated when passed to create_task."""
+        _clear_store()
+        task = create_task([], run_id="abc")
+        assert task.run_id == "abc"
+
 
 class TestGetTask:
     """Tests for get_task."""

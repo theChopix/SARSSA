@@ -6,7 +6,7 @@ All PipelineEngine interactions are mocked.
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from app.core.pipeline_worker import run_pipeline_worker
+from app.core.pipeline_worker import run_pipeline_worker, run_step_worker
 from app.models.pipeline import TaskState
 
 
@@ -401,3 +401,220 @@ class TestWorkerFailure:
 
         assert len(task.completed_steps) == 1
         assert task.completed_steps[0]["category"] == "cat_a"
+
+
+def _make_step_task(
+    run_id: str = "parent_run_1",
+    plugin: str = "labeling_evaluation.impl.impl",
+    params: dict[str, Any] | None = None,
+) -> TaskState:
+    """Create a TaskState pre-configured for run_step_worker testing.
+
+    Args:
+        run_id: Pre-existing MLflow parent run ID.
+        plugin: Plugin module path for the single step.
+        params: Optional params dict for the step.
+
+    Returns:
+        TaskState: A fresh task with run_id and one step set.
+    """
+    step = {"plugin": plugin, "params": params or {}}
+    task = TaskState(task_id="step-task", steps_requested=[step])
+    task.run_id = run_id
+    return task
+
+
+class TestStepWorkerSuccess:
+    """Tests for successful single-step execution via run_step_worker."""
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_status_completed(self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock) -> None:
+        """Verify status is set to 'completed' on success."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "step_run_1"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.status == "completed"
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_completed_steps_populated(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify completed_steps has one entry after the step finishes."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            category = plugin.split(".")[0]
+            ctx[category] = {"run_id": "step_run_42"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task(plugin="labeling_evaluation.impl.impl")
+        run_step_worker(task)
+
+        assert len(task.completed_steps) == 1
+        assert task.completed_steps[0] == {
+            "category": "labeling_evaluation",
+            "run_id": "step_run_42",
+        }
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_context_set(self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock) -> None:
+        """Verify task.context is set to the updated context on completion."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        initial_ctx = {"dataset_loading": {"run_id": "ds_run"}}
+        mock_get_ctx.return_value = initial_ctx
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "new_run"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.context is not None
+        assert "dataset_loading" in task.context
+        assert "labeling_evaluation" in task.context
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_resume_run_called_with_run_id(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify engine.resume_run is called with task.run_id."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task(run_id="my_parent_run")
+        run_step_worker(task)
+
+        mock_engine.resume_run.assert_called_once_with("my_parent_run")
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_finalize_run_called(self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock) -> None:
+        """Verify finalize_run is called to re-persist context.json."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        mock_engine.finalize_run.assert_called_once()
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_current_step_none_after_completion(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify current_step is cleared after the step completes."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.current_step is None
+
+
+class TestStepWorkerFailure:
+    """Tests for single-step execution failure via run_step_worker."""
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_status_error_on_exception(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify status is set to 'error' when the step raises."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+        mock_engine.execute_step.side_effect = RuntimeError("GPU OOM")
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.status == "error"
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_error_message_stored(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify the exception message is stored in task.error."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+        mock_engine.execute_step.side_effect = ValueError("bad param")
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.error == "bad param"
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_context_not_set_on_failure(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify task.context remains None when the step fails."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+        mock_engine.execute_step.side_effect = RuntimeError("crash")
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        assert task.context is None

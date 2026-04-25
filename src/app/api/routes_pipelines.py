@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_pipeline_runs, get_run_context
-from app.core.pipeline_worker import run_pipeline_worker
+from app.core.pipeline_worker import run_pipeline_worker, run_step_worker
 from app.core.task_store import cancel_task, create_task, get_task, task_to_response
 from app.models.pipeline import PipelineRequest, StepDefinition, TaskStatusResponse
 
@@ -184,6 +184,39 @@ def execute_step(run_id: str, step: StepDefinition) -> dict[str, Any]:
         "category": category,
         "step_run_id": context[category]["run_id"],
     }
+
+
+@router.post("/runs/{run_id}/execute-step-async")
+def execute_step_async(run_id: str, step: StepDefinition) -> dict[str, str]:
+    """Start a single plugin step in a background thread and return the task ID.
+
+    Fires a background thread that resumes the existing pipeline run
+    identified by *run_id*, executes the requested step, and
+    re-persists ``context.json``.  The caller should poll
+    ``GET /tasks/{task_id}`` every 2 seconds until the task reaches a
+    terminal state.
+
+    The synchronous ``POST /runs/{run_id}/execute-step`` endpoint is
+    kept as-is for scripting and testing.
+
+    Args:
+        run_id: MLflow run ID of the parent pipeline run to resume.
+        step: Plugin name and parameters to execute.
+
+    Returns:
+        dict[str, str]: ``{"task_id": "..."}``.  Poll
+            ``GET /tasks/{task_id}`` for progress.
+    """
+    task = create_task(steps=[step.model_dump()], run_id=run_id)
+
+    thread = threading.Thread(
+        target=run_step_worker,
+        args=(task,),
+        daemon=True,
+    )
+    thread.start()
+
+    return {"task_id": task.task_id}
 
 
 @router.post("/run")

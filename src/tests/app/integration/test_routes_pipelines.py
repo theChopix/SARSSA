@@ -340,3 +340,80 @@ class TestExecuteStep:
         )
 
         mock_engine.resume_run.assert_called_once_with("my_run_42")
+
+
+class TestExecuteStepAsync:
+    """Tests for POST /pipelines/runs/{run_id}/execute-step-async."""
+
+    @patch("app.api.routes_pipelines.run_step_worker")
+    def test_returns_200_with_task_id(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify the endpoint returns 200 and a task_id immediately."""
+        response = client.post(
+            "/pipelines/runs/parent_run_1/execute-step-async",
+            json={"plugin": "labeling_evaluation.impl.impl", "params": {}},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "task_id" in data
+        assert isinstance(data["task_id"], str)
+
+    @patch("app.api.routes_pipelines.run_step_worker")
+    def test_task_has_run_id_pre_set(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify the task's run_id matches the path parameter."""
+        response = client.post(
+            "/pipelines/runs/my_parent_run/execute-step-async",
+            json={"plugin": "inspection.insp.insp", "params": {}},
+        )
+        task_id = response.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.run_id == "my_parent_run"
+
+    @patch("app.api.routes_pipelines.run_step_worker")
+    def test_task_has_correct_step(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify steps_requested contains exactly the one submitted step."""
+        response = client.post(
+            "/pipelines/runs/run_abc/execute-step-async",
+            json={"plugin": "steering.sae_steering.sae_steering", "params": {"alpha": 0.3}},
+        )
+        task_id = response.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert len(task.steps_requested) == 1
+        assert task.steps_requested[0]["plugin"] == "steering.sae_steering.sae_steering"
+
+    @patch("app.api.routes_pipelines.run_step_worker")
+    def test_spawns_step_worker(self, mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify run_step_worker is called with the task."""
+        client.post(
+            "/pipelines/runs/run_x/execute-step-async",
+            json={"plugin": "inspection.insp.insp", "params": {}},
+        )
+
+        mock_worker.assert_called_once()
+
+    @patch("app.api.routes_pipelines.run_step_worker")
+    def test_task_status_polled_via_get_tasks(
+        self, _mock_worker: MagicMock, client: TestClient
+    ) -> None:
+        """Verify the returned task_id is immediately queryable via GET /tasks/{id}."""
+        create_resp = client.post(
+            "/pipelines/runs/run_y/execute-step-async",
+            json={"plugin": "labeling_evaluation.impl.impl", "params": {}},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        poll_resp = client.get(f"/pipelines/tasks/{task_id}")
+
+        assert poll_resp.status_code == 200
+        data = poll_resp.json()
+        assert data["task_id"] == task_id
+        assert data["status"] == "running"
+        assert data["total_steps"] == 1
