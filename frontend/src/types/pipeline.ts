@@ -62,6 +62,9 @@ export interface StepDefinition {
  * - `completed_steps`    – Steps that have finished so far.
  * - `context`            – Final pipeline context (set on completion).
  * - `error`              – Error message (set on failure).
+ * - `messages`           – Ordered list of notification dicts pushed by
+ *                          the executing plugin via `PluginNotifier`.
+ *                          Each entry has `timestamp`, `level`, and `text`.
  */
 export interface TaskStatusResponse {
   task_id: string;
@@ -73,6 +76,7 @@ export interface TaskStatusResponse {
   completed_steps: { category: string; run_id: string }[];
   context: PipelineContext | null;
   error: string | null;
+  messages: { timestamp: number; level: string; text: string }[];
 }
 
 // ── Execute-step response ───────────────────────────────

@@ -36,6 +36,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Loader2, X, Ban } from "lucide-react";
+import { Toaster } from "sonner";
 
 import PipelineCard from "./components/PipelineCard";
 import LaunchModal from "./components/LaunchModal";
@@ -201,6 +202,8 @@ function App() {
   // ── Render ──────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* ── Toast notifications ──────────────── */}
+      <Toaster richColors position="bottom-right" />
       {/* ── Launch confirmation modal ────────── */}
       <LaunchModal />
       {/* ── Header ─────────────────────────────────── */}

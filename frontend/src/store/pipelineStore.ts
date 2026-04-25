@@ -26,6 +26,7 @@
  */
 
 import { create } from "zustand";
+import { toast } from "sonner";
 
 import { fetchPluginRegistry } from "../api/plugins";
 import {
@@ -473,6 +474,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
       // Poll every 2 seconds until the task finishes.
       await new Promise<void>((resolve, reject) => {
+        let seenMessageCount = 0;
         const interval = setInterval(async () => {
           try {
             const status = await getTaskStatus(task_id);
@@ -511,6 +513,16 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
               };
             }
             set({ cards: c });
+
+            // Fire toasts for any new plugin notifications.
+            const newMessages = status.messages.slice(seenMessageCount);
+            for (const msg of newMessages) {
+              if (msg.level === "success") toast.success(msg.text);
+              else if (msg.level === "warning") toast.warning(msg.text);
+              else if (msg.level === "error") toast.error(msg.text);
+              else toast.info(msg.text);
+            }
+            seenMessageCount += newMessages.length;
 
             // Check terminal states.
             if (status.status === "completed") {
@@ -592,9 +604,20 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
       // Poll every 2 seconds until the task reaches a terminal state.
       await new Promise<void>((resolve, reject) => {
+        let seenMessageCount = 0;
         const interval = setInterval(async () => {
           try {
             const status = await getTaskStatus(task_id);
+
+            // Fire toasts for any new plugin notifications.
+            const newMessages = status.messages.slice(seenMessageCount);
+            for (const msg of newMessages) {
+              if (msg.level === "success") toast.success(msg.text);
+              else if (msg.level === "warning") toast.warning(msg.text);
+              else if (msg.level === "error") toast.error(msg.text);
+              else toast.info(msg.text);
+            }
+            seenMessageCount += newMessages.length;
 
             if (status.status === "completed") {
               clearInterval(interval);
