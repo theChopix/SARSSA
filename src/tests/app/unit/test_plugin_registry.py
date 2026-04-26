@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.core.plugin_discovery.plugin_registry import (
+    _convert_display_spec,
     _extract_parameters_from_instance,
     _find_plugin_modules,
     _make_display_name,
@@ -22,6 +23,10 @@ from app.models.plugin import (
     CategoryType,
     ParameterInfo,
 )
+from app.models.plugin import (
+    DisplaySpec as DisplayModel,
+)
+from plugins.plugin_interface import DisplayRowSpec, DisplaySpec, PluginIOSpec
 
 # ── Helpers for building mock plugin directory trees ──────────────
 
@@ -76,6 +81,7 @@ def _build_nested_category(
 def _make_mock_plugin(
     params: dict[str, tuple[type, Any]],
     plugin_name: str | None = None,
+    display: DisplaySpec | None = None,
 ) -> MagicMock:
     """Create a mock plugin whose run() has the given signature params.
 
@@ -84,6 +90,8 @@ def _make_mock_plugin(
             Use ``inspect.Parameter.empty`` for required params.
         plugin_name: Optional custom display name for the plugin.
             Mirrors ``BasePlugin.name``.
+        display: Optional DisplaySpec to attach to
+            ``io_spec.display``.
 
     Returns:
         MagicMock: A mock with a ``run`` method with proper signature.
@@ -108,6 +116,7 @@ def _make_mock_plugin(
     mock_plugin.name = plugin_name
     mock_plugin.run = MagicMock()
     mock_plugin.run.__signature__ = sig
+    mock_plugin.io_spec = PluginIOSpec(display=display)
     return mock_plugin
 
 
@@ -305,6 +314,91 @@ class TestDiscoverImplementationsDisplayName:
         impls = _discover_implementations("cat")
 
         assert impls[0].display_name == "My Impl"
+
+
+class TestConvertDisplaySpec:
+    """Tests for _convert_display_spec."""
+
+    def test_returns_none_for_none(self) -> None:
+        """Verify None input produces None output."""
+        assert _convert_display_spec(None) is None
+
+    def test_converts_display_spec(self) -> None:
+        """Verify dataclass DisplaySpec is converted to Pydantic model."""
+        spec = DisplaySpec(
+            type="item_rows",
+            rows=[
+                DisplayRowSpec("top_k", "Top Items"),
+                DisplayRowSpec("recs", "Recommendations"),
+            ],
+        )
+        result = _convert_display_spec(spec)
+        assert isinstance(result, DisplayModel)
+        assert result.type == "item_rows"
+        assert len(result.rows) == 2
+        assert result.rows[0].key == "top_k"
+        assert result.rows[0].label == "Top Items"
+        assert result.rows[1].key == "recs"
+
+    def test_converts_empty_rows(self) -> None:
+        """Verify DisplaySpec with no rows converts correctly."""
+        spec = DisplaySpec(type="item_rows", rows=[])
+        result = _convert_display_spec(spec)
+        assert result is not None
+        assert result.rows == []
+
+
+class TestDiscoverImplementationsDisplay:
+    """Tests for display field propagation in _discover_implementations."""
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_plugin_with_display_spec(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify display spec is included in ImplementationInfo."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        display = DisplaySpec(
+            type="item_rows",
+            rows=[DisplayRowSpec("items", "Items")],
+        )
+        mock_find.return_value = ["cat.my_impl.my_impl"]
+        mock_pm.load.return_value = _make_mock_plugin(
+            {"k": (int, 10)},
+            display=display,
+        )
+
+        impls = _discover_implementations("cat")
+        assert impls[0].display is not None
+        assert impls[0].display.type == "item_rows"
+        assert len(impls[0].display.rows) == 1
+        assert impls[0].display.rows[0].key == "items"
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_plugin_without_display_spec(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify display is None when plugin has no DisplaySpec."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.my_impl.my_impl"]
+        mock_pm.load.return_value = _make_mock_plugin(
+            {"k": (int, 10)},
+            display=None,
+        )
+
+        impls = _discover_implementations("cat")
+        assert impls[0].display is None
 
 
 class TestGetPluginRegistry:

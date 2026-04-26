@@ -47,6 +47,31 @@ class ParameterInfo(BaseModel):
     required: bool = True
 
 
+class DisplayRowSpec(BaseModel):
+    """One row of visual items to render in the frontend.
+
+    Attributes:
+        key: Key in the plugin's output artifacts.
+        label: Human-readable row label for the UI.
+    """
+
+    key: str
+    label: str
+
+
+class DisplaySpec(BaseModel):
+    """Declarative description of how the frontend should render
+    this plugin's output.
+
+    Attributes:
+        type: Display layout type (e.g. ``"item_rows"``).
+        rows: Ordered list of item-row specifications.
+    """
+
+    type: str = "item_rows"
+    rows: list[DisplayRowSpec] = []
+
+
 class ImplementationInfo(BaseModel):
     """Schema for a discovered plugin implementation.
 
@@ -55,11 +80,14 @@ class ImplementationInfo(BaseModel):
             (e.g. ``dataset_loading.movieLens_loader.movieLens_loader``).
         display_name: Human-readable name derived from the module name.
         params: List of configurable parameters from the run() signature.
+        display: Optional display specification describing how the
+            frontend should render this plugin's output.
     """
 
     plugin_name: str
     display_name: str
     params: list[ParameterInfo]
+    display: DisplaySpec | None = None
 
 
 class CategoryRegistryEntry(BaseModel):

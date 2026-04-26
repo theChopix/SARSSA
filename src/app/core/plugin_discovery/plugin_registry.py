@@ -16,9 +16,15 @@ from app.models.plugin import (
     ImplementationInfo,
     ParameterInfo,
 )
+from app.models.plugin import (
+    DisplayRowSpec as DisplayRowModel,
+)
+from app.models.plugin import (
+    DisplaySpec as DisplayModel,
+)
 
 if TYPE_CHECKING:
-    from plugins.plugin_interface import BasePlugin
+    from plugins.plugin_interface import BasePlugin, DisplaySpec
 
 PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
@@ -114,6 +120,27 @@ def _make_display_name(plugin_module_path: str) -> str:
     return impl_name.replace("_", " ").title()
 
 
+def _convert_display_spec(
+    spec: "DisplaySpec | None",
+) -> DisplayModel | None:
+    """Convert a dataclass DisplaySpec to a Pydantic DisplayModel.
+
+    Args:
+        spec: Dataclass display spec from the plugin's
+            ``io_spec``, or ``None``.
+
+    Returns:
+        DisplayModel | None: Pydantic model for JSON
+            serialisation, or ``None`` if *spec* is ``None``.
+    """
+    if spec is None:
+        return None
+    return DisplayModel(
+        type=spec.type,
+        rows=[DisplayRowModel(key=row.key, label=row.label) for row in spec.rows],
+    )
+
+
 def _discover_implementations(
     category_name: str,
 ) -> list[ImplementationInfo]:
@@ -135,11 +162,13 @@ def _discover_implementations(
         plugin_instance = PluginManager.load(module_path)
         params = _extract_parameters_from_instance(plugin_instance)
         display_name = plugin_instance.name or _make_display_name(module_path)
+        display = _convert_display_spec(plugin_instance.io_spec.display)
         implementations.append(
             ImplementationInfo(
                 plugin_name=module_path,
                 display_name=display_name,
                 params=params,
+                display=display,
             )
         )
 

@@ -53,6 +53,31 @@ export interface ParameterInfo {
   required: boolean;
 }
 
+// ── Display spec (visual output metadata) ───────────────
+
+/**
+ * One row of visual items to render in the frontend.
+ *
+ * - `key`   – Key in the plugin's output artifacts (e.g. "interacted_items").
+ * - `label` – Human-readable row label for the UI (e.g. "Interaction History").
+ */
+export interface DisplayRowSpec {
+  key: string;
+  label: string;
+}
+
+/**
+ * Declarative description of how the frontend should render
+ * a plugin's output.
+ *
+ * - `type` – Display layout type (currently only "item_rows").
+ * - `rows` – Ordered list of item-row specifications.
+ */
+export interface DisplaySpec {
+  type: string;
+  rows: DisplayRowSpec[];
+}
+
 // ── Single plugin implementation ────────────────────────
 
 /**
@@ -65,11 +90,13 @@ export interface ParameterInfo {
  *                     (e.g. "dataset_loading.lastFm1k_loader.lastFm1k_loader").
  * - `display_name` – Human-readable name for the UI.
  * - `params`       – Array of parameters the user can configure.
+ * - `display`      – Optional display spec for visual output rendering.
  */
 export interface ImplementationInfo {
   plugin_name: string;
   display_name: string;
   params: ParameterInfo[];
+  display: DisplaySpec | null;
 }
 
 // ── Full category entry in the registry ─────────────────
