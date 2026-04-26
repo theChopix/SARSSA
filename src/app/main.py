@@ -4,6 +4,7 @@ import mlflow
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes_items import router as items_router
 from app.api.routes_pipelines import router as pipelines_router
 from app.api.routes_plugins import router as plugins_router
 from app.config.config import ARTIFACT_ROOT, EXPERIMENT_NAME, TRACKING_URI
@@ -27,5 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(items_router, prefix="/items", tags=["Items"])
 app.include_router(pipelines_router, prefix="/pipelines", tags=["Pipelines"])
 app.include_router(plugins_router, prefix="/plugins", tags=["Plugins"])
