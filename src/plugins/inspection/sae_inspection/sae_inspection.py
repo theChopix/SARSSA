@@ -10,6 +10,8 @@ import torch
 from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
+    DisplayRowSpec,
+    DisplaySpec,
     OutputArtifactSpec,
     OutputParamSpec,
     PluginIOSpec,
@@ -59,6 +61,15 @@ class Plugin(BasePlugin):
             OutputParamSpec("neuron_id", "neuron_id"),
             OutputParamSpec("k", "k_param"),
         ],
+        display=DisplaySpec(
+            type="item_rows",
+            rows=[
+                DisplayRowSpec(
+                    "top_k_item_ids",
+                    "Top Items for Concept",
+                ),
+            ],
+        ),
     )
 
     def run(

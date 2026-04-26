@@ -10,6 +10,8 @@ import torch
 from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
+    DisplayRowSpec,
+    DisplaySpec,
     OutputArtifactSpec,
     OutputParamSpec,
     PluginIOSpec,
@@ -87,6 +89,23 @@ class Plugin(BasePlugin):
             OutputParamSpec("alpha", "alpha_param"),
             OutputParamSpec("k", "k_param"),
         ],
+        display=DisplaySpec(
+            type="item_rows",
+            rows=[
+                DisplayRowSpec(
+                    "interacted_items",
+                    "Interaction History",
+                ),
+                DisplayRowSpec(
+                    "original_recommendations",
+                    "Original Recommendations",
+                ),
+                DisplayRowSpec(
+                    "steered_recommendations",
+                    "Steered Recommendations",
+                ),
+            ],
+        ),
     )
 
     def run(
