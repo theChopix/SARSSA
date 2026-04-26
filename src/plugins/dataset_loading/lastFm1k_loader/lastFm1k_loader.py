@@ -17,7 +17,7 @@ class LastFm1kLoader(DatasetLoader):
     MIN_USER_INTERACTIONS: int = 5
     MIN_ITEM_INTERACTIONS: int = 10
 
-    def __init__(self, ratings_file_path: str = "../data/LastFm1k.tsv"):
+    def __init__(self, ratings_file_path: str = "../data/lastFm1k/ratings.tsv"):
         super().__init__("LastFM1k", ratings_file_path)
 
     def _load_ratings(self, ratings_file_path: str) -> None:
