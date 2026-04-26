@@ -20,11 +20,15 @@ class CategoryInfo(BaseModel):
         order: Execution order within the pipeline (0-indexed).
         type: Execution type of the category.
         display_name: Human-readable label for the UI.
+        has_visual_results: Whether plugins in this category
+            produce visual output that the frontend should
+            render in a results panel.
     """
 
     order: int
     type: CategoryType
     display_name: str
+    has_visual_results: bool = False
 
 
 class ParameterInfo(BaseModel):

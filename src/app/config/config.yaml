@@ -29,7 +29,9 @@ plugin_categories:
     order: 5
     type: "multi_run"
     display_name: "Inspection"
+    has_visual_results: true
   steering:
     order: 6
     type: "multi_run"
     display_name: "Steering"
+    has_visual_results: true

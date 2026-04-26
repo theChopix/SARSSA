@@ -31,3 +31,23 @@ class TestPluginCategoryKeys:
             assert folder.is_dir(), (
                 f"No plugin folder found for category '{category_name}' at {folder}"
             )
+
+
+class TestHasVisualResults:
+    """Tests for the has_visual_results category flag."""
+
+    def test_steering_has_visual_results(self) -> None:
+        """Verify steering category has visual results enabled."""
+        assert PLUGIN_CATEGORIES["steering"].has_visual_results is True
+
+    def test_inspection_has_visual_results(self) -> None:
+        """Verify inspection category has visual results enabled."""
+        assert PLUGIN_CATEGORIES["inspection"].has_visual_results is True
+
+    def test_other_categories_default_to_false(self) -> None:
+        """Verify categories without explicit flag default to False."""
+        for name, info in PLUGIN_CATEGORIES.items():
+            if name not in ("steering", "inspection"):
+                assert info.has_visual_results is False, (
+                    f"Category '{name}' should not have visual results"
+                )

@@ -30,6 +30,7 @@ export interface CategoryInfo {
   order: number;
   type: "one_time" | "multi_run";
   display_name: string;
+  has_visual_results: boolean;
 }
 
 // ── Plugin parameter metadata ───────────────────────────
