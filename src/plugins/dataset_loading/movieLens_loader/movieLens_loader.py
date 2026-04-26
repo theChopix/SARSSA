@@ -22,16 +22,22 @@ class MovieLensLoader(DatasetLoader):
     MIN_USER_INTERACTIONS: int = 50
     MIN_ITEM_INTERACTIONS: int = 20
 
-    def __init__(
-        self,
-        ratings_file_path: str = "../data/movieLens/ratings.csv",
-        tags_file_path: str = "../data/movieLens/tags.csv",
-    ):
-        super().__init__("MovieLens", ratings_file_path, tags_file_path)
+    RATINGS_FILE: str = "ratings.csv"
+    TAGS_FILE: str = "tags.csv"
+    DESCRIPTIONS_FILE: str = "descriptions.json"
+    METADATA_FILE: str = "metadata.json"
 
-    def _load_ratings(self, ratings_file_path: str) -> None:
+    def __init__(self, data_dir: str = "../data/movieLens") -> None:
+        super().__init__("MovieLens", data_dir)
+
+    def load_ratings(self) -> None:
+        if not self._file_exists(self.RATINGS_FILE):
+            raise FileNotFoundError(
+                f"Ratings file not found: {self._resolve_path(self.RATINGS_FILE)}. "
+                "Download the dataset first."
+            )
         self.df_interactions = (
-            pl.scan_csv(ratings_file_path, has_header=True)
+            pl.scan_csv(self._resolve_path(self.RATINGS_FILE), has_header=True)
             .select(["userId", "movieId", "rating"])
             .rename({"movieId": "itemId"})
             .cast({"userId": pl.String, "itemId": pl.String, "rating": pl.Float64})
@@ -42,20 +48,33 @@ class MovieLensLoader(DatasetLoader):
             .collect()
         )
 
-    def _load_tags(self, tags_file_path: str, items: np.ndarray) -> None:
-        self.df_tags = (
-            pl.scan_csv(tags_file_path, has_header=True)
-            .select(["movieId", "tag"])
-            .rename({"movieId": "itemId"})
-            .cast({"itemId": pl.String, "tag": pl.String})
-            .with_columns(pl.col("tag").str.to_lowercase().str.strip_chars().alias("tag"))
-            .filter(pl.col("itemId").is_in(items))
-            .unique()
-            .collect()
-        )
+    def load_optional_data(self) -> None:
+        # Tags
+        if self._file_exists(self.TAGS_FILE):
+            self.logger.info("Loading tags...")
+            self.df_tags = (
+                pl.scan_csv(self._resolve_path(self.TAGS_FILE), has_header=True)
+                .select(["movieId", "tag"])
+                .rename({"movieId": "itemId"})
+                .cast({"itemId": pl.String, "tag": pl.String})
+                .with_columns(pl.col("tag").str.to_lowercase().str.strip_chars().alias("tag"))
+                .filter(pl.col("itemId").is_in(self.items))
+                .unique()
+                .collect()
+            )
+            self.logger.info("Loaded %d tag entries", len(self.df_tags))
 
-    def has_tags(self) -> bool:
-        return True
+        # Descriptions
+        if self._file_exists(self.DESCRIPTIONS_FILE):
+            with open(self._resolve_path(self.DESCRIPTIONS_FILE)) as f:
+                self.descriptions = json.load(f)
+            self.logger.info("Loaded descriptions for %d items", len(self.descriptions))
+
+        # Metadata
+        if self._file_exists(self.METADATA_FILE):
+            with open(self._resolve_path(self.METADATA_FILE)) as f:
+                self.metadata = json.load(f)
+            self.logger.info("Loaded metadata for %d items", len(self.metadata))
 
     def tag_ids(self):
         return self.df_tags["tag"].unique().sort().to_list()
@@ -155,7 +174,7 @@ class Plugin(BasePlugin):
         self.num_train_users = len(dataset_loader.train_users)
         self.num_valid_users = len(dataset_loader.valid_users)
         self.num_test_users = len(dataset_loader.test_users)
-        self.has_tags = dataset_loader.has_tags()
+        self.has_tags = dataset_loader.df_tags is not None
 
         # Populate output artifacts
         self.users = dataset_loader.users
@@ -174,7 +193,7 @@ class Plugin(BasePlugin):
         # Tag outputs (conditional, handled in update_context)
         self._tag_ids: list[str] | None = None
         self._tag_item_matrix: sp.csr_matrix | None = None
-        if dataset_loader.has_tags():
+        if dataset_loader.df_tags is not None:
             self._tag_ids = dataset_loader.tag_ids()
             self._tag_item_matrix = dataset_loader.tag_item_matrix()
 
