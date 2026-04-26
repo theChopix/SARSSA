@@ -210,6 +210,20 @@ class DatasetLoader:
         Called at the end of :meth:`prepare`. Default implementation is a no-op.
         """
 
+    def get_item_metadata(self) -> dict[str, dict[str, Any]]:
+        """Return display-ready metadata for items in the dataset.
+
+        Subclasses that have item metadata (title, year, genres,
+        image_url, etc.) should override this method and return a
+        dict keyed by item ID.  The default implementation returns
+        an empty dict, meaning no visual metadata is available.
+
+        Returns:
+            dict[str, dict[str, Any]]: Mapping of item ID to
+                metadata fields.
+        """
+        return {}
+
     def to_artifacts(self) -> dict[str, Any]:
         """Return all outputs as a flat dict for plugin attribute population."""
         return {
