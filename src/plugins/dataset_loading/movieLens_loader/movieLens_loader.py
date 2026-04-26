@@ -24,8 +24,8 @@ class MovieLensLoader(DatasetLoader):
 
     def __init__(
         self,
-        ratings_file_path: str = "../data/movieLens/MovieLensRatings.csv",
-        tags_file_path: str = "../data/movieLens/MovieLensTags.csv",
+        ratings_file_path: str = "../data/movieLens/ratings.csv",
+        tags_file_path: str = "../data/movieLens/tags.csv",
     ):
         super().__init__("MovieLens", ratings_file_path, tags_file_path)
 
