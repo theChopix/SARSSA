@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from abc import abstractmethod
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -9,56 +10,68 @@ import scipy.sparse as sp
 
 
 class DatasetLoader:
-    # Constants
+    # Constants (subclasses override)
     MIN_USER_INTERACTIONS: int = 20
     MIN_ITEM_INTERACTIONS: int = 200
-    # -------------------
-    # Instance variables
-    df_interactions: pl.DataFrame
-    csr_interactions: sp.csr_matrix
-    users: np.ndarray
-    items: np.ndarray
-    train_csr: sp.csr_matrix
-    valid_csr: sp.csr_matrix
-    test_csr: sp.csr_matrix
-    train_users: np.ndarray
-    valid_users: np.ndarray
-    test_users: np.ndarray
-    train_idx: np.ndarray
-    valid_idx: np.ndarray
-    test_idx: np.ndarray
 
-    def __init__(self, name: str, ratings_file_path: str, tags_file_path: str | None = None):
+    def __init__(self, name: str, data_dir: str) -> None:
         self.name = name
+        self.data_dir = data_dir
         self.logger = logging.getLogger(__name__)
-        self.ratings_file_path = ratings_file_path
-        self.tags_file_path = tags_file_path
+
+        # Core interaction data
+        self.df_interactions: pl.DataFrame | None = None
+        self.csr_interactions: sp.csr_matrix | None = None
+        self.users: np.ndarray | None = None
+        self.items: np.ndarray | None = None
+
+        # Train/val/test splits
+        self.train_csr: sp.csr_matrix | None = None
+        self.valid_csr: sp.csr_matrix | None = None
+        self.test_csr: sp.csr_matrix | None = None
+        self.train_users: np.ndarray | None = None
+        self.valid_users: np.ndarray | None = None
+        self.test_users: np.ndarray | None = None
+        self.train_idx: np.ndarray | None = None
+        self.valid_idx: np.ndarray | None = None
+        self.test_idx: np.ndarray | None = None
+
+        # Optional data (populated by load_optional_data)
+        self.df_tags: pl.DataFrame | None = None
+        self.descriptions: dict[str, dict] | None = None
+        self.metadata: dict[str, dict] | None = None
+
+        # Prepare params (stored for to_artifacts)
+        self._seed: int | None = None
+        self._val_ratio: float | None = None
+        self._test_ratio: float | None = None
+
+    def _resolve_path(self, filename: str) -> str:
+        """Resolve a canonical filename relative to data_dir."""
+        return os.path.join(self.data_dir, filename)
+
+    def _file_exists(self, filename: str) -> bool:
+        """Check whether a canonical file exists in data_dir."""
+        return os.path.exists(self._resolve_path(filename))
 
     def prepare(self, val_ratio: float, test_ratio: float, seed: int) -> None:
-        """Prepare all data for processing"""
-        if not os.path.exists(self.ratings_file_path):
-            raise FileNotFoundError(
-                f"Ratings dataset file not found: {self.ratings_file_path}. Download the ratings dataset and place it in the correct path"
-            )
+        """Prepare all data for processing."""
+        self._seed = seed
+        self._val_ratio = val_ratio
+        self._test_ratio = test_ratio
 
         self.logger.info("Preparing dataset: %s", self.name)
         start = time.time()
 
         self.logger.info("Loading dataset...")
-        self._load_ratings(self.ratings_file_path)
+        self.load_ratings()
         load_end = time.time()
         self.logger.info(f"Dataset loaded in {load_end - start:.2f}s")
 
-        # check that df_interactions is correctly loaded
-        if not isinstance(self.df_interactions, pl.DataFrame) or any(
-            col not in self.df_interactions.columns for col in ["userId", "itemId"]
-        ):
-            raise ValueError(
-                "df_interactions must be a pl.DataFrame with columns userId and itemId"
-            )
+        self.validate_interactions()
 
         self.logger.info("Filtering dataset...")
-        self._filter()
+        self.filter_interactions()
         filter_end = time.time()
         self.logger.info(f"Dataset filtered in {filter_end - load_end:.2f}s")
 
@@ -70,48 +83,40 @@ class DatasetLoader:
         )
 
         self.logger.info("Creating csr_matrix...")
-        self._create_csr_matrix()
+        self.build_csr_matrix()
         csr_end = time.time()
         self.logger.info(f"csr_matrix created in {csr_end - filter_end:.2f}s")
 
         self.logger.info("Splitting dataset...")
-        self._split(val_ratio, test_ratio, seed=seed)
+        self.split(val_ratio, test_ratio, seed=seed)
         split_end = time.time()
         self.logger.info(f"Dataset split in {split_end - csr_end:.2f}s")
 
         self.logger.info("-" * 20)
         self.logger.info(f"Dataset prepared in {split_end - start:.2f}s")
 
-        if self.tags_file_path is not None:
-            if not os.path.exists(self.tags_file_path):
-                raise FileNotFoundError(
-                    f"Tags dataset file not found: {self.tags_file_path}. Download the tags dataset and place it in the correct path"
-                )
-
-            self.logger.info("Loading tags...")
-
-            tags_start = time.time()
-            self._load_tags(self.tags_file_path, self.items)
-
-            tags_end = time.time()
-            self.logger.info(f"Tags loaded in {tags_end - tags_start:.2f}s")
+        self.load_optional_data()
 
     @abstractmethod
-    def _load_ratings(self, path: str) -> None:
-        """Abstract that loads a pl.DataFrame with 2 columns - userId, itemId - into variable self.df_interactions"""
-        ...
+    def load_ratings(self) -> None:
+        """Load interactions into self.df_interactions.
 
-    @abstractmethod
-    def _load_tags(self, tags_file_path: str, items: np.ndarray) -> None:
-        """
-        Abstract that
-            - loads a pl.DataFrame with 2 columns - itemId, tag - into variable self.df_tags
-            - filters self.df_tags to only include items in the provided items array
+        Must produce a pl.DataFrame with columns ``userId`` and ``itemId``.
+        Subclasses should raise FileNotFoundError if the data file is missing.
         """
         ...
 
-    def _filter(self) -> None:
-        """Filter users and items that has too few interactions"""
+    def validate_interactions(self) -> None:
+        """Validate that df_interactions is correctly loaded."""
+        if not isinstance(self.df_interactions, pl.DataFrame) or any(
+            col not in self.df_interactions.columns for col in ["userId", "itemId"]
+        ):
+            raise ValueError(
+                "df_interactions must be a pl.DataFrame with columns userId and itemId"
+            )
+
+    def filter_interactions(self) -> None:
+        """Filter users and items that have too few interactions."""
         df = self.df_interactions
         self.logger.info(
             "Initial interactions: %d, users: %d, items: %d",
@@ -156,8 +161,8 @@ class DatasetLoader:
 
         self.df_interactions = df
 
-    def _create_csr_matrix(self) -> None:
-        """Create a csr_matrix from the interactions DataFrame"""
+    def build_csr_matrix(self) -> None:
+        """Create a csr_matrix from the interactions DataFrame."""
         self.users = self.df_interactions["userId"].cat.get_categories().to_numpy()
         self.items = self.df_interactions["itemId"].cat.get_categories().to_numpy()
 
@@ -172,8 +177,8 @@ class DatasetLoader:
             shape=(len(self.users), len(self.items)),
         )
 
-    def _split(self, val_ratio: float = 0.1, test_ratio: float = 0.1, seed: int = 42) -> None:
-        """Split the dataset into train, validation and test sets"""
+    def split(self, val_ratio: float = 0.1, test_ratio: float = 0.1, seed: int = 42) -> None:
+        """Split the dataset into train, validation and test sets."""
         np.random.seed(seed)
         p = np.random.permutation(len(self.users))
         val_count, test_count = int(len(self.users) * val_ratio), int(len(self.users) * test_ratio)
@@ -199,14 +204,40 @@ class DatasetLoader:
             self.csr_interactions[test_idx],
         )
 
-    def has_tags(self) -> bool:
-        """Whether this dataset provides tag metadata"""
-        return False
+    def load_optional_data(self) -> None:
+        """Hook for subclasses to load tags, descriptions, metadata, etc.
 
-    def get_tag_ids(self) -> list[str]:
-        """Return list of tag names."""
-        raise NotImplementedError("This dataset does not provide tag metadata.")
+        Called at the end of :meth:`prepare`. Default implementation is a no-op.
+        """
 
-    def get_tag_item_matrix(self) -> sp.csr_matrix:
-        """Return a tag-item csr_matrix. Rows correspond to tags, columns to items."""
-        raise NotImplementedError("This dataset does not provide tag metadata.")
+    def to_artifacts(self) -> dict[str, Any]:
+        """Return all outputs as a flat dict for plugin attribute population."""
+        return {
+            # Artifacts
+            "users": self.users,
+            "items": self.items,
+            "full_csr": self.csr_interactions,
+            "train_csr": self.train_csr,
+            "valid_csr": self.valid_csr,
+            "test_csr": self.test_csr,
+            "train_idx": self.train_idx,
+            "valid_idx": self.valid_idx,
+            "test_idx": self.test_idx,
+            "train_users": self.train_users,
+            "valid_users": self.valid_users,
+            "test_users": self.test_users,
+            # Params
+            "dataset_name": self.name,
+            "seed": self._seed,
+            "val_ratio": self._val_ratio,
+            "test_ratio": self._test_ratio,
+            "num_users": len(self.users),
+            "num_items": len(self.items),
+            "num_interactions": self.csr_interactions.nnz,
+            "num_train_users": len(self.train_users),
+            "num_valid_users": len(self.valid_users),
+            "num_test_users": len(self.test_users),
+            "min_user_interactions": self.MIN_USER_INTERACTIONS,
+            "min_item_interactions": self.MIN_ITEM_INTERACTIONS,
+            "has_tags": self.df_tags is not None,
+        }

@@ -1,4 +1,3 @@
-import numpy as np
 import polars as pl
 
 from plugins.dataset_loading._dataset_loader import DatasetLoader
@@ -17,10 +16,17 @@ class LastFm1kLoader(DatasetLoader):
     MIN_USER_INTERACTIONS: int = 5
     MIN_ITEM_INTERACTIONS: int = 10
 
-    def __init__(self, ratings_file_path: str = "../data/lastFm1k/ratings.tsv"):
-        super().__init__("LastFM1k", ratings_file_path)
+    RATINGS_FILE: str = "ratings.tsv"
 
-    def _load_ratings(self, ratings_file_path: str) -> None:
+    def __init__(self, data_dir: str = "../data/lastFm1k") -> None:
+        super().__init__("LastFM1k", data_dir)
+
+    def load_ratings(self) -> None:
+        if not self._file_exists(self.RATINGS_FILE):
+            raise FileNotFoundError(
+                f"Ratings file not found: {self._resolve_path(self.RATINGS_FILE)}. "
+                "Download the dataset first."
+            )
         skiprows = [
             2120260 - 1,
             2446318 - 1,
@@ -34,7 +40,12 @@ class LastFm1kLoader(DatasetLoader):
         ]
 
         self.df_interactions = (
-            pl.scan_csv(ratings_file_path, separator="\t", has_header=False, quote_char=None)
+            pl.scan_csv(
+                self._resolve_path(self.RATINGS_FILE),
+                separator="\t",
+                has_header=False,
+                quote_char=None,
+            )
             .rename({"column_1": "userId", "column_3": "itemId"})
             .select(["userId", "itemId"])
             .with_row_index()
@@ -45,9 +56,6 @@ class LastFm1kLoader(DatasetLoader):
             .sort(["userId", "itemId"])
             .collect()
         )
-
-    def _load_tags(self, tags_file_path: str, items: np.ndarray) -> None:
-        raise NotImplementedError("This dataset does not provide tag metadata.")
 
 
 class Plugin(BasePlugin):
@@ -129,7 +137,7 @@ class Plugin(BasePlugin):
         self.num_train_users = len(dataset_loader.train_users)
         self.num_valid_users = len(dataset_loader.valid_users)
         self.num_test_users = len(dataset_loader.test_users)
-        self.has_tags = dataset_loader.has_tags()
+        self.has_tags = dataset_loader.df_tags is not None
 
         # Populate output artifacts
         self.users = dataset_loader.users
