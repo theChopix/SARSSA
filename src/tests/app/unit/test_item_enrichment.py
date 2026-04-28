@@ -2,7 +2,13 @@
 
 from unittest.mock import MagicMock, patch
 
-from app.core.item_enrichment.item_enrichment import enrich_items, load_item_metadata
+import pytest
+
+from app.core.item_enrichment.item_enrichment import (
+    enrich_items,
+    load_item_metadata,
+    load_step_artifact,
+)
 
 # ── load_item_metadata ─────────────────────────────────────────────
 
@@ -154,3 +160,39 @@ class TestEnrichItems:
         items, _ = enrich_items("run_4", ["c", "a", "b"])
 
         assert [i["id"] for i in items] == ["c", "a", "b"]
+
+
+# ── load_step_artifact ────────────────────────────────────────────
+
+
+class TestLoadStepArtifact:
+    """Tests for load_step_artifact."""
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_artifact_content(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify artifact JSON content is returned."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = True
+        mock_loader.get_json_artifact.return_value = ["42", "107"]
+        mock_loader_cls.return_value = mock_loader
+
+        result = load_step_artifact("run_1", "recs.json")
+
+        assert result == ["42", "107"]
+        mock_loader.get_json_artifact.assert_called_once_with("recs.json")
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_raises_when_artifact_missing(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify FileNotFoundError when artifact does not exist."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = False
+        mock_loader_cls.return_value = mock_loader
+
+        with pytest.raises(FileNotFoundError, match="recs.json"):
+            load_step_artifact("run_bad", "recs.json")

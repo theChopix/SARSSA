@@ -1,9 +1,8 @@
 /**
- * API service for item enrichment endpoints.
+ * API service for item enrichment and artifact endpoints.
  *
  * This module provides functions to fetch enriched item metadata
- * from the backend. It is the frontend's equivalent of calling
- * `GET /items/enrich`.
+ * and raw step artifacts from the backend.
  */
 
 import { API_BASE_URL } from "../constants";
@@ -48,4 +47,42 @@ export async function fetchEnrichedItems(
   }
 
   return (await response.json()) as EnrichResponse;
+}
+
+/**
+ * Fetch a JSON artifact from a plugin step's MLflow run.
+ *
+ * Calls `GET /items/artifact` which acts as a proxy to MLflow,
+ * so the frontend never needs direct MLflow access.
+ *
+ * @param runId    - MLflow run ID of the plugin step.
+ * @param filename - Artifact filename (e.g. "steered_recommendations.json").
+ * @returns The parsed JSON content of the artifact.
+ *
+ * @example
+ * ```ts
+ * const itemIds = await fetchStepArtifact("abc123", "steered_recommendations.json");
+ * // itemIds → ["42", "107", "253"]
+ * ```
+ *
+ * @throws {Error} If the HTTP request fails (non-2xx status).
+ */
+export async function fetchStepArtifact(
+  runId: string,
+  filename: string
+): Promise<unknown> {
+  const params = new URLSearchParams({
+    run_id: runId,
+    filename,
+  });
+
+  const response = await fetch(`${API_BASE_URL}/items/artifact?${params}`);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch artifact '${filename}': ${response.status} ${response.statusText}`
+    );
+  }
+
+  return response.json();
 }

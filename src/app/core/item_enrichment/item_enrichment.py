@@ -35,6 +35,32 @@ def load_item_metadata(run_id: str) -> dict[str, dict[str, Any]]:
     return loader.get_json_artifact("item_metadata.json")
 
 
+def load_step_artifact(
+    run_id: str,
+    filename: str,
+) -> Any:
+    """Download a JSON artifact from an MLflow run.
+
+    This is a thin proxy so the frontend never needs direct
+    MLflow access.  No caching is applied here because the
+    set of possible filenames is unbounded.
+
+    Args:
+        run_id: MLflow run ID of the step.
+        filename: Artifact filename (e.g. ``"steered_recommendations.json"``).
+
+    Returns:
+        Any: Parsed JSON content of the artifact.
+
+    Raises:
+        FileNotFoundError: If the artifact does not exist.
+    """
+    loader = MLflowRunLoader(run_id)
+    if not loader.artifact_exists(filename):
+        raise FileNotFoundError(f"Artifact '{filename}' not found for run {run_id}")
+    return loader.get_json_artifact(filename)
+
+
 def enrich_items(
     run_id: str,
     item_ids: list[str],

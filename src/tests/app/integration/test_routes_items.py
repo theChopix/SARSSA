@@ -1,7 +1,7 @@
-"""Integration tests for GET /items/enrich.
+"""Integration tests for /items/ endpoints.
 
-Tests hit the real endpoint via FastAPI TestClient.  The MLflow
-metadata loading is mocked so tests don't require a live MLflow
+Tests hit the real endpoints via FastAPI TestClient.  MLflow
+artifact loading is mocked so tests don't require a live MLflow
 server.
 """
 
@@ -96,3 +96,53 @@ class TestGetEnrichedItems:
 
         assert "items" in data
         assert "metadata_available" in data
+
+
+class TestGetStepArtifact:
+    """Tests for GET /items/artifact."""
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_artifact_json(
+        self,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify artifact content is returned as JSON."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = True
+        mock_loader.get_json_artifact.return_value = ["42", "107"]
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/items/artifact",
+            params={"run_id": "r1", "filename": "recs.json"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == ["42", "107"]
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_404_when_artifact_missing(
+        self,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify 404 when the artifact does not exist."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = False
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/items/artifact",
+            params={"run_id": "r1", "filename": "missing.json"},
+        )
+
+        assert response.status_code == 404
+
+    def test_returns_422_without_required_params(
+        self,
+        client: TestClient,
+    ) -> None:
+        """Verify 422 when required query params are missing."""
+        response = client.get("/items/artifact")
+        assert response.status_code == 422

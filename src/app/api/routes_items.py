@@ -1,12 +1,38 @@
-"""API routes for item enrichment."""
+"""API routes for item enrichment and artifact access."""
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from app.core.item_enrichment.item_enrichment import enrich_items
+from app.core.item_enrichment.item_enrichment import enrich_items, load_step_artifact
 
 router = APIRouter()
+
+
+@router.get("/artifact")
+def get_step_artifact(
+    run_id: str = Query(..., description="MLflow run ID of the step"),
+    filename: str = Query(..., description="Artifact filename to download"),
+) -> Any:
+    """Download a JSON artifact from any MLflow run.
+
+    Acts as a proxy so the frontend does not need direct MLflow
+    access.
+
+    Args:
+        run_id: MLflow run ID of the plugin step.
+        filename: Name of the JSON artifact file.
+
+    Returns:
+        Any: Parsed JSON content of the artifact.
+
+    Raises:
+        HTTPException: 404 if the artifact does not exist.
+    """
+    try:
+        return load_step_artifact(run_id, filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/enrich")
