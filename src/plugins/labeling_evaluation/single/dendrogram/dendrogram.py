@@ -7,6 +7,8 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import pdist
 
 from plugins.plugin_interface import (
+    ArtifactDisplaySpec,
+    ArtifactFileSpec,
     ArtifactSpec,
     BasePlugin,
     OutputArtifactSpec,
@@ -38,6 +40,15 @@ class Plugin(BasePlugin):
             OutputParamSpec("linkage_method", "linkage_method_param"),
             OutputParamSpec("num_neurons", "num_neurons"),
         ],
+        display=ArtifactDisplaySpec(
+            files=[
+                ArtifactFileSpec(
+                    "dendrogram.pdf",
+                    "Dendrogram",
+                    "application/pdf",
+                ),
+            ],
+        ),
     )
 
     def load_context(self, context: dict) -> None:

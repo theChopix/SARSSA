@@ -28,13 +28,13 @@ import { Loader2, AlertCircle } from "lucide-react";
 
 import { fetchStepArtifact, fetchEnrichedItems } from "../api/items";
 import { ItemCard } from "./ItemCard";
-import type { DisplaySpec, DisplayRowSpec } from "../types/plugin";
+import type { ItemRowsDisplaySpec, DisplayRowSpec } from "../types/plugin";
 import type { EnrichedItem } from "../types/items";
 
 // ── Props ────────────────────────────────────────────────
 
 interface VisualResultsPanelProps {
-  displaySpec: DisplaySpec;
+  displaySpec: ItemRowsDisplaySpec;
   stepRunId: string;
   datasetRunId: string;
 }

@@ -6,6 +6,7 @@ import pytest
 
 from app.core.item_enrichment.item_enrichment import (
     enrich_items,
+    get_step_artifact_path,
     load_item_metadata,
     load_step_artifact,
 )
@@ -196,3 +197,39 @@ class TestLoadStepArtifact:
 
         with pytest.raises(FileNotFoundError, match="recs.json"):
             load_step_artifact("run_bad", "recs.json")
+
+
+# ── get_step_artifact_path ─────────────────────────────────────────
+
+
+class TestGetStepArtifactPath:
+    """Tests for get_step_artifact_path."""
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_local_path(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify the local filesystem path is returned."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = True
+        mock_loader.download_artifact.return_value = "/tmp/dendrogram.svg"
+        mock_loader_cls.return_value = mock_loader
+
+        result = get_step_artifact_path("run_1", "dendrogram.svg")
+
+        assert result == "/tmp/dendrogram.svg"
+        mock_loader.download_artifact.assert_called_once_with("dendrogram.svg")
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_raises_when_artifact_missing(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify FileNotFoundError when artifact does not exist."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = False
+        mock_loader_cls.return_value = mock_loader
+
+        with pytest.raises(FileNotFoundError, match="dendrogram.svg"):
+            get_step_artifact_path("run_bad", "dendrogram.svg")

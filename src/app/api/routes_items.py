@@ -1,10 +1,16 @@
 """API routes for item enrichment and artifact access."""
 
+import mimetypes
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 
-from app.core.item_enrichment.item_enrichment import enrich_items, load_step_artifact
+from app.core.item_enrichment.item_enrichment import (
+    enrich_items,
+    get_step_artifact_path,
+    load_step_artifact,
+)
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -37,6 +43,43 @@ def get_step_artifact(
     except Exception as exc:
         logger.exception("Unexpected error fetching artifact %s for run %s", filename, run_id)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/artifact-raw")
+def get_raw_artifact(
+    run_id: str = Query(..., description="MLflow run ID of the step"),
+    filename: str = Query(..., description="Artifact filename to download"),
+) -> FileResponse:
+    """Serve a raw artifact file from an MLflow run.
+
+    Returns the file with its original content type (inferred
+    from the filename extension).  Used for non-JSON artifacts
+    such as SVG images or interactive HTML pages.
+
+    Args:
+        run_id: MLflow run ID of the plugin step.
+        filename: Name of the artifact file.
+
+    Returns:
+        FileResponse: Raw file with appropriate Content-Type.
+
+    Raises:
+        HTTPException: 404 if the artifact does not exist.
+    """
+    try:
+        path = get_step_artifact_path(run_id, filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception(
+            "Unexpected error fetching raw artifact %s for run %s",
+            filename,
+            run_id,
+        )
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type)
 
 
 @router.get("/enrich")

@@ -5,6 +5,7 @@ artifact loading is mocked so tests don't require a live MLflow
 server.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -145,4 +146,83 @@ class TestGetStepArtifact:
     ) -> None:
         """Verify 422 when required query params are missing."""
         response = client.get("/items/artifact")
+        assert response.status_code == 422
+
+
+class TestGetRawArtifact:
+    """Tests for GET /items/artifact-raw."""
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_svg_with_correct_content_type(
+        self,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+        tmp_path: Path,
+    ) -> None:
+        """Verify SVG file is served with image/svg+xml content type."""
+        svg_file = tmp_path / "dendrogram.svg"
+        svg_file.write_text("<svg></svg>")
+
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = True
+        mock_loader.download_artifact.return_value = str(svg_file)
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/items/artifact-raw",
+            params={"run_id": "r1", "filename": "dendrogram.svg"},
+        )
+
+        assert response.status_code == 200
+        assert "image/svg+xml" in response.headers["content-type"]
+        assert "<svg></svg>" in response.text
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_html_with_correct_content_type(
+        self,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+        tmp_path: Path,
+    ) -> None:
+        """Verify HTML file is served with text/html content type."""
+        html_file = tmp_path / "embedding_map.html"
+        html_file.write_text("<html><body>map</body></html>")
+
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = True
+        mock_loader.download_artifact.return_value = str(html_file)
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/items/artifact-raw",
+            params={"run_id": "r1", "filename": "embedding_map.html"},
+        )
+
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+
+    @patch("app.core.item_enrichment.item_enrichment.MLflowRunLoader")
+    def test_returns_404_when_artifact_missing(
+        self,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify 404 when the artifact does not exist."""
+        mock_loader = MagicMock()
+        mock_loader.artifact_exists.return_value = False
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/items/artifact-raw",
+            params={"run_id": "r1", "filename": "missing.svg"},
+        )
+
+        assert response.status_code == 404
+
+    def test_returns_422_without_required_params(
+        self,
+        client: TestClient,
+    ) -> None:
+        """Verify 422 when required query params are missing."""
+        response = client.get("/items/artifact-raw")
         assert response.status_code == 422

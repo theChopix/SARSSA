@@ -19,6 +19,7 @@ import { useEffect, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Loader2, AlertCircle } from "lucide-react";
 
+import { ArtifactPanel } from "../components/ArtifactPanel";
 import { VisualResultsPanel } from "../components/VisualResultsPanel";
 import { usePipelineStore } from "../store/pipelineStore";
 import type { DisplaySpec } from "../types/plugin";
@@ -108,11 +109,20 @@ export function ResultsPage() {
         {categoryDisplayName} — Results
       </h2>
 
-      <VisualResultsPanel
-        displaySpec={displaySpec}
-        stepRunId={stepRunId}
-        datasetRunId={datasetRunId}
-      />
+      {displaySpec.type === "item_rows" && (
+        <VisualResultsPanel
+          displaySpec={displaySpec}
+          stepRunId={stepRunId}
+          datasetRunId={datasetRunId}
+        />
+      )}
+
+      {displaySpec.type === "artifact" && (
+        <ArtifactPanel
+          files={displaySpec.files}
+          stepRunId={stepRunId}
+        />
+      )}
     </div>
   );
 }

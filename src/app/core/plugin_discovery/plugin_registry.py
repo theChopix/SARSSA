@@ -12,15 +12,15 @@ from typing import TYPE_CHECKING
 from app.config.config import PLUGIN_CATEGORIES
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.models.plugin import (
+    ArtifactDisplayModel,
+    ArtifactFileModel,
     CategoryRegistryEntry,
     ImplementationInfo,
+    ItemRowsDisplayModel,
     ParameterInfo,
 )
 from app.models.plugin import (
     DisplayRowSpec as DisplayRowModel,
-)
-from app.models.plugin import (
-    DisplaySpec as DisplayModel,
 )
 
 if TYPE_CHECKING:
@@ -122,23 +122,45 @@ def _make_display_name(plugin_module_path: str) -> str:
 
 def _convert_display_spec(
     spec: "DisplaySpec | None",
-) -> DisplayModel | None:
-    """Convert a dataclass DisplaySpec to a Pydantic DisplayModel.
+) -> ItemRowsDisplayModel | ArtifactDisplayModel | None:
+    """Convert a dataclass DisplaySpec to a Pydantic model.
+
+    Handles both ``ItemRowsDisplaySpec`` and
+    ``ArtifactDisplaySpec`` variants.
 
     Args:
         spec: Dataclass display spec from the plugin's
             ``io_spec``, or ``None``.
 
     Returns:
-        DisplayModel | None: Pydantic model for JSON
-            serialisation, or ``None`` if *spec* is ``None``.
+        ItemRowsDisplayModel | ArtifactDisplayModel | None:
+            Pydantic model for JSON serialisation, or ``None``
+            if *spec* is ``None``.
     """
     if spec is None:
         return None
-    return DisplayModel(
-        type=spec.type,
-        rows=[DisplayRowModel(key=row.key, label=row.label) for row in spec.rows],
+
+    from plugins.plugin_interface import (
+        ArtifactDisplaySpec,
+        ItemRowsDisplaySpec,
     )
+
+    if isinstance(spec, ItemRowsDisplaySpec):
+        return ItemRowsDisplayModel(
+            rows=[DisplayRowModel(key=r.key, label=r.label) for r in spec.rows],
+        )
+    if isinstance(spec, ArtifactDisplaySpec):
+        return ArtifactDisplayModel(
+            files=[
+                ArtifactFileModel(
+                    filename=f.filename,
+                    label=f.label,
+                    content_type=f.content_type,
+                )
+                for f in spec.files
+            ],
+        )
+    return None
 
 
 def _discover_implementations(

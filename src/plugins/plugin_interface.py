@@ -114,22 +114,57 @@ class DisplayRowSpec:
 
 
 @dataclass
-class DisplaySpec:
-    """Declarative description of how the frontend should render
-    this plugin's output.
+class ItemRowsDisplaySpec:
+    """Horizontal scrollable rows of enriched item cards.
+
+    Each row corresponds to one output artifact containing a
+    list of item IDs that will be enriched with metadata and
+    rendered as ``ItemCard`` components.
 
     Attributes:
-        type: Display layout type. Currently only ``"item_rows"``
-            (horizontal scrollable rows of item cards). Future
-            types could include ``"metrics_table"``, ``"chart"``,
-            etc.
-        rows: Ordered list of item-row specifications. Each row
-            corresponds to one output artifact containing a list
-            of item IDs.
+        type: Display layout discriminator (always ``"item_rows"``).
+        rows: Ordered list of item-row specifications.
     """
 
     type: str = "item_rows"
     rows: list[DisplayRowSpec] = field(default_factory=list)
+
+
+@dataclass
+class ArtifactFileSpec:
+    """One renderable artifact file produced by a plugin.
+
+    Attributes:
+        filename: Artifact filename (e.g. ``"dendrogram.svg"``).
+        label: Human-readable label for the UI (e.g.
+            ``"Dendrogram"``).
+        content_type: MIME type used for rendering (e.g.
+            ``"image/svg+xml"``, ``"text/html"``).
+    """
+
+    filename: str
+    label: str
+    content_type: str
+
+
+@dataclass
+class ArtifactDisplaySpec:
+    """Standalone visual artifacts rendered inline.
+
+    Each file entry is fetched from the step's MLflow artifacts
+    and rendered according to its ``content_type`` (e.g. an
+    ``<img>`` for SVG, an ``<iframe>`` for HTML).
+
+    Attributes:
+        type: Display layout discriminator (always ``"artifact"``).
+        files: Ordered list of artifact file specifications.
+    """
+
+    type: str = "artifact"
+    files: list[ArtifactFileSpec] = field(default_factory=list)
+
+
+DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec
 
 
 @dataclass

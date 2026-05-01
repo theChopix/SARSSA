@@ -25,6 +25,7 @@ plugin_categories:
     order: 4
     type: "multi_run"
     display_name: "Labeling Evaluation"
+    has_visual_results: true
   inspection:
     order: 5
     type: "multi_run"

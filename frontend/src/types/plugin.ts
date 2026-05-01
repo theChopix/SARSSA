@@ -54,6 +54,10 @@ export interface ParameterInfo {
 }
 
 // ── Display spec (visual output metadata) ───────────────
+//
+// DisplaySpec is a discriminated union on the `type` field.
+// Each variant carries the data needed by a specific frontend
+// rendering strategy.
 
 /**
  * One row of visual items to render in the frontend.
@@ -67,16 +71,47 @@ export interface DisplayRowSpec {
 }
 
 /**
- * Declarative description of how the frontend should render
- * a plugin's output.
+ * Horizontal scrollable rows of enriched item cards.
  *
- * - `type` – Display layout type (currently only "item_rows").
- * - `rows` – Ordered list of item-row specifications.
+ * Each row corresponds to one output artifact containing a
+ * list of item IDs that are enriched with metadata and
+ * rendered as ItemCard components.
  */
-export interface DisplaySpec {
-  type: string;
+export interface ItemRowsDisplaySpec {
+  type: "item_rows";
   rows: DisplayRowSpec[];
 }
+
+/**
+ * One renderable artifact file produced by a plugin.
+ *
+ * - `filename`     – Artifact filename (e.g. "dendrogram.svg").
+ * - `label`        – Human-readable label for the UI.
+ * - `content_type` – MIME type for rendering (e.g. "image/svg+xml", "text/html").
+ */
+export interface ArtifactFileSpec {
+  filename: string;
+  label: string;
+  content_type: string;
+}
+
+/**
+ * Standalone visual artifacts rendered inline.
+ *
+ * Each file entry is fetched from the step's MLflow artifacts
+ * and rendered according to its content_type.
+ */
+export interface ArtifactDisplaySpec {
+  type: "artifact";
+  files: ArtifactFileSpec[];
+}
+
+/**
+ * Discriminated union of all display spec variants.
+ *
+ * Switch on `displaySpec.type` to determine the rendering strategy.
+ */
+export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
 
 // ── Single plugin implementation ────────────────────────
 
