@@ -372,6 +372,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       selectedPlugin: pluginName,
       params: {},
       configOpen: false,
+      status: "idle",
+      stepRunId: null,
     };
     set({ cards });
   },
@@ -381,6 +383,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     cards[category] = {
       ...cards[category],
       params: { ...cards[category].params, [paramName]: value },
+      status: "idle",
+      stepRunId: null,
     };
     set({ cards });
   },
