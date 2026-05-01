@@ -404,7 +404,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       cards[category] = { ...cards[category], mode };
     }
 
-    // When switching to "setup", also reset all following one_time cards.
+    // When switching to "setup", also reset all following one_time cards
+    // and ALL multi_run cards (their baseline config has changed).
     if (mode === "setup" && registry) {
       const sorted = Object.entries(registry)
         .filter(([, e]) => e.category_info.type === "one_time")
@@ -417,6 +418,12 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
           continue;
         }
         if (pastTarget && cards[key]) {
+          cards[key] = { ...defaultCard() };
+        }
+      }
+
+      for (const [key, entry] of Object.entries(registry)) {
+        if (entry.category_info.type === "multi_run" && cards[key]) {
           cards[key] = { ...defaultCard() };
         }
       }
