@@ -213,7 +213,7 @@ class DatasetLoader:
     def get_item_metadata(self) -> dict[str, dict[str, Any]]:
         """Return display-ready metadata for items in the dataset.
 
-        Subclasses that have item metadata (title, year, genres,
+        Subclasses that have item metadata (title, year, categories,
         image_url, etc.) should override this method and return a
         dict keyed by item ID.  The default implementation returns
         an empty dict, meaning no visual metadata is available.

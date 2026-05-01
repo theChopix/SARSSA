@@ -3,7 +3,7 @@
  *
  * These mirror the response shape of `GET /items/enrich` on the backend.
  * The backend joins raw item IDs with dataset-specific metadata
- * (title, year, genres, image_url, etc.) and returns enriched records.
+ * (title, year, categories, image_url, etc.) and returns enriched records.
  *
  * ┌─────────────────────────────────────────────────────────┐
  * │  Backend (Python)            →   Frontend (TypeScript)  │
@@ -21,8 +21,8 @@
  * - `title`     – Human-readable name (always present; falls back to id).
  * - `year`      – Release year (dataset-specific, optional).
  * - `image_url` – Poster / cover image URL (optional).
- * - `genres`    – Genre tags (optional).
- * - `artist`    – Artist name for music datasets (optional).
+ * - `categories` – Category / genre tags (optional).
+ * - `author`     – Author or artist name (optional).
  *
  * Additional dataset-specific fields may appear via the index signature.
  */
@@ -31,8 +31,8 @@ export interface EnrichedItem {
   title: string;
   year?: number;
   image_url?: string;
-  genres?: string[];
-  artist?: string;
+  categories?: string[];
+  author?: string;
   [key: string]: unknown;
 }
 

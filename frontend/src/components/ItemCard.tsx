@@ -13,8 +13,8 @@
  * │  │                    │  │
  * │  └────────────────────┘  │
  * │  Title (Year)            │
- * │  Artist                  │
- * │  [Genre] [Genre]         │
+ * │  Author                  │
+ * │  [Category] [Category]   │
  * └──────────────────────────┘
  */
 
@@ -47,7 +47,7 @@ function LetterPlaceholder({ title }: { title: string }) {
 // ── Component ────────────────────────────────────────────
 
 export function ItemCard({ item }: ItemCardProps) {
-  const { title, year, image_url, genres, artist } = item;
+  const { title, year, image_url, categories, author } = item;
 
   return (
     <div
@@ -76,23 +76,23 @@ export function ItemCard({ item }: ItemCardProps) {
           )}
         </p>
 
-        {/* Artist (music datasets) */}
-        {artist && (
+        {/* Author / artist */}
+        {author && (
           <p className="text-[11px] text-gray-500 leading-tight truncate">
-            {artist}
+            {author}
           </p>
         )}
 
-        {/* Genre tags */}
-        {genres && genres.length > 0 && (
+        {/* Category tags */}
+        {categories && categories.length > 0 && (
           <div className="flex flex-wrap gap-0.5 pt-0.5">
-            {genres.slice(0, 3).map((genre) => (
+            {categories.slice(0, 3).map((category) => (
               <span
-                key={genre}
+                key={category}
                 className="px-1.5 py-0.5 text-[10px] rounded-full
                            bg-blue-50 text-blue-600"
               >
-                {genre}
+                {category}
               </span>
             ))}
           </div>
