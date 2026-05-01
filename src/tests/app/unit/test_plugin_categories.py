@@ -44,10 +44,15 @@ class TestHasVisualResults:
         """Verify inspection category has visual results enabled."""
         assert PLUGIN_CATEGORIES["inspection"].has_visual_results is True
 
+    def test_labeling_evaluation_has_visual_results(self) -> None:
+        """Verify labeling_evaluation category has visual results enabled."""
+        assert PLUGIN_CATEGORIES["labeling_evaluation"].has_visual_results is True
+
     def test_other_categories_default_to_false(self) -> None:
         """Verify categories without explicit flag default to False."""
+        visual_categories = {"steering", "inspection", "labeling_evaluation"}
         for name, info in PLUGIN_CATEGORIES.items():
-            if name not in ("steering", "inspection"):
+            if name not in visual_categories:
                 assert info.has_visual_results is False, (
                     f"Category '{name}' should not have visual results"
                 )

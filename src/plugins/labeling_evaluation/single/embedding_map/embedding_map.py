@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 import umap
 
 from plugins.plugin_interface import (
+    ArtifactDisplaySpec,
+    ArtifactFileSpec,
     ArtifactSpec,
     BasePlugin,
     OutputArtifactSpec,
@@ -40,6 +42,15 @@ class Plugin(BasePlugin):
             OutputParamSpec("umap_random_state", "umap_random_state_param"),
             OutputParamSpec("num_neurons", "num_neurons"),
         ],
+        display=ArtifactDisplaySpec(
+            files=[
+                ArtifactFileSpec(
+                    "embedding_map.html",
+                    "Embedding Map",
+                    "text/html",
+                ),
+            ],
+        ),
     )
 
     def load_context(self, context: dict) -> None:
