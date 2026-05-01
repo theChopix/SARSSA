@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.core.item_enrichment.item_enrichment import enrich_items, load_step_artifact
+from app.utils.logger import logger
 
 router = APIRouter()
 
@@ -33,6 +34,9 @@ def get_step_artifact(
         return load_step_artifact(run_id, filename)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error fetching artifact %s for run %s", filename, run_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/enrich")
@@ -50,5 +54,9 @@ def get_enriched_items(
         dict[str, Any]: ``{"items": [...], "metadata_available": bool}``.
     """
     item_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
-    items, metadata_available = enrich_items(run_id, item_ids)
+    try:
+        items, metadata_available = enrich_items(run_id, item_ids)
+    except Exception as exc:
+        logger.exception("Unexpected error enriching items for run %s", run_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"items": items, "metadata_available": metadata_available}

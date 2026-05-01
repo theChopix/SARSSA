@@ -1,24 +1,13 @@
 /**
  * Root application component.
  *
- * This is the top-level React component rendered by `main.tsx`.
- * It orchestrates the full page layout matching the UI mockup:
+ * Sets up client-side routing via React Router.
+ * All pages share a common layout (header + toaster + modal)
+ * provided by the `Layout` component.
  *
- *   ┌──────────────────────────────────────────────────┐
- *   │  SARSSAe               mlflow … Results (link)   │  ← header
- *   ├──────────────────────────────────────────────────┤
- *   │  "Run new pipeline experiment"                   │  ← title
- *   │                                                  │
- *   │  ┌────┐ ┌────┐ ┌────┐ ┌────┐                    │  ← row 1
- *   │  │Card│ │Card│ │Card│ │Card│   (one_time)        │    (4 cols)
- *   │  └────┘ └────┘ └────┘ └────┘                    │
- *   │                                                  │
- *   │  ┌────┐ ┌────┐ ┌────┐                            │  ← row 2
- *   │  │Card│ │Card│ │Card│          (multi_run)       │    (3 cols)
- *   │  └────┘ └────┘ └────┘                            │
- *   │                                                  │
- *   │  [ Run full pipeline ]                           │  ← bottom bar
- *   └──────────────────────────────────────────────────┘
+ * Routes:
+ *   `/`                        → HomePage (pipeline cards)
+ *   `/results/:categoryKey`    → ResultsPage (visual enrichment)
  *
  * ┌──────────────────────────────────────────────────────┐
  * │  React hooks refresher                                │
@@ -35,12 +24,13 @@
  */
 
 import { useEffect, useMemo } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Loader2, X, Ban } from "lucide-react";
-import { Toaster } from "sonner";
 
 import PipelineCard from "./components/PipelineCard";
-import LaunchModal from "./components/LaunchModal";
-import { usePipelineStore, mlflowExperimentUrl } from "./store/pipelineStore";
+import { Layout } from "./components/Layout";
+import { ResultsPage } from "./pages/ResultsPage";
+import { usePipelineStore } from "./store/pipelineStore";
 import type { StepDefinition } from "./types/pipeline";
 
 /**
@@ -64,13 +54,12 @@ function coerceParamValue(value: string, pythonType: string): unknown {
 }
 
 /**
- * App — the top-level React component.
+ * HomePage — the main pipeline configuration page.
  *
- * On mount, it fetches the plugin registry from the backend.
- * Then it splits categories into two rows (one_time vs multi_run)
- * and renders a grid of PipelineCard components.
+ * Displays two rows of PipelineCards (one_time + multi_run)
+ * and the bottom action bar.
  */
-function App() {
+function HomePage() {
   // ── Read state from store ───────────────────────────
   const registry = usePipelineStore((s) => s.registry);
   const cards = usePipelineStore((s) => s.cards);
@@ -84,7 +73,6 @@ function App() {
   const clearError = usePipelineStore((s) => s.clearError);
   const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
   const totalSteps = usePipelineStore((s) => s.totalSteps);
-  const mlflowInfo = usePipelineStore((s) => s.mlflowInfo);
   const loadMlflowInfo = usePipelineStore((s) => s.loadMlflowInfo);
   const cancellationPending = usePipelineStore((s) => s.cancellationPending);
   const cancelPipeline = usePipelineStore((s) => s.cancelPipeline);
@@ -193,7 +181,7 @@ function App() {
   // ── Loading state ───────────────────────────────────
   if (!registry) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
       </div>
     );
@@ -201,29 +189,7 @@ function App() {
 
   // ── Render ──────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* ── Toast notifications ──────────────── */}
-      <Toaster richColors position="top-center" duration={6000} />
-      {/* ── Launch confirmation modal ────────── */}
-      <LaunchModal />
-      {/* ── Header ─────────────────────────────────── */}
-      <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">SARSSAe</h1>
-        <a
-          href={mlflowInfo ? mlflowExperimentUrl(mlflowInfo) : "#"}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-700"
-        >
-          <img
-            src="/mlflow-logo.png"
-            alt="mlflow"
-            className="h-5"
-          />
-          Pipeline Experiments Results
-        </a>
-      </header>
-
+    <>
       {/* ── Error / cancellation banner ───────────────── */}
       {errorMessage && (
         <div
@@ -330,7 +296,27 @@ function App() {
           </button>
         )}
       </div>
-    </div>
+    </>
+  );
+}
+
+// ── Root component with routing ──────────────────────
+
+/**
+ * App — sets up BrowserRouter and routes.
+ *
+ * All pages share the `Layout` shell (header + toaster + modal).
+ */
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<HomePage />} />
+          <Route path="results/:categoryKey" element={<ResultsPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
 
