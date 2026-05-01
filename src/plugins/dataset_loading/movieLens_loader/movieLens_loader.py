@@ -81,17 +81,38 @@ class MovieLensLoader(DatasetLoader):
 
         Uses the ``metadata.json`` loaded in :meth:`load_optional_data`.
         Only items present in ``self.items`` (the filtered item set)
-        are included.
+        are included.  The ``genres`` key from the raw metadata is
+        renamed to ``categories`` to match the canonical frontend
+        schema.
 
         Returns:
             dict[str, dict]: Mapping of item ID to metadata fields
-                (``title``, ``year``, ``genres``, ``image_url``).
+                (``title``, ``year``, ``categories``, ``image_url``).
                 Empty dict if no metadata was loaded.
         """
         if self.metadata is None or self.items is None:
             return {}
         item_set = set(self.items)
-        return {item_id: meta for item_id, meta in self.metadata.items() if item_id in item_set}
+        return {
+            item_id: self._normalise_meta(meta)
+            for item_id, meta in self.metadata.items()
+            if item_id in item_set
+        }
+
+    @staticmethod
+    def _normalise_meta(meta: dict) -> dict:
+        """Rename dataset-specific keys to canonical frontend names.
+
+        Args:
+            meta: Raw metadata dict for a single item.
+
+        Returns:
+            dict: Metadata with ``genres`` renamed to ``categories``.
+        """
+        out = {k: v for k, v in meta.items() if k != "genres"}
+        if "genres" in meta:
+            out["categories"] = meta["genres"]
+        return out
 
     def tag_ids(self):
         return self.df_tags["tag"].unique().sort().to_list()
