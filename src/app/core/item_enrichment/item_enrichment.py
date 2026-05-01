@@ -23,16 +23,23 @@ def load_item_metadata(run_id: str) -> dict[str, dict[str, Any]]:
     Returns:
         dict[str, dict[str, Any]]: Mapping of item ID to
             metadata fields.  Empty dict if the artifact does
-            not exist.
+            not exist or cannot be loaded.
     """
-    loader = MLflowRunLoader(run_id)
-    if not loader.artifact_exists("item_metadata.json"):
-        logger.warning(
-            "item_metadata.json not found for run %s",
+    try:
+        loader = MLflowRunLoader(run_id)
+        if not loader.artifact_exists("item_metadata.json"):
+            logger.warning(
+                "item_metadata.json not found for run %s",
+                run_id,
+            )
+            return {}
+        return loader.get_json_artifact("item_metadata.json")
+    except Exception:
+        logger.exception(
+            "Failed to load item_metadata.json for run %s",
             run_id,
         )
         return {}
-    return loader.get_json_artifact("item_metadata.json")
 
 
 def load_step_artifact(

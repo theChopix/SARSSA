@@ -42,7 +42,7 @@
  */
 
 import { useEffect } from "react";
-import { Settings, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
@@ -285,6 +285,7 @@ export default function PipelineCard({
   const loadFromPreviousRun = usePipelineStore((s) => s.loadFromPreviousRun);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
   const mlflowInfo = usePipelineStore((s) => s.mlflowInfo);
+  const context = usePipelineStore((s) => s.context);
   const allOneTimeDone = usePipelineStore((s) => {
     if (!s.registry) return false;
     return Object.entries(s.registry)
@@ -466,6 +467,32 @@ export default function PipelineCard({
           ))}
         </div>
       )}
+
+      {/* ── View Results button (multi_run + done + has_visual_results) ── */}
+      {isMultiRun &&
+        card.status === "done" &&
+        category_info.has_visual_results &&
+        selectedImpl?.display != null &&
+        card.stepRunId != null &&
+        card.selectedPlugin != null &&
+        context?.dataset_loading?.run_id != null && (
+          <a
+            href={`/results/${categoryKey}?${new URLSearchParams({
+              stepRunId: card.stepRunId,
+              datasetRunId: context.dataset_loading.run_id,
+              pluginName: card.selectedPlugin,
+            })}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-2
+                       rounded-md text-sm font-medium text-white
+                       bg-green-500 hover:bg-green-600
+                       transition-colors cursor-pointer"
+          >
+            <Eye className="h-4 w-4" />
+            View Results
+          </a>
+        )}
 
       {/* ── Action button ────────────────────────────── */}
       <div className="mt-auto pt-2">
