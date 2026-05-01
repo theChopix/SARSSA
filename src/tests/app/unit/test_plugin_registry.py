@@ -18,15 +18,20 @@ from app.core.plugin_discovery.plugin_registry import (
     get_plugin_registry,
 )
 from app.models.plugin import (
+    ArtifactDisplayModel,
     CategoryInfo,
     CategoryRegistryEntry,
     CategoryType,
+    ItemRowsDisplayModel,
     ParameterInfo,
 )
-from app.models.plugin import (
-    DisplaySpec as DisplayModel,
+from plugins.plugin_interface import (
+    ArtifactDisplaySpec,
+    ArtifactFileSpec,
+    DisplayRowSpec,
+    ItemRowsDisplaySpec,
+    PluginIOSpec,
 )
-from plugins.plugin_interface import DisplayRowSpec, DisplaySpec, PluginIOSpec
 
 # ── Helpers for building mock plugin directory trees ──────────────
 
@@ -81,7 +86,7 @@ def _build_nested_category(
 def _make_mock_plugin(
     params: dict[str, tuple[type, Any]],
     plugin_name: str | None = None,
-    display: DisplaySpec | None = None,
+    display: ItemRowsDisplaySpec | ArtifactDisplaySpec | None = None,
 ) -> MagicMock:
     """Create a mock plugin whose run() has the given signature params.
 
@@ -90,7 +95,7 @@ def _make_mock_plugin(
             Use ``inspect.Parameter.empty`` for required params.
         plugin_name: Optional custom display name for the plugin.
             Mirrors ``BasePlugin.name``.
-        display: Optional DisplaySpec to attach to
+        display: Optional display spec to attach to
             ``io_spec.display``.
 
     Returns:
@@ -323,17 +328,16 @@ class TestConvertDisplaySpec:
         """Verify None input produces None output."""
         assert _convert_display_spec(None) is None
 
-    def test_converts_display_spec(self) -> None:
-        """Verify dataclass DisplaySpec is converted to Pydantic model."""
-        spec = DisplaySpec(
-            type="item_rows",
+    def test_converts_item_rows_display_spec(self) -> None:
+        """Verify ItemRowsDisplaySpec is converted to Pydantic model."""
+        spec = ItemRowsDisplaySpec(
             rows=[
                 DisplayRowSpec("top_k", "Top Items"),
                 DisplayRowSpec("recs", "Recommendations"),
             ],
         )
         result = _convert_display_spec(spec)
-        assert isinstance(result, DisplayModel)
+        assert isinstance(result, ItemRowsDisplayModel)
         assert result.type == "item_rows"
         assert len(result.rows) == 2
         assert result.rows[0].key == "top_k"
@@ -341,11 +345,27 @@ class TestConvertDisplaySpec:
         assert result.rows[1].key == "recs"
 
     def test_converts_empty_rows(self) -> None:
-        """Verify DisplaySpec with no rows converts correctly."""
-        spec = DisplaySpec(type="item_rows", rows=[])
+        """Verify ItemRowsDisplaySpec with no rows converts correctly."""
+        spec = ItemRowsDisplaySpec(rows=[])
         result = _convert_display_spec(spec)
         assert result is not None
+        assert isinstance(result, ItemRowsDisplayModel)
         assert result.rows == []
+
+    def test_converts_artifact_display_spec(self) -> None:
+        """Verify ArtifactDisplaySpec is converted to Pydantic model."""
+        spec = ArtifactDisplaySpec(
+            files=[
+                ArtifactFileSpec("map.html", "Map", "text/html"),
+            ],
+        )
+        result = _convert_display_spec(spec)
+        assert isinstance(result, ArtifactDisplayModel)
+        assert result.type == "artifact"
+        assert len(result.files) == 1
+        assert result.files[0].filename == "map.html"
+        assert result.files[0].label == "Map"
+        assert result.files[0].content_type == "text/html"
 
 
 class TestDiscoverImplementationsDisplay:
@@ -363,8 +383,7 @@ class TestDiscoverImplementationsDisplay:
             _discover_implementations,
         )
 
-        display = DisplaySpec(
-            type="item_rows",
+        display = ItemRowsDisplaySpec(
             rows=[DisplayRowSpec("items", "Items")],
         )
         mock_find.return_value = ["cat.my_impl.my_impl"]
@@ -375,6 +394,7 @@ class TestDiscoverImplementationsDisplay:
 
         impls = _discover_implementations("cat")
         assert impls[0].display is not None
+        assert isinstance(impls[0].display, ItemRowsDisplayModel)
         assert impls[0].display.type == "item_rows"
         assert len(impls[0].display.rows) == 1
         assert impls[0].display.rows[0].key == "items"
@@ -386,7 +406,7 @@ class TestDiscoverImplementationsDisplay:
         mock_pm: MagicMock,
         mock_find: MagicMock,
     ) -> None:
-        """Verify display is None when plugin has no DisplaySpec."""
+        """Verify display is None when plugin has no display spec."""
         from app.core.plugin_discovery.plugin_registry import (
             _discover_implementations,
         )

@@ -11,7 +11,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     DisplayRowSpec,
-    DisplaySpec,
+    ItemRowsDisplaySpec,
     OutputArtifactSpec,
     OutputParamSpec,
     PluginIOSpec,
@@ -61,7 +61,7 @@ class Plugin(BasePlugin):
             OutputParamSpec("neuron_id", "neuron_id"),
             OutputParamSpec("k", "k_param"),
         ],
-        display=DisplaySpec(
+        display=ItemRowsDisplaySpec(
             type="item_rows",
             rows=[
                 DisplayRowSpec(

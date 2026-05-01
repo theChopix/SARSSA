@@ -108,11 +108,19 @@ export function ResultsPage() {
         {categoryDisplayName} — Results
       </h2>
 
-      <VisualResultsPanel
-        displaySpec={displaySpec}
-        stepRunId={stepRunId}
-        datasetRunId={datasetRunId}
-      />
+      {displaySpec.type === "item_rows" && (
+        <VisualResultsPanel
+          displaySpec={displaySpec}
+          stepRunId={stepRunId}
+          datasetRunId={datasetRunId}
+        />
+      )}
+
+      {displaySpec.type === "artifact" && (
+        <p className="mt-4 text-sm text-gray-500">
+          Artifact rendering will be implemented in a following subtask.
+        </p>
+      )}
     </div>
   );
 }

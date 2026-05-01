@@ -1,9 +1,9 @@
 """Pydantic models for plugin-related data."""
 
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Discriminator, Tag
 
 
 class CategoryType(StrEnum):
@@ -59,17 +59,49 @@ class DisplayRowSpec(BaseModel):
     label: str
 
 
-class DisplaySpec(BaseModel):
-    """Declarative description of how the frontend should render
-    this plugin's output.
+class ItemRowsDisplayModel(BaseModel):
+    """Horizontal scrollable rows of enriched item cards.
 
     Attributes:
-        type: Display layout type (e.g. ``"item_rows"``).
+        type: Display layout discriminator (always ``"item_rows"``).
         rows: Ordered list of item-row specifications.
     """
 
-    type: str = "item_rows"
+    type: Literal["item_rows"] = "item_rows"
     rows: list[DisplayRowSpec] = []
+
+
+class ArtifactFileModel(BaseModel):
+    """One renderable artifact file produced by a plugin.
+
+    Attributes:
+        filename: Artifact filename (e.g. ``"dendrogram.svg"``).
+        label: Human-readable label for the UI.
+        content_type: MIME type for rendering.
+    """
+
+    filename: str
+    label: str
+    content_type: str
+
+
+class ArtifactDisplayModel(BaseModel):
+    """Standalone visual artifacts rendered inline.
+
+    Attributes:
+        type: Display layout discriminator (always ``"artifact"``).
+        files: Ordered list of artifact file specifications.
+    """
+
+    type: Literal["artifact"] = "artifact"
+    files: list[ArtifactFileModel] = []
+
+
+DisplaySpec = Annotated[
+    Annotated[ItemRowsDisplayModel, Tag("item_rows")]
+    | Annotated[ArtifactDisplayModel, Tag("artifact")],
+    Discriminator("type"),
+]
 
 
 class ImplementationInfo(BaseModel):
@@ -87,7 +119,7 @@ class ImplementationInfo(BaseModel):
     plugin_name: str
     display_name: str
     params: list[ParameterInfo]
-    display: DisplaySpec | None = None
+    display: ItemRowsDisplayModel | ArtifactDisplayModel | None = None
 
 
 class CategoryRegistryEntry(BaseModel):

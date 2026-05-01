@@ -3,9 +3,11 @@
 import pytest
 
 from plugins.plugin_interface import (
+    ArtifactDisplaySpec,
+    ArtifactFileSpec,
     ArtifactSpec,
     DisplayRowSpec,
-    DisplaySpec,
+    ItemRowsDisplaySpec,
     MissingContextError,
     OutputArtifactSpec,
     OutputParamSpec,
@@ -146,15 +148,15 @@ class TestDisplayRowSpec:
         assert row.label == "Interaction History"
 
 
-# ── DisplaySpec ─────────────────────────────────────────────────────
+# ── ItemRowsDisplaySpec ──────────────────────────────────────────────
 
 
-class TestDisplaySpec:
-    """Tests for the DisplaySpec dataclass."""
+class TestItemRowsDisplaySpec:
+    """Tests for the ItemRowsDisplaySpec dataclass."""
 
     def test_defaults(self) -> None:
         """Verify type defaults to 'item_rows' and rows to empty list."""
-        spec = DisplaySpec()
+        spec = ItemRowsDisplaySpec()
         assert spec.type == "item_rows"
         assert spec.rows == []
 
@@ -164,7 +166,7 @@ class TestDisplaySpec:
             DisplayRowSpec("interacted_items", "Interaction History"),
             DisplayRowSpec("original_recommendations", "Original Recommendations"),
         ]
-        spec = DisplaySpec(type="item_rows", rows=rows)
+        spec = ItemRowsDisplaySpec(type="item_rows", rows=rows)
         assert spec.type == "item_rows"
         assert len(spec.rows) == 2
         assert spec.rows[0].key == "interacted_items"
@@ -172,10 +174,42 @@ class TestDisplaySpec:
 
     def test_default_rows_not_shared(self) -> None:
         """Verify each instance gets its own default rows list."""
-        spec_a = DisplaySpec()
-        spec_b = DisplaySpec()
+        spec_a = ItemRowsDisplaySpec()
+        spec_b = ItemRowsDisplaySpec()
         spec_a.rows.append(DisplayRowSpec("k", "L"))
         assert spec_b.rows == []
+
+
+# ── ArtifactDisplaySpec ──────────────────────────────────────────────
+
+
+class TestArtifactDisplaySpec:
+    """Tests for the ArtifactDisplaySpec dataclass."""
+
+    def test_defaults(self) -> None:
+        """Verify type defaults to 'artifact' and files to empty list."""
+        spec = ArtifactDisplaySpec()
+        assert spec.type == "artifact"
+        assert spec.files == []
+
+    def test_construction_with_files(self) -> None:
+        """Verify construction with explicit files."""
+        files = [
+            ArtifactFileSpec("dendrogram.svg", "Dendrogram", "image/svg+xml"),
+        ]
+        spec = ArtifactDisplaySpec(files=files)
+        assert spec.type == "artifact"
+        assert len(spec.files) == 1
+        assert spec.files[0].filename == "dendrogram.svg"
+        assert spec.files[0].label == "Dendrogram"
+        assert spec.files[0].content_type == "image/svg+xml"
+
+    def test_default_files_not_shared(self) -> None:
+        """Verify each instance gets its own default files list."""
+        spec_a = ArtifactDisplaySpec()
+        spec_b = ArtifactDisplaySpec()
+        spec_a.files.append(ArtifactFileSpec("f.svg", "F", "image/svg+xml"))
+        assert spec_b.files == []
 
 
 # ── PluginIOSpec ─────────────────────────────────────────────────────
@@ -238,10 +272,9 @@ class TestPluginIOSpec:
         assert len(spec.required_steps) == 3
         assert "training_cfm" in spec.required_steps
 
-    def test_construction_with_display(self) -> None:
-        """Verify PluginIOSpec stores a DisplaySpec."""
-        display = DisplaySpec(
-            type="item_rows",
+    def test_construction_with_item_rows_display(self) -> None:
+        """Verify PluginIOSpec stores an ItemRowsDisplaySpec."""
+        display = ItemRowsDisplaySpec(
             rows=[
                 DisplayRowSpec("top_k_item_ids", "Top Items"),
             ],
@@ -251,3 +284,16 @@ class TestPluginIOSpec:
         assert spec.display.type == "item_rows"
         assert len(spec.display.rows) == 1
         assert spec.display.rows[0].key == "top_k_item_ids"
+
+    def test_construction_with_artifact_display(self) -> None:
+        """Verify PluginIOSpec stores an ArtifactDisplaySpec."""
+        display = ArtifactDisplaySpec(
+            files=[
+                ArtifactFileSpec("map.html", "Map", "text/html"),
+            ],
+        )
+        spec = PluginIOSpec(display=display)
+        assert spec.display is not None
+        assert spec.display.type == "artifact"
+        assert len(spec.display.files) == 1
+        assert spec.display.files[0].filename == "map.html"
