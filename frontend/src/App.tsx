@@ -76,6 +76,9 @@ function HomePage() {
   const loadMlflowInfo = usePipelineStore((s) => s.loadMlflowInfo);
   const cancellationPending = usePipelineStore((s) => s.cancellationPending);
   const cancelPipeline = usePipelineStore((s) => s.cancelPipeline);
+  const anyStepRunning = usePipelineStore((s) =>
+    Object.values(s.cards).some((c) => c.status === "running")
+  );
 
   // ── Load registry on mount ──────────────────────────
   // This runs ONCE when the page loads. It calls the backend
@@ -284,6 +287,14 @@ function HomePage() {
               <Ban className="h-4 w-4" />
               {cancellationPending ? "Cancelling..." : "Cancel"}
             </button>
+          </div>
+        ) : anyStepRunning ? (
+          <div className="w-full py-3 rounded-lg text-white font-medium text-sm
+                          bg-blue-500 opacity-70 text-center">
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Executing step...
+            </span>
           </div>
         ) : (
           <button

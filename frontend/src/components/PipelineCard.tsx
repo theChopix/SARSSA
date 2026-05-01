@@ -292,6 +292,11 @@ export default function PipelineCard({
       .filter(([, e]) => e.category_info.type === "one_time")
       .every(([key]) => s.cards[key]?.status === "done");
   });
+  const anyStepRunning = usePipelineStore((s) =>
+    Object.values(s.cards).some((c) => c.status === "running")
+  );
+
+  const busy = pipelineRunning || anyStepRunning;
 
   // Guard: if registry hasn't loaded yet, render nothing.
   if (!entry || !card) return null;
@@ -336,7 +341,7 @@ export default function PipelineCard({
         <div className="flex rounded-md overflow-hidden border border-gray-300">
           <button
             onClick={() => setCardMode(categoryKey, "setup")}
-            disabled={pipelineRunning}
+            disabled={busy}
             className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer
                         disabled:cursor-not-allowed ${
               cardMode === "setup"
@@ -348,7 +353,7 @@ export default function PipelineCard({
           </button>
           <button
             onClick={() => setCardMode(categoryKey, "load")}
-            disabled={pipelineRunning}
+            disabled={busy}
             className={`flex-1 py-1.5 text-xs font-medium transition-colors cursor-pointer
                         disabled:cursor-not-allowed border-l border-gray-300 ${
               cardMode === "load"
@@ -376,7 +381,7 @@ export default function PipelineCard({
           />
           <button
             onClick={() => setCardMode(categoryKey, "setup")}
-            disabled={pipelineRunning}
+            disabled={busy}
             className="w-full py-2 rounded-md text-sm font-medium
                        border border-gray-300 text-gray-700
                        hover:bg-gray-50 disabled:opacity-50
@@ -408,7 +413,7 @@ export default function PipelineCard({
       {/* ── "Load from previous run" dropdown ──────────── */}
       {!isMultiRun && cardMode === "load" && card.status !== "done" && (
         <select
-          disabled={pipelineRunning}
+          disabled={busy}
           onChange={(e) => {
             const runId = e.target.value;
             if (runId) {
@@ -444,7 +449,7 @@ export default function PipelineCard({
                 }
                 toggleConfig(categoryKey);
               }}
-              disabled={pipelineRunning}
+              disabled={busy}
             />
           ))}
         </div>
@@ -506,7 +511,7 @@ export default function PipelineCard({
       <div className="mt-auto pt-2">
         {isMultiRun ? (
           <button
-            disabled={!card.selectedPlugin || card.status === "running" || !allOneTimeDone}
+            disabled={!card.selectedPlugin || busy || !allOneTimeDone}
             onClick={() => onExecuteStep?.(categoryKey)}
             className="w-full py-2 rounded-md text-sm font-medium text-white
                        bg-blue-500 hover:bg-blue-600 disabled:opacity-50
@@ -525,7 +530,7 @@ export default function PipelineCard({
           </button>
         ) : (cardMode === "setup" && card.status !== "done") ? (
           <button
-            disabled={pipelineRunning}
+            disabled={busy}
             onClick={() => onRunUpTo?.(categoryKey)}
             className="w-full py-2 rounded-md text-sm font-medium
                        border border-gray-300 text-gray-700
