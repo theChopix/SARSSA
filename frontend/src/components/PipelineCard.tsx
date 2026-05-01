@@ -481,6 +481,14 @@ export default function PipelineCard({
               stepRunId: card.stepRunId,
               datasetRunId: context.dataset_loading.run_id,
               pluginName: card.selectedPlugin,
+              params: JSON.stringify(
+                Object.fromEntries(
+                  (selectedImpl?.params ?? []).map((p) => [
+                    p.name,
+                    card.params[p.name] ?? (p.default != null ? String(p.default) : ""),
+                  ])
+                )
+              ),
             })}`}
             target="_blank"
             rel="noopener noreferrer"

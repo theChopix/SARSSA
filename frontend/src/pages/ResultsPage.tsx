@@ -33,6 +33,17 @@ export function ResultsPage() {
   const datasetRunId = searchParams.get("datasetRunId");
   const pluginName = searchParams.get("pluginName");
 
+  // ── Plugin input params (serialised by PipelineCard) ───
+  const pluginParams: Record<string, string> | null = useMemo(() => {
+    const raw = searchParams.get("params");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as Record<string, string>;
+    } catch {
+      return null;
+    }
+  }, [searchParams]);
+
   // ── Load registry (new tab = empty store) ───────────────
   const registry = usePipelineStore((s) => s.registry);
   const loadRegistry = usePipelineStore((s) => s.loadRegistry);
@@ -108,6 +119,21 @@ export function ResultsPage() {
       <h2 className="text-xl font-bold text-gray-900">
         {categoryDisplayName} — Results
       </h2>
+
+      {pluginParams && Object.keys(pluginParams).length > 0 && (
+        <p className="mt-1 text-sm text-gray-500 font-mono">
+          [{" "}
+          {Object.entries(pluginParams).map(([key, value], idx, arr) => (
+            <span key={key}>
+              <span className="font-semibold text-gray-600">{key}</span>
+              {": "}
+              <span>{value}</span>
+              {idx < arr.length - 1 && ",  "}
+            </span>
+          ))}
+          {" ]"}
+        </p>
+      )}
 
       {displaySpec.type === "item_rows" && (
         <VisualResultsPanel
