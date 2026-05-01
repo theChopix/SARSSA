@@ -42,6 +42,7 @@ dist/
 # Data & Experiment Tracking
 # =========================
 data/
+docs/
 mlruns/
 mlartifacts/
 wandb/
