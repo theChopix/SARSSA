@@ -68,6 +68,32 @@ def load_step_artifact(
     return loader.get_json_artifact(filename)
 
 
+def get_step_artifact_path(
+    run_id: str,
+    filename: str,
+) -> str:
+    """Download an artifact and return its local filesystem path.
+
+    Unlike :func:`load_step_artifact` which parses JSON, this
+    returns the raw path so the caller can serve the file with
+    its original content type (e.g. SVG, HTML).
+
+    Args:
+        run_id: MLflow run ID of the step.
+        filename: Artifact filename (e.g. ``"dendrogram.svg"``).
+
+    Returns:
+        str: Local filesystem path to the downloaded artifact.
+
+    Raises:
+        FileNotFoundError: If the artifact does not exist.
+    """
+    loader = MLflowRunLoader(run_id)
+    if not loader.artifact_exists(filename):
+        raise FileNotFoundError(f"Artifact '{filename}' not found for run {run_id}")
+    return loader.download_artifact(filename)
+
+
 def enrich_items(
     run_id: str,
     item_ids: list[str],
