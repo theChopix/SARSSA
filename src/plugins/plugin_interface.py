@@ -99,6 +99,40 @@ class OutputParamSpec:
 
 
 @dataclass
+class DisplayRowSpec:
+    """One row of visual items to render in the frontend.
+
+    Attributes:
+        key: Key in the plugin's output artifacts (e.g.
+            ``"interacted_items"``).
+        label: Human-readable row label for the UI (e.g.
+            ``"Interaction History"``).
+    """
+
+    key: str
+    label: str
+
+
+@dataclass
+class DisplaySpec:
+    """Declarative description of how the frontend should render
+    this plugin's output.
+
+    Attributes:
+        type: Display layout type. Currently only ``"item_rows"``
+            (horizontal scrollable rows of item cards). Future
+            types could include ``"metrics_table"``, ``"chart"``,
+            etc.
+        rows: Ordered list of item-row specifications. Each row
+            corresponds to one output artifact containing a list
+            of item IDs.
+    """
+
+    type: str = "item_rows"
+    rows: list[DisplayRowSpec] = field(default_factory=list)
+
+
+@dataclass
 class PluginIOSpec:
     """Full I/O contract for a plugin.
 
@@ -109,6 +143,10 @@ class PluginIOSpec:
         input_params: Parameters to read from upstream steps.
         output_artifacts: Artifacts this plugin produces.
         output_params: Parameters this plugin logs.
+        display: Optional declarative display specification
+            describing how the frontend should render this
+            plugin's output.  ``None`` means no visual rendering
+            (the default for most plugins).
     """
 
     required_steps: list[str] = field(default_factory=list)
@@ -122,6 +160,7 @@ class PluginIOSpec:
     output_params: list[OutputParamSpec] = field(
         default_factory=list,
     )
+    display: DisplaySpec | None = None
 
 
 class BasePlugin(ABC):

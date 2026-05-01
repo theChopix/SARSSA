@@ -345,6 +345,63 @@ class TestLoadOptionalData:
         assert loader.metadata is None
 
 
+# ── get_item_metadata ──────────────────────────────────────────────
+
+
+class TestGetItemMetadata:
+    """Tests for DatasetLoader.get_item_metadata."""
+
+    def test_default_returns_empty_dict(self) -> None:
+        """Verify base class returns empty dict."""
+        loader = _StubLoader()
+        assert loader.get_item_metadata() == {}
+
+    def test_default_returns_empty_after_prepare(self) -> None:
+        """Verify base class still returns empty dict after full prepare."""
+        loader = _StubLoader(df=_make_interactions(DENSE_ROWS))
+        loader.prepare(val_ratio=0.1, test_ratio=0.1, seed=42)
+        assert loader.get_item_metadata() == {}
+
+    def test_subclass_with_metadata_filters_to_items(self) -> None:
+        """Verify a subclass with metadata returns only matching items."""
+
+        class _MetadataLoader(_StubLoader):
+            def load_optional_data(self) -> None:
+                self.metadata = {
+                    "i1": {"title": "Item 1"},
+                    "i2": {"title": "Item 2"},
+                    "i999": {"title": "Not in dataset"},
+                }
+
+            def get_item_metadata(self) -> dict[str, dict]:
+                if self.metadata is None or self.items is None:
+                    return {}
+                item_set = set(self.items)
+                return {k: v for k, v in self.metadata.items() if k in item_set}
+
+        loader = _MetadataLoader(df=_make_interactions(DENSE_ROWS))
+        loader.prepare(val_ratio=0.1, test_ratio=0.1, seed=42)
+        meta = loader.get_item_metadata()
+
+        assert "i1" in meta
+        assert "i2" in meta
+        assert "i999" not in meta
+        assert meta["i1"]["title"] == "Item 1"
+
+    def test_subclass_with_no_metadata_returns_empty(self) -> None:
+        """Verify subclass returns empty dict when metadata is None."""
+
+        class _NoMetaLoader(_StubLoader):
+            def get_item_metadata(self) -> dict[str, dict]:
+                if self.metadata is None or self.items is None:
+                    return {}
+                return {}
+
+        loader = _NoMetaLoader(df=_make_interactions(DENSE_ROWS))
+        loader.prepare(val_ratio=0.1, test_ratio=0.1, seed=42)
+        assert loader.get_item_metadata() == {}
+
+
 # ── to_artifacts ────────────────────────────────────────────────────
 
 

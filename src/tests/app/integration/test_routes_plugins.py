@@ -52,7 +52,7 @@ class TestGetPluginRegistry:
             assert len(entry["implementations"]) >= 1, f"No implementations for {key}"
 
     def test_implementations_have_expected_fields(self, client: TestClient) -> None:
-        """Verify each implementation has plugin_name, display_name, params."""
+        """Verify each implementation has plugin_name, display_name, params, display."""
         response = client.get("/plugins/registry")
         data = response.json()
 
@@ -61,3 +61,32 @@ class TestGetPluginRegistry:
                 assert "plugin_name" in impl, f"Missing plugin_name in {key}"
                 assert "display_name" in impl, f"Missing display_name in {key}"
                 assert "params" in impl, f"Missing params in {key}"
+                assert "display" in impl, f"Missing display in {key}"
+
+    def test_steering_has_display_spec(self, client: TestClient) -> None:
+        """Verify steering implementations include a non-null display spec."""
+        response = client.get("/plugins/registry")
+        data = response.json()
+
+        for impl in data["steering"]["implementations"]:
+            assert impl["display"] is not None
+            assert impl["display"]["type"] == "item_rows"
+            assert len(impl["display"]["rows"]) > 0
+
+    def test_inspection_has_display_spec(self, client: TestClient) -> None:
+        """Verify inspection implementations include a non-null display spec."""
+        response = client.get("/plugins/registry")
+        data = response.json()
+
+        for impl in data["inspection"]["implementations"]:
+            assert impl["display"] is not None
+            assert impl["display"]["type"] == "item_rows"
+            assert len(impl["display"]["rows"]) > 0
+
+    def test_dataset_loading_has_no_display_spec(self, client: TestClient) -> None:
+        """Verify dataset_loading implementations have display as null."""
+        response = client.get("/plugins/registry")
+        data = response.json()
+
+        for impl in data["dataset_loading"]["implementations"]:
+            assert impl["display"] is None

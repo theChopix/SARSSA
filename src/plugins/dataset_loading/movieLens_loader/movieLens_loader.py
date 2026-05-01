@@ -76,6 +76,23 @@ class MovieLensLoader(DatasetLoader):
                 self.metadata = json.load(f)
             self.logger.info("Loaded metadata for %d items", len(self.metadata))
 
+    def get_item_metadata(self) -> dict[str, dict]:
+        """Return metadata filtered to items in the current dataset.
+
+        Uses the ``metadata.json`` loaded in :meth:`load_optional_data`.
+        Only items present in ``self.items`` (the filtered item set)
+        are included.
+
+        Returns:
+            dict[str, dict]: Mapping of item ID to metadata fields
+                (``title``, ``year``, ``genres``, ``image_url``).
+                Empty dict if no metadata was loaded.
+        """
+        if self.metadata is None or self.items is None:
+            return {}
+        item_set = set(self.items)
+        return {item_id: meta for item_id, meta in self.metadata.items() if item_id in item_set}
+
     def tag_ids(self):
         return self.df_tags["tag"].unique().sort().to_list()
 
@@ -197,6 +214,9 @@ class Plugin(BasePlugin):
             self._tag_ids = dataset_loader.tag_ids()
             self._tag_item_matrix = dataset_loader.tag_item_matrix()
 
+        # Item metadata (conditional, handled in update_context)
+        self._item_metadata = dataset_loader.get_item_metadata()
+
         logger.info("=" * 50)
         logger.info("MovieLens dataset loading completed")
         logger.info(f"Users: {self.num_users}, Items: {self.num_items}")
@@ -224,3 +244,10 @@ class Plugin(BasePlugin):
                 sp.save_npz(f"{tmp}/tag_item_matrix.npz", self._tag_item_matrix)
                 mlflow.log_artifacts(tmp)
             mlflow.log_param("num_tags", len(self._tag_ids))
+
+        if self._item_metadata:
+            logger.info("Saving item metadata (%d items)...", len(self._item_metadata))
+            with tempfile.TemporaryDirectory() as tmp:
+                with open(f"{tmp}/item_metadata.json", "w") as f:
+                    json.dump(self._item_metadata, f)
+                mlflow.log_artifacts(tmp)

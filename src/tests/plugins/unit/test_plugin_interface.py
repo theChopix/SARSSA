@@ -4,6 +4,8 @@ import pytest
 
 from plugins.plugin_interface import (
     ArtifactSpec,
+    DisplayRowSpec,
+    DisplaySpec,
     MissingContextError,
     OutputArtifactSpec,
     OutputParamSpec,
@@ -131,6 +133,51 @@ class TestOutputParamSpec:
         assert spec.attr == "dataset"
 
 
+# ── DisplayRowSpec ──────────────────────────────────────────────────
+
+
+class TestDisplayRowSpec:
+    """Tests for the DisplayRowSpec dataclass."""
+
+    def test_construction(self) -> None:
+        """Verify all fields are stored correctly."""
+        row = DisplayRowSpec(key="interacted_items", label="Interaction History")
+        assert row.key == "interacted_items"
+        assert row.label == "Interaction History"
+
+
+# ── DisplaySpec ─────────────────────────────────────────────────────
+
+
+class TestDisplaySpec:
+    """Tests for the DisplaySpec dataclass."""
+
+    def test_defaults(self) -> None:
+        """Verify type defaults to 'item_rows' and rows to empty list."""
+        spec = DisplaySpec()
+        assert spec.type == "item_rows"
+        assert spec.rows == []
+
+    def test_construction_with_rows(self) -> None:
+        """Verify construction with explicit rows."""
+        rows = [
+            DisplayRowSpec("interacted_items", "Interaction History"),
+            DisplayRowSpec("original_recommendations", "Original Recommendations"),
+        ]
+        spec = DisplaySpec(type="item_rows", rows=rows)
+        assert spec.type == "item_rows"
+        assert len(spec.rows) == 2
+        assert spec.rows[0].key == "interacted_items"
+        assert spec.rows[1].label == "Original Recommendations"
+
+    def test_default_rows_not_shared(self) -> None:
+        """Verify each instance gets its own default rows list."""
+        spec_a = DisplaySpec()
+        spec_b = DisplaySpec()
+        spec_a.rows.append(DisplayRowSpec("k", "L"))
+        assert spec_b.rows == []
+
+
 # ── PluginIOSpec ─────────────────────────────────────────────────────
 
 
@@ -145,6 +192,11 @@ class TestPluginIOSpec:
         assert spec.input_params == []
         assert spec.output_artifacts == []
         assert spec.output_params == []
+
+    def test_display_defaults_to_none(self) -> None:
+        """Verify display defaults to None."""
+        spec = PluginIOSpec()
+        assert spec.display is None
 
     def test_construction_with_all_fields(self) -> None:
         """Verify full construction with populated lists."""
@@ -185,3 +237,17 @@ class TestPluginIOSpec:
         )
         assert len(spec.required_steps) == 3
         assert "training_cfm" in spec.required_steps
+
+    def test_construction_with_display(self) -> None:
+        """Verify PluginIOSpec stores a DisplaySpec."""
+        display = DisplaySpec(
+            type="item_rows",
+            rows=[
+                DisplayRowSpec("top_k_item_ids", "Top Items"),
+            ],
+        )
+        spec = PluginIOSpec(display=display)
+        assert spec.display is not None
+        assert spec.display.type == "item_rows"
+        assert len(spec.display.rows) == 1
+        assert spec.display.rows[0].key == "top_k_item_ids"
