@@ -52,6 +52,17 @@ function ArtifactRenderer({
     );
   }
 
+  if (file.content_type === "application/pdf") {
+    return (
+      <iframe
+        src={url}
+        title={file.label}
+        className="w-full rounded border border-gray-200"
+        style={{ height: "800px" }}
+      />
+    );
+  }
+
   if (file.content_type === "text/html") {
     return (
       <iframe

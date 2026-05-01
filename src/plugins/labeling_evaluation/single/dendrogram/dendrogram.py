@@ -43,9 +43,9 @@ class Plugin(BasePlugin):
         display=ArtifactDisplaySpec(
             files=[
                 ArtifactFileSpec(
-                    "dendrogram.svg",
+                    "dendrogram.pdf",
                     "Dendrogram",
-                    "image/svg+xml",
+                    "application/pdf",
                 ),
             ],
         ),
