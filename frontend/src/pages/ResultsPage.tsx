@@ -19,6 +19,7 @@ import { useEffect, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Loader2, AlertCircle } from "lucide-react";
 
+import { ArtifactPanel } from "../components/ArtifactPanel";
 import { VisualResultsPanel } from "../components/VisualResultsPanel";
 import { usePipelineStore } from "../store/pipelineStore";
 import type { DisplaySpec } from "../types/plugin";
@@ -117,9 +118,10 @@ export function ResultsPage() {
       )}
 
       {displaySpec.type === "artifact" && (
-        <p className="mt-4 text-sm text-gray-500">
-          Artifact rendering will be implemented in a following subtask.
-        </p>
+        <ArtifactPanel
+          files={displaySpec.files}
+          stepRunId={stepRunId}
+        />
       )}
     </div>
   );

@@ -50,6 +50,25 @@ export async function fetchEnrichedItems(
 }
 
 /**
+ * Build the URL for a raw (non-JSON) artifact served by the backend.
+ *
+ * The returned URL can be used directly as the `src` of an `<img>`
+ * or `<iframe>` element.  The backend serves the file with the
+ * correct `Content-Type` header inferred from the filename extension.
+ *
+ * @param runId    - MLflow run ID of the plugin step.
+ * @param filename - Artifact filename (e.g. "dendrogram.svg").
+ * @returns Absolute URL string pointing to the raw artifact endpoint.
+ */
+export function buildRawArtifactUrl(
+  runId: string,
+  filename: string
+): string {
+  const params = new URLSearchParams({ run_id: runId, filename });
+  return `${API_BASE_URL}/items/artifact-raw?${params}`;
+}
+
+/**
  * Fetch a JSON artifact from a plugin step's MLflow run.
  *
  * Calls `GET /items/artifact` which acts as a proxy to MLflow,
