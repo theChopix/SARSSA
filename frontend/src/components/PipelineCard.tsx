@@ -108,11 +108,13 @@ function ParamRow({
   param,
   value,
   onChange,
+  onLabelChange,
   context,
 }: {
   param: ParameterInfo;
   value: string;
   onChange: (value: string) => void;
+  onLabelChange?: (label: string) => void;
   context: PipelineContext | null;
 }) {
   return (
@@ -133,6 +135,7 @@ function ParamRow({
           param={param}
           value={value}
           onChange={onChange}
+          onLabelChange={onLabelChange}
           context={context}
         />
       ) : (
@@ -163,11 +166,13 @@ function DropdownSelect({
   param,
   value,
   onChange,
+  onLabelChange,
   context,
 }: {
   param: ParameterInfo;
   value: string;
   onChange: (value: string) => void;
+  onLabelChange?: (label: string) => void;
   context: PipelineContext | null;
 }) {
   const [options, setOptions] = useState<ParamChoice[]>([]);
@@ -293,7 +298,7 @@ function DropdownSelect({
               .map((opt) => (
                 <li
                   key={opt.value}
-                  onClick={() => { onChange(opt.value); setOpen(false); setFilter(""); }}
+                  onClick={() => { onChange(opt.value); onLabelChange?.(opt.label); setOpen(false); setFilter(""); }}
                   className={`px-2 py-1.5 text-sm cursor-pointer hover:bg-blue-50
                     ${opt.value === value ? "bg-blue-100 font-medium" : "text-gray-800"}`}
                 >
@@ -639,6 +644,11 @@ export default function PipelineCard({
                 (param.default != null ? String(param.default) : "")
               }
               onChange={(val) => setParam(categoryKey, param.name, val)}
+              onLabelChange={
+                param.widget === "dropdown"
+                  ? (label) => setParam(categoryKey, `${param.name}_label`, label)
+                  : undefined
+              }
               context={context}
             />
           ))}
@@ -660,10 +670,13 @@ export default function PipelineCard({
               pluginName: card.selectedPlugin,
               params: JSON.stringify(
                 Object.fromEntries(
-                  (selectedImpl?.params ?? []).map((p) => [
-                    p.name,
-                    card.params[p.name] ?? (p.default != null ? String(p.default) : ""),
-                  ])
+                  (selectedImpl?.params ?? []).flatMap((p) => {
+                    const val = card.params[p.name] ?? (p.default != null ? String(p.default) : "");
+                    const entries: [string, string][] = [[p.name, val]];
+                    const label = card.params[`${p.name}_label`];
+                    if (label) entries.push(["label", label]);
+                    return entries;
+                  })
                 )
               ),
             })}`}
