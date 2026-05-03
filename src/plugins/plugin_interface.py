@@ -212,6 +212,26 @@ class DynamicDropdownHint(ParamUIHint):
 
 
 @dataclass
+class PastRunsDropdownHint(ParamUIHint):
+    """Render a parameter as a dropdown of past pipeline runs.
+
+    Used by *compare* plugins to let the user pick a previously
+    completed pipeline run to compare against.  The frontend fetches
+    the list of eligible runs from the pipelines runs endpoint and
+    sends ``required_steps`` so only runs whose ``context.json``
+    contains all of those step keys are returned.
+
+    Attributes:
+        required_steps: Step keys that must be present in a past
+            run's ``context.json`` for the run to be considered
+            eligible.  Empty list means every top-level run is
+            eligible.
+    """
+
+    required_steps: list[str] = field(default_factory=list)
+
+
+@dataclass
 class SliderHint(ParamUIHint):
     """Render a parameter as a range slider.
 

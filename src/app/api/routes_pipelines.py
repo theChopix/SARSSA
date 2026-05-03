@@ -4,11 +4,15 @@ import threading
 from typing import Any
 
 import mlflow
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL
 from app.core.pipeline_engine import PipelineEngine
-from app.core.pipeline_runs import get_pipeline_runs, get_run_context
+from app.core.pipeline_runs import (
+    get_eligible_pipeline_runs,
+    get_pipeline_runs,
+    get_run_context,
+)
 from app.core.pipeline_worker import run_pipeline_worker, run_step_worker
 from app.core.task_store import cancel_task, create_task, get_task, task_to_response
 from app.models.pipeline import PipelineRequest, StepDefinition, TaskStatusResponse
@@ -42,13 +46,32 @@ def get_mlflow_info() -> dict[str, str]:
 
 
 @router.get("/runs")
-def list_runs() -> list[dict[str, Any]]:
-    """Return all top-level pipeline runs, newest first.
+def list_runs(
+    required_steps: list[str] | None = Query(
+        default=None,
+        description=(
+            "Filter to runs whose context.json contains every listed step. "
+            "Pass repeated query params (?required_steps=a&required_steps=b)."
+        ),
+    ),
+) -> list[dict[str, Any]]:
+    """Return top-level pipeline runs, newest first.
+
+    When *required_steps* is provided, only runs whose
+    ``context.json`` contains every listed step key are returned —
+    used by the compare-plugin past-runs dropdown to surface only
+    runs that already completed the prerequisite stages.
+
+    Args:
+        required_steps: Optional list of step keys that must be
+            present in each returned run's context.
 
     Returns:
         list[dict[str, Any]]: Each dict has ``run_id``,
             ``run_name``, ``status``, ``start_time``.
     """
+    if required_steps:
+        return get_eligible_pipeline_runs(required_steps)
     return get_pipeline_runs()
 
 

@@ -46,6 +46,9 @@ class WidgetConfig(BaseModel):
         slider_min: Minimum value for slider widgets.
         slider_max: Maximum value for slider widgets.
         slider_step: Step increment for slider widgets.
+        required_steps: Step keys that an eligible past run must
+            contain in its ``context.json`` (used when
+            ``widget="past_runs_dropdown"``).
     """
 
     choices_endpoint: str | None = None
@@ -53,6 +56,7 @@ class WidgetConfig(BaseModel):
     slider_min: float | None = None
     slider_max: float | None = None
     slider_step: float | None = None
+    required_steps: list[str] | None = None
 
 
 class ParameterInfo(BaseModel):

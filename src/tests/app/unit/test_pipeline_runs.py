@@ -9,6 +9,7 @@ import pytest
 
 from app.config.config import EXPERIMENT_NAME
 from app.core.pipeline_runs import (
+    get_eligible_pipeline_runs,
     get_pipeline_runs,
     get_run_context,
 )
@@ -116,6 +117,120 @@ class TestGetPipelineRuns:
 
         assert len(runs) == 1
         assert runs[0]["run_id"] == "parent"
+
+
+class TestGetEligiblePipelineRuns:
+    """Tests for get_eligible_pipeline_runs."""
+
+    @patch("app.core.pipeline_runs.get_pipeline_runs")
+    def test_empty_required_steps_returns_all(
+        self,
+        mock_get_runs: MagicMock,
+    ) -> None:
+        """Verify an empty required_steps list short-circuits filtering."""
+        mock_get_runs.return_value = [
+            {
+                "run_id": "r1",
+                "run_name": "run_a",
+                "status": "FINISHED",
+                "start_time": 1,
+            },
+            {
+                "run_id": "r2",
+                "run_name": "run_b",
+                "status": "FINISHED",
+                "start_time": 2,
+            },
+        ]
+        result = get_eligible_pipeline_runs([])
+        assert [r["run_id"] for r in result] == ["r1", "r2"]
+
+    @patch("app.core.pipeline_runs.get_run_context")
+    @patch("app.core.pipeline_runs.get_pipeline_runs")
+    def test_filters_runs_missing_required_step(
+        self,
+        mock_get_runs: MagicMock,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify runs missing any required step are dropped."""
+        mock_get_runs.return_value = [
+            {
+                "run_id": "r1",
+                "run_name": "run_a",
+                "status": "FINISHED",
+                "start_time": 1,
+            },
+            {
+                "run_id": "r2",
+                "run_name": "run_b",
+                "status": "FINISHED",
+                "start_time": 2,
+            },
+        ]
+        mock_get_context.side_effect = [
+            {"dataset_loading": {"run_id": "x"}, "neuron_labeling": {"run_id": "y"}},
+            {"dataset_loading": {"run_id": "x"}},
+        ]
+
+        result = get_eligible_pipeline_runs(["dataset_loading", "neuron_labeling"])
+
+        assert [r["run_id"] for r in result] == ["r1"]
+
+    @patch("app.core.pipeline_runs.get_run_context")
+    @patch("app.core.pipeline_runs.get_pipeline_runs")
+    def test_drops_runs_with_unreadable_context(
+        self,
+        mock_get_runs: MagicMock,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify runs whose context.json is missing are silently skipped."""
+        mock_get_runs.return_value = [
+            {
+                "run_id": "r1",
+                "run_name": "run_a",
+                "status": "FINISHED",
+                "start_time": 1,
+            },
+        ]
+        mock_get_context.side_effect = FileNotFoundError("missing")
+
+        result = get_eligible_pipeline_runs(["dataset_loading"])
+
+        assert result == []
+
+    @patch("app.core.pipeline_runs.get_run_context")
+    @patch("app.core.pipeline_runs.get_pipeline_runs")
+    def test_preserves_newest_first_ordering(
+        self,
+        mock_get_runs: MagicMock,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify the underlying ordering from get_pipeline_runs survives filtering."""
+        mock_get_runs.return_value = [
+            {
+                "run_id": "newest",
+                "run_name": "n",
+                "status": "FINISHED",
+                "start_time": 3,
+            },
+            {
+                "run_id": "middle",
+                "run_name": "m",
+                "status": "FINISHED",
+                "start_time": 2,
+            },
+            {
+                "run_id": "oldest",
+                "run_name": "o",
+                "status": "FINISHED",
+                "start_time": 1,
+            },
+        ]
+        mock_get_context.return_value = {"dataset_loading": {"run_id": "x"}}
+
+        result = get_eligible_pipeline_runs(["dataset_loading"])
+
+        assert [r["run_id"] for r in result] == ["newest", "middle", "oldest"]
 
 
 class TestGetRunContext:
