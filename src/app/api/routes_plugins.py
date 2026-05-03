@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.core.pipeline_runs import get_run_context
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.core.plugin_discovery.plugin_registry import get_plugin_registry
 from plugins.plugin_interface import DynamicDropdownHint
@@ -74,7 +75,8 @@ def get_param_choices(
             ),
         )
 
-    artifact_data = _load_hint_artifact(hint, run_id)
+    resolved_run_id = _resolve_artifact_run_id(hint, run_id)
+    artifact_data = _load_hint_artifact(hint, resolved_run_id)
     formatter = getattr(plugin_instance.__class__, hint.formatter, None)
     if formatter is None:
         raise HTTPException(
@@ -103,6 +105,56 @@ def _find_dropdown_hint(
         if isinstance(hint, DynamicDropdownHint) and hint.param_name == param_name:
             return hint
     return None
+
+
+def _resolve_artifact_run_id(
+    hint: DynamicDropdownHint,
+    run_id: str,
+) -> str:
+    """Resolve the run id that holds the dropdown's source artifact.
+
+    For non-cascading hints (``hint.source_run_param is None``) the
+    caller already supplied the per-step run id, so it is returned
+    unchanged.
+
+    For cascading hints, *run_id* is the parent pipeline run id
+    selected via a :class:`PastRunsDropdownHint`.  This function
+    loads that run's ``context.json`` and returns the per-step
+    run id recorded for ``hint.artifact_step``.
+
+    Args:
+        hint: The dropdown hint declaring how to resolve the source.
+        run_id: The run id supplied by the frontend.
+
+    Returns:
+        str: The run id that directly holds the source artifact.
+
+    Raises:
+        HTTPException: 404 if the parent run's context cannot be
+            loaded or does not contain the requested step.
+    """
+    if hint.source_run_param is None:
+        return run_id
+
+    try:
+        context = get_run_context(run_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Parent run '{run_id}' has no context.json: {exc}",
+        ) from exc
+
+    step_entry = context.get(hint.artifact_step)
+    if not isinstance(step_entry, dict) or "run_id" not in step_entry:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Parent run '{run_id}' context is missing step "
+                f"'{hint.artifact_step}' or its run_id."
+            ),
+        )
+
+    return str(step_entry["run_id"])
 
 
 def _load_hint_artifact(

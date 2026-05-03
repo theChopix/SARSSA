@@ -10,7 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.api.routes_plugins import _find_dropdown_hint, _load_hint_artifact
+from app.api.routes_plugins import (
+    _find_dropdown_hint,
+    _load_hint_artifact,
+    _resolve_artifact_run_id,
+)
 from plugins.plugin_interface import (
     DynamicDropdownHint,
     ParamUIHint,
@@ -216,6 +220,97 @@ class TestLoadHintArtifact:
         assert "missing.json" in exc_info.value.detail
 
 
+# ── Tests for _resolve_artifact_run_id ────────────────────────────
+
+
+class TestResolveArtifactRunId:
+    """Tests for _resolve_artifact_run_id."""
+
+    def test_returns_run_id_unchanged_when_not_cascading(self) -> None:
+        """Verify non-cascading hints pass run_id through untouched."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+        )
+        assert _resolve_artifact_run_id(hint, "step_run_xyz") == "step_run_xyz"
+
+    @patch("app.api.routes_plugins.get_run_context")
+    def test_resolves_from_parent_context_when_cascading(
+        self,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify cascading hints resolve via the parent run's context."""
+        mock_get_context.return_value = {
+            "dataset_loading": {"run_id": "ds_step"},
+            "neuron_labeling": {"run_id": "nl_step"},
+        }
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        result = _resolve_artifact_run_id(hint, "parent_run_abc")
+        assert result == "nl_step"
+        mock_get_context.assert_called_once_with("parent_run_abc")
+
+    @patch("app.api.routes_plugins.get_run_context")
+    def test_raises_404_when_parent_context_missing(
+        self,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify a missing context.json bubbles as a 404."""
+        mock_get_context.side_effect = FileNotFoundError("no context")
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_artifact_run_id(hint, "parent_run_abc")
+        assert exc_info.value.status_code == 404
+        assert "context.json" in exc_info.value.detail
+
+    @patch("app.api.routes_plugins.get_run_context")
+    def test_raises_404_when_step_missing_from_context(
+        self,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify a context without the required step yields 404."""
+        mock_get_context.return_value = {"dataset_loading": {"run_id": "ds"}}
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_artifact_run_id(hint, "parent_run_abc")
+        assert exc_info.value.status_code == 404
+        assert "neuron_labeling" in exc_info.value.detail
+
+    @patch("app.api.routes_plugins.get_run_context")
+    def test_raises_404_when_step_entry_has_no_run_id(
+        self,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify a malformed step entry without run_id yields 404."""
+        mock_get_context.return_value = {"neuron_labeling": {"foo": "bar"}}
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_artifact_run_id(hint, "parent_run_abc")
+        assert exc_info.value.status_code == 404
+
+
 # ── Tests for GET /plugins/param-choices endpoint ─────────────────
 
 
@@ -352,6 +447,55 @@ class TestGetParamChoicesEndpoint:
 
         assert response.status_code == 404
         assert "Formatter" in response.json()["detail"]
+
+    @patch("app.api.routes_plugins.get_run_context")
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_cascading_hint_resolves_via_parent_context(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        mock_get_context: MagicMock,
+    ) -> None:
+        """Verify cascading dropdown loads artifact from parent run's step."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        def _fmt(data: dict) -> list[dict[str, str]]:
+            return [{"label": label, "value": nid} for nid, label in data.items()]
+
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            artifact_loader="json",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        plugin.__class__._fmt = staticmethod(_fmt)
+        mock_pm.load.return_value = plugin
+
+        mock_get_context.return_value = {
+            "neuron_labeling": {"run_id": "past_step_run"},
+        }
+
+        mock_loader = MagicMock()
+        mock_loader.get_json_artifact.return_value = {"7": "drama"}
+        mock_loader_cls.return_value = mock_loader
+
+        client = TestClient(app)
+        response = client.get(
+            "/plugins/param-choices/inspection/inspection.compare.x.x/past_neuron_id",
+            params={"run_id": "past_parent_run"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == [{"label": "drama", "value": "7"}]
+        mock_get_context.assert_called_once_with("past_parent_run")
+        mock_loader_cls.assert_called_once_with("past_step_run")
 
     def test_returns_422_when_run_id_missing(self) -> None:
         """Verify 422 when run_id query param is not provided."""

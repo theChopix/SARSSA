@@ -43,6 +43,13 @@ class WidgetConfig(BaseModel):
         run_id_source: Pipeline context key whose ``run_id`` the
             frontend should pass as query param when fetching
             choices (e.g. ``"neuron_labeling"``).
+        source_run_param: Name of another parameter on the same
+            plugin whose value is a parent pipeline run id.  When
+            set, the frontend should pass that param's current
+            value as ``run_id`` to ``choices_endpoint`` and refetch
+            whenever it changes — overriding the
+            ``run_id_source`` lookup against the current pipeline
+            context.
         slider_min: Minimum value for slider widgets.
         slider_max: Maximum value for slider widgets.
         slider_step: Step increment for slider widgets.
@@ -53,6 +60,7 @@ class WidgetConfig(BaseModel):
 
     choices_endpoint: str | None = None
     run_id_source: str | None = None
+    source_run_param: str | None = None
     slider_min: float | None = None
     slider_max: float | None = None
     slider_step: float | None = None

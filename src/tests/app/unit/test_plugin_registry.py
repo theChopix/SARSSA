@@ -705,6 +705,32 @@ class TestResolveWidget:
         )
         assert config.run_id_source == "neuron_labeling"
 
+    def test_dropdown_hint_propagates_source_run_param(self) -> None:
+        """Verify cascading hints surface source_run_param on WidgetConfig."""
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        _, config = _resolve_widget(hint, "inspection", "inspection.compare.x.x")
+        assert config is not None
+        assert config.source_run_param == "past_run_id"
+        assert config.run_id_source == "neuron_labeling"
+
+    def test_dropdown_hint_omits_source_run_param_by_default(self) -> None:
+        """Verify non-cascading hints leave source_run_param as None."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+        )
+        _, config = _resolve_widget(hint, "inspection", "inspection.single.x.x")
+        assert config is not None
+        assert config.source_run_param is None
+
     def test_past_runs_dropdown_hint_returns_widget(self) -> None:
         """Verify PastRunsDropdownHint produces past_runs_dropdown widget."""
         hint = PastRunsDropdownHint(
