@@ -33,6 +33,25 @@ export interface CategoryInfo {
   has_visual_results: boolean;
 }
 
+// ── Widget configuration ────────────────────────────────
+
+/**
+ * Extra configuration for non-default parameter widgets.
+ *
+ * Only the fields relevant to the chosen `widget` type are
+ * populated; the rest are `null`.
+ *
+ * - `choices_endpoint` – URL path for fetching dynamic dropdown
+ *                         options (used when `widget = "dropdown"`).
+ * - `run_id_source`    – Pipeline context key whose `run_id` should
+ *                         be passed as a query param when fetching
+ *                         choices (e.g. `"neuron_labeling"`).
+ */
+export interface WidgetConfig {
+  choices_endpoint: string | null;
+  run_id_source: string | null;
+}
+
 // ── Plugin parameter metadata ───────────────────────────
 
 /**
@@ -41,16 +60,20 @@ export interface CategoryInfo {
  * Extracted by the backend via Python's `inspect` module from
  * the plugin class's `run(self, context, **params)` signature.
  *
- * - `name`     – Parameter name (e.g. "learning_rate").
- * - `type`     – Python type as a string (e.g. "float", "int").
- * - `default`  – Default value, or `null` if the param is required.
- * - `required` – `true` when the user must provide a value.
+ * - `name`          – Parameter name (e.g. "learning_rate").
+ * - `type`          – Python type as a string (e.g. "float", "int").
+ * - `default`       – Default value, or `null` if the param is required.
+ * - `required`      – `true` when the user must provide a value.
+ * - `widget`        – Frontend widget type (`"text"` or `"dropdown"`).
+ * - `widget_config` – Extra configuration for non-default widgets.
  */
 export interface ParameterInfo {
   name: string;
   type: string;
   default: unknown;
   required: boolean;
+  widget: string;
+  widget_config: WidgetConfig | null;
 }
 
 // ── Display spec (visual output metadata) ───────────────

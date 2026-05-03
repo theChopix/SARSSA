@@ -26,6 +26,12 @@
 import { API_BASE_URL } from "../constants";
 import type { PluginRegistry } from "../types/plugin";
 
+/** A single option returned by the param-choices endpoint. */
+export interface ParamChoice {
+  label: string;
+  value: string;
+}
+
 /**
  * Fetch the full plugin registry from the backend.
  *
@@ -50,4 +56,32 @@ export async function fetchPluginRegistry(): Promise<PluginRegistry> {
   }
 
   return (await response.json()) as PluginRegistry;
+}
+
+/**
+ * Fetch dynamic dropdown options for a plugin parameter.
+ *
+ * @param choicesEndpoint - URL path from `widget_config.choices_endpoint`.
+ * @param runId           - MLflow run ID of the upstream step that produced
+ *                          the source artifact.
+ * @returns Array of `{ label, value }` options for the dropdown.
+ *
+ * @throws {Error} If the HTTP request fails (non-2xx status).
+ */
+export async function fetchParamChoices(
+  choicesEndpoint: string,
+  runId: string
+): Promise<ParamChoice[]> {
+  const params = new URLSearchParams({ run_id: runId });
+  const response = await fetch(
+    `${API_BASE_URL}${choicesEndpoint}?${params}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch param choices: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return (await response.json()) as ParamChoice[];
 }

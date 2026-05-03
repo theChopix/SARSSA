@@ -41,12 +41,14 @@
  *   └─────────────────────────────────────┘
  */
 
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
+import { fetchParamChoices } from "../api/plugins";
+import type { ParamChoice } from "../api/plugins";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
-import type { MlflowInfo } from "../types/pipeline";
+import type { MlflowInfo, PipelineContext } from "../types/pipeline";
 import type { CardStatus, CardMode } from "../store/pipelineStore";
 
 // ── Props ───────────────────────────────────────────────
@@ -94,21 +96,24 @@ function StatusIcon({ status }: { status: CardStatus }) {
 /**
  * A single row in the parameter configuration form.
  *
- * Shows: param name, type badge, and an input field with the
- * default value pre-filled.
+ * Shows: param name, type badge, and either a text input or
+ * a dropdown depending on the `widget` field.
  *
  * ┌──────────────────────────────────────────────┐
- * │  epochs  (int)    [ 100                    ] │
+ * │  epochs  (int)    [ 100                    ] │  ← text
+ * │  neuron  (str)    [ ▾ sci-fi [neuron id 0] ] │  ← dropdown
  * └──────────────────────────────────────────────┘
  */
 function ParamRow({
   param,
   value,
   onChange,
+  context,
 }: {
   param: ParameterInfo;
   value: string;
   onChange: (value: string) => void;
+  context: PipelineContext | null;
 }) {
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -122,17 +127,115 @@ function ParamRow({
         ({param.type})
       </span>
 
-      {/* Input field */}
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={param.required ? "required" : ""}
-        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
-                   focus:outline-none focus:ring-2 focus:ring-blue-400
-                   text-gray-800 bg-white"
-      />
+      {/* Widget: dropdown or text input */}
+      {param.widget === "dropdown" && param.widget_config?.choices_endpoint ? (
+        <DropdownSelect
+          param={param}
+          value={value}
+          onChange={onChange}
+          context={context}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={param.required ? "required" : ""}
+          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
+                     focus:outline-none focus:ring-2 focus:ring-blue-400
+                     text-gray-800 bg-white"
+        />
+      )}
     </div>
+  );
+}
+
+// ── Dropdown select for dynamic choices ─────────────────
+
+/**
+ * A `<select>` dropdown that fetches its options from the
+ * backend param-choices endpoint.
+ *
+ * Requires a `run_id` from the pipeline context (looked up
+ * via `widget_config.run_id_source`).
+ */
+function DropdownSelect({
+  param,
+  value,
+  onChange,
+  context,
+}: {
+  param: ParameterInfo;
+  value: string;
+  onChange: (value: string) => void;
+  context: PipelineContext | null;
+}) {
+  const [options, setOptions] = useState<ParamChoice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const endpoint = param.widget_config!.choices_endpoint!;
+  const sourceStep = param.widget_config!.run_id_source;
+  const runId = sourceStep ? context?.[sourceStep]?.run_id : null;
+
+  const loadOptions = useCallback(async () => {
+    if (!runId) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const choices = await fetchParamChoices(endpoint, runId);
+      setOptions(choices);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load options");
+    } finally {
+      setLoading(false);
+    }
+  }, [endpoint, runId]);
+
+  useEffect(() => {
+    loadOptions();
+  }, [loadOptions]);
+
+  if (!runId) {
+    return (
+      <span className="flex-1 text-sm text-gray-400 italic">
+        Run the {sourceStep ?? "upstream"} step first
+      </span>
+    );
+  }
+
+  if (loading) {
+    return (
+      <span className="flex-1 text-sm text-gray-400 italic flex items-center gap-1">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading options…
+      </span>
+    );
+  }
+
+  if (error) {
+    return (
+      <span className="flex-1 text-sm text-red-500">
+        {error}
+      </span>
+    );
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
+                 focus:outline-none focus:ring-2 focus:ring-blue-400
+                 text-gray-800 bg-white"
+    >
+      <option value="">— select —</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -468,6 +571,7 @@ export default function PipelineCard({
                 (param.default != null ? String(param.default) : "")
               }
               onChange={(val) => setParam(categoryKey, param.name, val)}
+              context={context}
             />
           ))}
         </div>
