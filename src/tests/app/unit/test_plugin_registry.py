@@ -287,12 +287,12 @@ class TestDeriveKind:
     @pytest.mark.parametrize(
         ("module_path", "category"),
         [
-            ("inspection.sae_inspection.sae_inspection", "inspection"),
             (
                 "dataset_loading.movieLens_loader.movieLens_loader",
                 "dataset_loading",
             ),
             ("training_sae.sae_trainer.sae_trainer", "training_sae"),
+            ("neuron_labeling.tf_idf.tf_idf", "neuron_labeling"),
         ],
     )
     def test_returns_none_for_flat_layout(
@@ -696,11 +696,11 @@ class TestResolveWidget:
         _, config = _resolve_widget(
             hint,
             "inspection",
-            "inspection.sae_inspection.sae_inspection",
+            "inspection.single.sae_inspection.sae_inspection",
         )
         assert config is not None
         assert config.choices_endpoint == (
-            "/plugins/param-choices/inspection/inspection.sae_inspection.sae_inspection/neuron_id"
+            "/plugins/param-choices/inspection/inspection.single.sae_inspection.sae_inspection/neuron_id"
         )
         assert config.run_id_source == "neuron_labeling"
 

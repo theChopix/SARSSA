@@ -84,17 +84,39 @@ class TestKindIntegration:
                 f"{impl.plugin_name} expected kind='single' but got {impl.kind}"
             )
 
-    def test_inspection_flat_plugin_has_no_kind(self) -> None:
-        """Verify the un-migrated inspection.sae_inspection has kind=None."""
+    def test_inspection_plugins_carry_a_kind(self) -> None:
+        """Verify every inspection plugin lives under a kind subfolder.
+
+        After the migration of ``sae_inspection`` into
+        ``inspection/single/``, no flat-layout plugins should remain
+        in this category, and every implementation must carry a
+        non-null ``kind``.
+        """
         registry = get_plugin_registry()
         entry = registry["inspection"]
-        flat_impls = [
-            impl
-            for impl in entry.implementations
-            if not (".single." in impl.plugin_name or ".compare." in impl.plugin_name)
-        ]
-        for impl in flat_impls:
-            assert impl.kind is None, f"{impl.plugin_name} unexpectedly has kind={impl.kind}"
+        assert entry.implementations, "expected at least one inspection plugin"
+        for impl in entry.implementations:
+            assert impl.kind in ("single", "compare"), (
+                f"{impl.plugin_name} expected single/compare kind but got {impl.kind}"
+            )
+
+    def test_categories_without_kind_layout_still_have_none(self) -> None:
+        """Verify flat-layout categories continue to report kind=None.
+
+        Categories that have not opted into the single/compare
+        distinction (e.g. ``dataset_loading``) must surface
+        ``kind=None`` for all their implementations.
+        """
+        registry = get_plugin_registry()
+        flat_categories = ["dataset_loading", "training_sae", "training_cfm", "neuron_labeling"]
+        for category_name in flat_categories:
+            entry = registry.get(category_name)
+            if entry is None:
+                continue
+            for impl in entry.implementations:
+                if ".single." in impl.plugin_name or ".compare." in impl.plugin_name:
+                    continue
+                assert impl.kind is None, f"{impl.plugin_name} unexpectedly has kind={impl.kind}"
 
     def test_kind_only_set_for_known_subfolders(self) -> None:
         """Verify no plugin reports a kind outside the allowed literals."""
