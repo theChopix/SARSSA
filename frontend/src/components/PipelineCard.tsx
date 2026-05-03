@@ -41,7 +41,7 @@
  *   └─────────────────────────────────────┘
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
@@ -173,11 +173,16 @@ function DropdownSelect({
   const [options, setOptions] = useState<ParamChoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const endpoint = param.widget_config!.choices_endpoint!;
   const sourceStep = param.widget_config!.run_id_source;
   const runId = sourceStep ? context?.[sourceStep]?.run_id : null;
 
+  // Fetch options when the run_id becomes available.
   const loadOptions = useCallback(async () => {
     if (!runId) return;
 
@@ -196,6 +201,25 @@ function DropdownSelect({
   useEffect(() => {
     loadOptions();
   }, [loadOptions]);
+
+  // Close dropdown when clicking outside.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setFilter("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Auto-focus the search input when the dropdown opens.
+  useEffect(() => {
+    if (open) searchRef.current?.focus();
+  }, [open]);
+
+  // ── Render states ───────────────────────────────────
 
   if (!runId) {
     return (
@@ -221,21 +245,65 @@ function DropdownSelect({
     );
   }
 
+  const selectedLabel = options.find((o) => o.value === value)?.label;
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
-                 focus:outline-none focus:ring-2 focus:ring-blue-400
-                 text-gray-800 bg-white"
-    >
-      <option value="">— select —</option>
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <div ref={wrapperRef} className="flex-1 relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full px-2 py-1 text-sm border border-gray-300 rounded
+                   focus:outline-none focus:ring-2 focus:ring-blue-400
+                   text-gray-800 bg-white text-left flex items-center justify-between
+                   cursor-pointer"
+      >
+        <span className={selectedLabel ? "" : "text-gray-400"}>
+          {selectedLabel ?? "— select —"}
+        </span>
+        <svg className="h-4 w-4 text-gray-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        </svg>
+      </button>
+
+      {/* Options list — opens below, left-aligned */}
+      {open && (
+        <div
+          className="absolute left-0 right-0 top-full mt-1 z-50
+                     rounded border border-gray-300 bg-white shadow-lg"
+        >
+          {/* Search input */}
+          <div className="sticky top-0 bg-white p-1.5 border-b border-gray-200">
+            <input
+              ref={searchRef}
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Type to filter…"
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded
+                         focus:outline-none focus:ring-2 focus:ring-blue-400
+                         text-gray-800 bg-white"
+            />
+          </div>
+
+          {/* Filtered options */}
+          <ul className="max-h-52 overflow-y-auto">
+            {options
+              .filter((o) => o.label.toLowerCase().includes(filter.toLowerCase()))
+              .map((opt) => (
+                <li
+                  key={opt.value}
+                  onClick={() => { onChange(opt.value); setOpen(false); setFilter(""); }}
+                  className={`px-2 py-1.5 text-sm cursor-pointer hover:bg-blue-50
+                    ${opt.value === value ? "bg-blue-100 font-medium" : "text-gray-800"}`}
+                >
+                  {opt.label}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
