@@ -123,14 +123,22 @@ export function ResultsPage() {
       {pluginParams && Object.keys(pluginParams).length > 0 && (
         <p className="mt-1 text-sm text-gray-500 font-mono">
           [{" "}
-          {Object.entries(pluginParams).map(([key, value], idx, arr) => (
-            <span key={key}>
-              <span className="font-semibold text-gray-600">{key}</span>
-              {": "}
-              <span>{value}</span>
-              {idx < arr.length - 1 && ",  "}
-            </span>
-          ))}
+          {Object.entries(pluginParams)
+            .filter(([key]) => !key.endsWith("_label"))
+            .map(([key, value], idx, arr) => {
+              const label = pluginParams[`${key}_label`];
+              return (
+                <span key={key}>
+                  <span className="font-semibold text-gray-600">{key}</span>
+                  {": "}
+                  <span>{value}</span>
+                  {label && (
+                    <span className="text-gray-400"> ({label})</span>
+                  )}
+                  {idx < arr.length - 1 && ",  "}
+                </span>
+              );
+            })}
           {" ]"}
         </p>
       )}
