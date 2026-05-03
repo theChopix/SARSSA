@@ -203,12 +203,25 @@ class DynamicDropdownHint(ParamUIHint):
             class that transforms the loaded artifact data into
             ``list[dict[str, str]]`` with ``"label"`` and
             ``"value"`` keys.
+        source_run_param: Optional name of another ``run()``
+            parameter on the same plugin whose value is a
+            *parent* pipeline run id (e.g. one selected via a
+            :class:`PastRunsDropdownHint`).  When set, the
+            backend treats the value as a parent run id, loads
+            its ``context.json``, resolves *artifact_step* to the
+            per-step run id recorded there, and loads the artifact
+            from that run.  The frontend should refetch the
+            dropdown's choices whenever the watched param changes.
+            ``None`` (the default) keeps the original behaviour
+            where ``run_id`` already points directly at the run
+            holding the artifact.
     """
 
     artifact_step: str = ""
     artifact_file: str = ""
     artifact_loader: str = "json"
     formatter: str = ""
+    source_run_param: str | None = None
 
 
 @dataclass

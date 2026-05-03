@@ -113,6 +113,7 @@ def _resolve_widget(
         return "dropdown", WidgetConfig(
             choices_endpoint=endpoint,
             run_id_source=hint.artifact_step,
+            source_run_param=hint.source_run_param,
         )
 
     if isinstance(hint, PastRunsDropdownHint):
