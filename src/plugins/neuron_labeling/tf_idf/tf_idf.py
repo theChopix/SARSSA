@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.sparse as sp
-from sklearn.feature_extraction.text import TfidfTransformer
 
 from plugins.plugin_interface import (
     ArtifactSpec,
@@ -43,20 +42,10 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("item_acts", "item_acts.pt", "pt"),
             OutputArtifactSpec("tag_item_prob", "tag_item_prob.npz", "npz"),
             OutputArtifactSpec("tag_neuron", "tag_neuron.npy", "npy"),
-            OutputArtifactSpec(
-                "tfidf_tag_to_neuron",
-                "tfidf_tag_to_neuron.npz",
-                "npz",
-            ),
-            OutputArtifactSpec(
-                "tfidf_neuron_to_tag",
-                "tfidf_neuron_to_tag.npz",
-                "npz",
-            ),
             OutputArtifactSpec("neuron_labels", "neuron_labels.json", "json"),
             OutputArtifactSpec(
-                "characteristic_neuron_per_tag",
-                "characteristic_neuron_per_tag.json",
+                "top_tag_per_neuron",
+                "top_tag_per_neuron.json",
                 "json",
             ),
             OutputArtifactSpec(
@@ -98,50 +87,63 @@ class Plugin(BasePlugin):
             device=device,
         )
 
-        # build tag–item probability matrix
-        self.tag_item_prob: sp.csr_matrix = self.tag_item_counts.multiply(
-            1.0 / self.tag_item_counts.sum(axis=1)
-        )
+        # build tag–item probability matrix (global normalization)
+        self.tag_item_prob: sp.csr_matrix = self.tag_item_counts.copy()
+        self.tag_item_prob.data /= self.tag_item_prob.data.sum()
 
         # aggregate tag → neuron
         self.tag_neuron = self.tag_item_prob @ self.item_acts.numpy()
 
-        # TF-IDF
-        tfidf = TfidfTransformer(norm=None)
-        self.tfidf_tag_to_neuron = tfidf.fit_transform(self.tag_neuron)
-        self.tfidf_neuron_to_tag = tfidf.fit_transform(self.tag_neuron.T).T
+        tag_neuron_dense = (
+            self.tag_neuron.toarray()
+            if sp.issparse(self.tag_neuron)
+            else np.asarray(self.tag_neuron)
+        )
 
-        self.neuron_labels = {
-            int(n): self.tag_ids[int(self.tfidf_neuron_to_tag[:, n].argmax())]
-            for n in range(self.tfidf_neuron_to_tag.shape[1])
+        # top_tag_per_neuron: for each neuron, the tag with highest
+        #   tfidf score (term=neuron, document=tag)
+        tfidf_nt = self._compute_tfidf(tag_neuron_dense.T)
+        self.top_tag_per_neuron = {
+            int(n): self.tag_ids[int(tfidf_nt[n].argmax())] for n in range(tfidf_nt.shape[0])
         }
 
-        # tag → neuron mappings (used by the steering plugin)
-        # characteristic_neuron_per_tag: for each tag, the neuron that best characterises it
-        #   tfidf with term=tag, document=neuron → argmax over neurons for each tag
-        tfidf_tn_dense = (
-            self.tfidf_tag_to_neuron.toarray()
-            if sp.issparse(self.tfidf_tag_to_neuron)
-            else np.asarray(self.tfidf_tag_to_neuron)
-        )
-        self.characteristic_neuron_per_tag = {
-            self.tag_ids[int(t)]: int(tfidf_tn_dense[t].argmax())
-            for t in range(tfidf_tn_dense.shape[0])
-        }
+        # neuron_labels is a copy of top_tag_per_neuron
+        self.neuron_labels = dict(self.top_tag_per_neuron)
 
-        # top_neuron_per_tag: for each tag, the neuron whose firing is most unique to it
-        #   tfidf with term=neuron, document=tag → argmax over neurons for each tag
-        tfidf_nt_dense = (
-            self.tfidf_neuron_to_tag.toarray()
-            if sp.issparse(self.tfidf_neuron_to_tag)
-            else np.asarray(self.tfidf_neuron_to_tag)
-        )
+        # top_neuron_per_tag: for each tag, the neuron that best
+        #   characterises it (term=tag, document=neuron)
+        tfidf_tn = self._compute_tfidf(tag_neuron_dense)
         self.top_neuron_per_tag = {
-            self.tag_ids[int(t)]: int(tfidf_nt_dense[t].argmax())
-            for t in range(min(tfidf_nt_dense.shape[0], len(self.tag_ids)))
+            self.tag_ids[int(t)]: int(tfidf_tn[t].argmax()) for t in range(tfidf_tn.shape[0])
         }
 
         # output params
         self.neuron_labeling = True
         self.num_tags = len(self.tag_ids)
         self.num_neurons = self.item_acts.shape[1]
+
+    @staticmethod
+    def _compute_tfidf(x: np.ndarray) -> np.ndarray:
+        """Compute TF-IDF for a term-document value matrix.
+
+        Rows are treated as terms and columns as documents.
+        TF is normalized by column sum (document length), IDF is
+        computed per term (row) with smoothing.
+
+        Args:
+            x: Dense matrix of shape ``(num_terms, num_documents)``.
+
+        Returns:
+            np.ndarray: TF-IDF matrix of the same shape.
+        """
+        col_sums = np.sum(x, axis=0, keepdims=True)
+        tf = np.divide(
+            x,
+            col_sums,
+            out=np.zeros_like(x, dtype=float),
+            where=col_sums != 0,
+        )
+        df = np.count_nonzero(x, axis=1)
+        num_documents = x.shape[1]
+        idf = np.log((num_documents + 1) / (df + 1)) + 1
+        return tf * idf[:, np.newaxis]
