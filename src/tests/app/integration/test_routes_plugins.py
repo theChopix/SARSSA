@@ -2,11 +2,17 @@
 
 Tests hit the real endpoints via FastAPI TestClient, exercising the
 full stack from route → registry → filesystem plugin discovery.
+Where downstream MLflow/plugin-loader interactions would otherwise
+require fixture data, those collaborators are mocked while the
+FastAPI router and handler logic continue to run for real.
 """
+
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from app.config.config import PLUGIN_CATEGORIES
+from plugins.plugin_interface import DynamicDropdownHint, PluginIOSpec
 
 
 class TestGetPluginRegistry:
@@ -107,8 +113,15 @@ class TestGetPluginRegistry:
                     )
 
 
-class TestGetParamChoicesIntegration:
-    """Tests for GET /plugins/param-choices."""
+class TestGetParamChoicesEndpoint:
+    """Tests for /plugins/param-choices.
+
+    The FastAPI router and handler run for real throughout.  Cases
+    that need fabricated plugin instances or artifact payloads stub
+    ``PluginManager`` / ``MLflowRunLoader``; cases that exercise
+    failure paths through real plugin discovery hit the live
+    registry instead.
+    """
 
     def test_returns_422_when_run_id_missing(
         self,
@@ -145,3 +158,128 @@ class TestGetParamChoicesIntegration:
         )
         assert response.status_code == 404
         assert "No DynamicDropdownHint" in response.json()["detail"]
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_returns_formatted_choices(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify the endpoint returns formatted dropdown options."""
+
+        def _fmt(data: dict) -> list[dict[str, str]]:
+            return [{"label": f"{v} [id {k}]", "value": k} for k, v in data.items()]
+
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            artifact_loader="json",
+            formatter="_fmt",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        plugin.__class__._fmt = staticmethod(_fmt)
+        mock_pm.load.return_value = plugin
+
+        mock_loader = MagicMock()
+        mock_loader.get_json_artifact.return_value = {
+            "0": "sci-fi",
+            "42": "comedy",
+        }
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/plugins/param-choices/steering/steering.sae.sae/neuron_id",
+            params={"run_id": "abc123"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert {"label": "sci-fi [id 0]", "value": "0"} in data
+        assert {"label": "comedy [id 42]", "value": "42"} in data
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_returns_404_for_missing_formatter(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify 404 when the formatter method doesn't exist."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_file="neuron_labels.json",
+            artifact_loader="json",
+            formatter="_nonexistent_formatter",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        plugin.__class__ = type(
+            "FakePlugin",
+            (),
+            {"io_spec": plugin.io_spec},
+        )
+        mock_pm.load.return_value = plugin
+
+        mock_loader = MagicMock()
+        mock_loader.get_json_artifact.return_value = {}
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/plugins/param-choices/steering/steering.sae.sae/neuron_id",
+            params={"run_id": "abc123"},
+        )
+
+        assert response.status_code == 404
+        assert "Formatter" in response.json()["detail"]
+
+    @patch("app.api.routes_plugins.get_run_context")
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_cascading_hint_resolves_via_parent_context(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        mock_get_context: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify cascading dropdown loads artifact from parent run's step."""
+
+        def _fmt(data: dict) -> list[dict[str, str]]:
+            return [{"label": label, "value": nid} for nid, label in data.items()]
+
+        hint = DynamicDropdownHint(
+            param_name="past_neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            artifact_loader="json",
+            formatter="_fmt",
+            source_run_param="past_run_id",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        plugin.__class__._fmt = staticmethod(_fmt)
+        mock_pm.load.return_value = plugin
+
+        mock_get_context.return_value = {
+            "neuron_labeling": {"run_id": "past_step_run"},
+        }
+
+        mock_loader = MagicMock()
+        mock_loader.get_json_artifact.return_value = {"7": "drama"}
+        mock_loader_cls.return_value = mock_loader
+
+        response = client.get(
+            "/plugins/param-choices/inspection/inspection.compare.x.x/past_neuron_id",
+            params={"run_id": "past_parent_run"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == [{"label": "drama", "value": "7"}]
+        mock_get_context.assert_called_once_with("past_parent_run")
+        mock_loader_cls.assert_called_once_with("past_step_run")
