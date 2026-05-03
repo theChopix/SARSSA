@@ -168,6 +168,50 @@ DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec
 
 
 @dataclass
+class ParamUIHint:
+    """Base class for parameter UI rendering hints.
+
+    Subclasses declare how a specific ``run()`` parameter should
+    be rendered in the frontend (e.g. dropdown, slider).  Plugins
+    attach these to ``PluginIOSpec.param_ui_hints`` so the registry
+    builder can translate them into widget metadata for the API.
+
+    Attributes:
+        param_name: Name of the ``run()`` parameter this hint
+            applies to.
+    """
+
+    param_name: str
+
+
+@dataclass
+class DynamicDropdownHint(ParamUIHint):
+    """Render a parameter as a dropdown populated from an artifact.
+
+    The backend loads the artifact from the specified upstream
+    pipeline step, passes the raw data to the plugin's
+    ``formatter`` static method, and returns a list of
+    ``{"label": ..., "value": ...}`` options to the frontend.
+
+    Attributes:
+        artifact_step: Context key of the pipeline step that
+            produces the source artifact.
+        artifact_file: Filename of the artifact in MLflow.
+        artifact_loader: Loader strategy identifier (e.g.
+            ``"json"``, ``"npy"``).
+        formatter: Name of a **static method** on the plugin
+            class that transforms the loaded artifact data into
+            ``list[dict[str, str]]`` with ``"label"`` and
+            ``"value"`` keys.
+    """
+
+    artifact_step: str = ""
+    artifact_file: str = ""
+    artifact_loader: str = "json"
+    formatter: str = ""
+
+
+@dataclass
 class PluginIOSpec:
     """Full I/O contract for a plugin.
 
@@ -182,6 +226,9 @@ class PluginIOSpec:
             describing how the frontend should render this
             plugin's output.  ``None`` means no visual rendering
             (the default for most plugins).
+        param_ui_hints: Optional list of UI rendering hints for
+            ``run()`` parameters.  Each hint declares how a
+            parameter should be presented in the frontend.
     """
 
     required_steps: list[str] = field(default_factory=list)
@@ -196,6 +243,9 @@ class PluginIOSpec:
         default_factory=list,
     )
     display: DisplaySpec | None = None
+    param_ui_hints: list[ParamUIHint] = field(
+        default_factory=list,
+    )
 
 
 class BasePlugin(ABC):

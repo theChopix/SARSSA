@@ -11,10 +11,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.core.plugin_discovery.plugin_registry import (
+    _build_ui_hint_map,
     _convert_display_spec,
     _extract_parameters_from_instance,
     _find_plugin_modules,
     _make_display_name,
+    _resolve_widget,
     get_plugin_registry,
 )
 from app.models.plugin import (
@@ -24,12 +26,15 @@ from app.models.plugin import (
     CategoryType,
     ItemRowsDisplayModel,
     ParameterInfo,
+    WidgetConfig,
 )
 from plugins.plugin_interface import (
     ArtifactDisplaySpec,
     ArtifactFileSpec,
     DisplayRowSpec,
+    DynamicDropdownHint,
     ItemRowsDisplaySpec,
+    ParamUIHint,
     PluginIOSpec,
 )
 
@@ -87,6 +92,7 @@ def _make_mock_plugin(
     params: dict[str, tuple[type, Any]],
     plugin_name: str | None = None,
     display: ItemRowsDisplaySpec | ArtifactDisplaySpec | None = None,
+    param_ui_hints: list[ParamUIHint] | None = None,
 ) -> MagicMock:
     """Create a mock plugin whose run() has the given signature params.
 
@@ -97,6 +103,8 @@ def _make_mock_plugin(
             Mirrors ``BasePlugin.name``.
         display: Optional display spec to attach to
             ``io_spec.display``.
+        param_ui_hints: Optional list of UI hints to attach to
+            ``io_spec.param_ui_hints``.
 
     Returns:
         MagicMock: A mock with a ``run`` method with proper signature.
@@ -121,7 +129,10 @@ def _make_mock_plugin(
     mock_plugin.name = plugin_name
     mock_plugin.run = MagicMock()
     mock_plugin.run.__signature__ = sig
-    mock_plugin.io_spec = PluginIOSpec(display=display)
+    mock_plugin.io_spec = PluginIOSpec(
+        display=display,
+        param_ui_hints=param_ui_hints or [],
+    )
     return mock_plugin
 
 
@@ -464,3 +475,140 @@ class TestGetPluginRegistry:
         mock_discover.return_value = []
         registry = get_plugin_registry()
         assert registry["cat_a"].category_info.display_name == "Cat A"
+
+
+class TestBuildUIHintMap:
+    """Tests for _build_ui_hint_map."""
+
+    def test_empty_when_no_hints(self) -> None:
+        """Verify empty dict when plugin declares no hints."""
+        plugin = _make_mock_plugin({"x": (int, 1)})
+        assert _build_ui_hint_map(plugin) == {}
+
+    def test_maps_param_name_to_hint(self) -> None:
+        """Verify hints are keyed by param_name."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+        )
+        plugin = _make_mock_plugin(
+            {"neuron_id": (str, "0")},
+            param_ui_hints=[hint],
+        )
+        result = _build_ui_hint_map(plugin)
+        assert "neuron_id" in result
+        assert result["neuron_id"] is hint
+
+    def test_multiple_hints(self) -> None:
+        """Verify multiple hints are all present in the map."""
+        hint_a = DynamicDropdownHint(param_name="a", formatter="_f")
+        hint_b = ParamUIHint(param_name="b")
+        plugin = _make_mock_plugin(
+            {"a": (str, "x"), "b": (int, 1)},
+            param_ui_hints=[hint_a, hint_b],
+        )
+        result = _build_ui_hint_map(plugin)
+        assert len(result) == 2
+        assert "a" in result
+        assert "b" in result
+
+
+class TestResolveWidget:
+    """Tests for _resolve_widget."""
+
+    def test_dynamic_dropdown_hint_returns_dropdown(self) -> None:
+        """Verify DynamicDropdownHint produces dropdown widget."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_format_choices",
+        )
+        widget, config = _resolve_widget(hint, "steering", "sae.sae")
+        assert widget == "dropdown"
+        assert config is not None
+        assert isinstance(config, WidgetConfig)
+
+    def test_dynamic_dropdown_hint_endpoint_format(self) -> None:
+        """Verify choices_endpoint URL contains category, plugin, param."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+        )
+        _, config = _resolve_widget(
+            hint,
+            "inspection",
+            "inspection.sae_inspection.sae_inspection",
+        )
+        assert config is not None
+        assert config.choices_endpoint == (
+            "/plugins/param-choices/inspection/inspection.sae_inspection.sae_inspection/neuron_id"
+        )
+
+    def test_base_hint_returns_text(self) -> None:
+        """Verify base ParamUIHint falls back to text widget."""
+        hint = ParamUIHint(param_name="x")
+        widget, config = _resolve_widget(hint, "cat", "cat.impl.impl")
+        assert widget == "text"
+        assert config is None
+
+
+class TestExtractParametersWithUIHints:
+    """Tests for widget metadata in _extract_parameters_from_instance."""
+
+    def test_param_without_hint_defaults_to_text(self) -> None:
+        """Verify params without hints get widget='text'."""
+        plugin = _make_mock_plugin({"k": (int, 10)})
+        params = _extract_parameters_from_instance(plugin)
+        assert params[0].widget == "text"
+        assert params[0].widget_config is None
+
+    def test_param_with_dropdown_hint(self) -> None:
+        """Verify param with DynamicDropdownHint gets dropdown widget."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+        )
+        plugin = _make_mock_plugin(
+            {"neuron_id": (str, "0")},
+            param_ui_hints=[hint],
+        )
+        params = _extract_parameters_from_instance(
+            plugin,
+            "steering",
+            "steering.sae.sae",
+        )
+        assert params[0].widget == "dropdown"
+        assert params[0].widget_config is not None
+        endpoint = params[0].widget_config.choices_endpoint
+        assert endpoint is not None
+        assert "param-choices" in endpoint
+
+    def test_mixed_params_only_hinted_gets_widget(self) -> None:
+        """Verify only the hinted param gets a widget override."""
+        hint = DynamicDropdownHint(
+            param_name="neuron_id",
+            artifact_step="neuron_labeling",
+            artifact_file="neuron_labels.json",
+            formatter="_fmt",
+        )
+        plugin = _make_mock_plugin(
+            {"neuron_id": (str, "0"), "k": (int, 10)},
+            param_ui_hints=[hint],
+        )
+        params = _extract_parameters_from_instance(
+            plugin,
+            "inspection",
+            "inspection.impl.impl",
+        )
+        neuron_param = next(p for p in params if p.name == "neuron_id")
+        k_param = next(p for p in params if p.name == "k")
+        assert neuron_param.widget == "dropdown"
+        assert k_param.widget == "text"
+        assert k_param.widget_config is None

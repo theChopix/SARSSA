@@ -18,35 +18,88 @@ from app.models.plugin import (
     ImplementationInfo,
     ItemRowsDisplayModel,
     ParameterInfo,
+    WidgetConfig,
 )
 from app.models.plugin import (
     DisplayRowSpec as DisplayRowModel,
 )
 
 if TYPE_CHECKING:
-    from plugins.plugin_interface import BasePlugin, DisplaySpec
+    from plugins.plugin_interface import (
+        BasePlugin,
+        DisplaySpec,
+        ParamUIHint,
+    )
 
 PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
 SKIP_PARAMS = {"self"}
 
 
-def _extract_parameters_from_instance(
+def _build_ui_hint_map(
     plugin_instance: "BasePlugin",
-) -> list[ParameterInfo]:
-    """Extract configurable parameters from a plugin's run() method.
-
-    Inspects the ``run()`` signature of an already-loaded plugin
-    instance and returns metadata for every parameter except
-    ``self``.
+) -> dict[str, "ParamUIHint"]:
+    """Build a mapping from parameter name to its UI hint.
 
     Args:
         plugin_instance: An instantiated plugin object.
 
     Returns:
+        dict[str, ParamUIHint]: Mapping of parameter names to
+            their UI hints.  Empty if the plugin declares none.
+    """
+    return {hint.param_name: hint for hint in plugin_instance.io_spec.param_ui_hints}
+
+
+def _resolve_widget(
+    hint: "ParamUIHint",
+    category_name: str,
+    plugin_name: str,
+) -> tuple[str, WidgetConfig | None]:
+    """Convert a ParamUIHint to a widget type and config.
+
+    Args:
+        hint: The UI hint dataclass from the plugin's io_spec.
+        category_name: Plugin category key (e.g. ``"steering"``).
+        plugin_name: Dotted plugin module path.
+
+    Returns:
+        tuple[str, WidgetConfig | None]: The widget type string
+            and optional widget configuration.
+    """
+    from plugins.plugin_interface import DynamicDropdownHint
+
+    if isinstance(hint, DynamicDropdownHint):
+        endpoint = f"/plugins/param-choices/{category_name}/{plugin_name}/{hint.param_name}"
+        return "dropdown", WidgetConfig(
+            choices_endpoint=endpoint,
+        )
+
+    return "text", None
+
+
+def _extract_parameters_from_instance(
+    plugin_instance: "BasePlugin",
+    category_name: str = "",
+    plugin_name: str = "",
+) -> list[ParameterInfo]:
+    """Extract configurable parameters from a plugin's run() method.
+
+    Inspects the ``run()`` signature of an already-loaded plugin
+    instance and returns metadata for every parameter except
+    ``self``.  If the plugin declares ``param_ui_hints``, matching
+    parameters receive ``widget`` and ``widget_config`` overrides.
+
+    Args:
+        plugin_instance: An instantiated plugin object.
+        category_name: Plugin category key (e.g. ``"steering"``).
+        plugin_name: Dotted plugin module path.
+
+    Returns:
         list[ParameterInfo]: Ordered list of parameter descriptors.
     """
     sig = inspect.signature(plugin_instance.run)
+    hint_map = _build_ui_hint_map(plugin_instance)
 
     params: list[ParameterInfo] = []
     for name, param in sig.parameters.items():
@@ -58,12 +111,23 @@ def _extract_parameters_from_instance(
             param.annotation.__name__ if param.annotation is not inspect.Parameter.empty else "str"
         )
 
+        widget = "text"
+        widget_config = None
+        if name in hint_map:
+            widget, widget_config = _resolve_widget(
+                hint_map[name],
+                category_name,
+                plugin_name,
+            )
+
         params.append(
             ParameterInfo(
                 name=name,
                 type=type_name,
                 default=param.default if has_default else None,
                 required=not has_default,
+                widget=widget,
+                widget_config=widget_config,
             )
         )
 
@@ -182,7 +246,11 @@ def _discover_implementations(
     implementations: list[ImplementationInfo] = []
     for module_path in module_paths:
         plugin_instance = PluginManager.load(module_path)
-        params = _extract_parameters_from_instance(plugin_instance)
+        params = _extract_parameters_from_instance(
+            plugin_instance,
+            category_name,
+            module_path,
+        )
         display_name = plugin_instance.name or _make_display_name(module_path)
         display = _convert_display_spec(plugin_instance.io_spec.display)
         implementations.append(

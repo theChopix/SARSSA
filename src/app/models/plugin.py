@@ -31,6 +31,20 @@ class CategoryInfo(BaseModel):
     has_visual_results: bool = False
 
 
+class WidgetConfig(BaseModel):
+    """Configuration payload for a non-default parameter widget.
+
+    Only the fields relevant to the chosen ``widget`` type are
+    populated; the rest remain ``None``.
+
+    Attributes:
+        choices_endpoint: URL path for fetching dynamic dropdown
+            options (used when ``widget="dropdown"``).
+    """
+
+    choices_endpoint: str | None = None
+
+
 class ParameterInfo(BaseModel):
     """Schema for a single plugin parameter.
 
@@ -39,12 +53,16 @@ class ParameterInfo(BaseModel):
         type: Python type name (e.g. ``int``, ``float``, ``str``).
         default: Default value, or None if the parameter is required.
         required: Whether the parameter must be provided by the user.
+        widget: Frontend widget type. Defaults to ``"text"``.
+        widget_config: Extra configuration for non-default widgets.
     """
 
     name: str
     type: str
     default: Any | None = None
     required: bool = True
+    widget: str = "text"
+    widget_config: WidgetConfig | None = None
 
 
 class DisplayRowSpec(BaseModel):
