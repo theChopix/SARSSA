@@ -133,6 +133,8 @@ class Plugin(BasePlugin):
         self.top_k_activations = topk_values.numpy().tolist()
 
         # output params
+        self.neuron_id_param = neuron_id
+        self.label_param = self.label
         self.k_param = k
 
         logger.info(f"Neuron {self.neuron_id} ('{self.label}') | top-{k} items retrieved")

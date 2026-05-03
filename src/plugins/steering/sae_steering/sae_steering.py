@@ -197,6 +197,8 @@ class Plugin(BasePlugin):
         # output params
         self.user_id_param = user_id
         self.user_original_id = str(self.users[user_id])
+        self.neuron_id_param = neuron_id
+        self.label_param = self.label
         self.alpha_param = alpha
         self.k_param = k
 
