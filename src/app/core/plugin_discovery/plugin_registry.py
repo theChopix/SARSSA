@@ -73,6 +73,7 @@ def _resolve_widget(
         endpoint = f"/plugins/param-choices/{category_name}/{plugin_name}/{hint.param_name}"
         return "dropdown", WidgetConfig(
             choices_endpoint=endpoint,
+            run_id_source=hint.artifact_step,
         )
 
     return "text", None

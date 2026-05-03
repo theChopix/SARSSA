@@ -548,6 +548,7 @@ class TestResolveWidget:
         assert config.choices_endpoint == (
             "/plugins/param-choices/inspection/inspection.sae_inspection.sae_inspection/neuron_id"
         )
+        assert config.run_id_source == "neuron_labeling"
 
     def test_base_hint_returns_text(self) -> None:
         """Verify base ParamUIHint falls back to text widget."""

@@ -40,9 +40,13 @@ class WidgetConfig(BaseModel):
     Attributes:
         choices_endpoint: URL path for fetching dynamic dropdown
             options (used when ``widget="dropdown"``).
+        run_id_source: Pipeline context key whose ``run_id`` the
+            frontend should pass as query param when fetching
+            choices (e.g. ``"neuron_labeling"``).
     """
 
     choices_endpoint: str | None = None
+    run_id_source: str | None = None
 
 
 class ParameterInfo(BaseModel):
