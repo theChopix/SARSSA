@@ -142,12 +142,18 @@ class ImplementationInfo(BaseModel):
         params: List of configurable parameters from the run() signature.
         display: Optional display specification describing how the
             frontend should render this plugin's output.
+        kind: Plugin variant derived from the folder layout.
+            ``"single"`` if the plugin lives directly under a
+            ``single/`` subfolder of its category, ``"compare"`` if
+            under ``compare/``.  ``None`` when the category does not
+            opt into the single/compare distinction.
     """
 
     plugin_name: str
     display_name: str
     params: list[ParameterInfo]
     display: ItemRowsDisplayModel | ArtifactDisplayModel | None = None
+    kind: Literal["single", "compare"] | None = None
 
 
 class CategoryRegistryEntry(BaseModel):

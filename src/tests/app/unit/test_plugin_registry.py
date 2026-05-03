@@ -13,6 +13,7 @@ import pytest
 from app.core.plugin_discovery.plugin_registry import (
     _build_ui_hint_map,
     _convert_display_spec,
+    _derive_kind,
     _extract_parameters_from_instance,
     _find_plugin_modules,
     _make_display_name,
@@ -240,6 +241,94 @@ class TestExtractParametersFromInstance:
             assert isinstance(p, ParameterInfo)
 
 
+class TestDeriveKind:
+    """Tests for _derive_kind (pure function, no mocking needed)."""
+
+    @pytest.mark.parametrize(
+        ("module_path", "category", "expected"),
+        [
+            (
+                "labeling_evaluation.single.dendrogram.dendrogram",
+                "labeling_evaluation",
+                "single",
+            ),
+            (
+                "labeling_evaluation.compare.diff.diff",
+                "labeling_evaluation",
+                "compare",
+            ),
+            (
+                "inspection.single.sae_inspection.sae_inspection",
+                "inspection",
+                "single",
+            ),
+            (
+                "inspection.compare.sae_inspection.sae_inspection",
+                "inspection",
+                "compare",
+            ),
+        ],
+    )
+    def test_returns_kind_when_subfolder_matches(
+        self,
+        module_path: str,
+        category: str,
+        expected: str,
+    ) -> None:
+        """Verify single/compare subfolders are recognised.
+
+        Args:
+            module_path: Dotted plugin module path.
+            category: Category key the module belongs to.
+            expected: Expected kind value.
+        """
+        assert _derive_kind(module_path, category) == expected
+
+    @pytest.mark.parametrize(
+        ("module_path", "category"),
+        [
+            ("inspection.sae_inspection.sae_inspection", "inspection"),
+            (
+                "dataset_loading.movieLens_loader.movieLens_loader",
+                "dataset_loading",
+            ),
+            ("training_sae.sae_trainer.sae_trainer", "training_sae"),
+        ],
+    )
+    def test_returns_none_for_flat_layout(
+        self,
+        module_path: str,
+        category: str,
+    ) -> None:
+        """Verify flat-layout plugins yield no kind.
+
+        Args:
+            module_path: Dotted plugin module path.
+            category: Category key the module belongs to.
+        """
+        assert _derive_kind(module_path, category) is None
+
+    def test_returns_none_for_unknown_subfolder(self) -> None:
+        """Verify subfolders other than single/compare yield None."""
+        result = _derive_kind(
+            "my_cat.other_subdir.impl.impl",
+            "my_cat",
+        )
+        assert result is None
+
+    def test_returns_none_when_first_segment_not_category(self) -> None:
+        """Verify defensive guard against malformed module paths."""
+        result = _derive_kind(
+            "wrong_root.single.impl.impl",
+            "expected_category",
+        )
+        assert result is None
+
+    def test_returns_none_for_too_short_path(self) -> None:
+        """Verify a one-segment path does not raise and yields None."""
+        assert _derive_kind("just_one", "just_one") is None
+
+
 class TestMakeDisplayName:
     """Tests for _make_display_name (pure function, no mocking needed)."""
 
@@ -431,6 +520,70 @@ class TestDiscoverImplementationsDisplay:
 
         impls = _discover_implementations("cat")
         assert impls[0].display is None
+
+
+class TestDiscoverImplementationsKind:
+    """Tests for kind propagation in _discover_implementations."""
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_single_kind_is_set(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify plugins under single/ get kind="single"."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["my_cat.single.impl.impl"]
+        mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
+
+        impls = _discover_implementations("my_cat")
+
+        assert len(impls) == 1
+        assert impls[0].kind == "single"
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_compare_kind_is_set(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify plugins under compare/ get kind="compare"."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["my_cat.compare.impl.impl"]
+        mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
+
+        impls = _discover_implementations("my_cat")
+
+        assert len(impls) == 1
+        assert impls[0].kind == "compare"
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_flat_layout_kind_is_none(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify plugins not under a kind subfolder have kind=None."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["my_cat.impl.impl"]
+        mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
+
+        impls = _discover_implementations("my_cat")
+
+        assert len(impls) == 1
+        assert impls[0].kind is None
 
 
 class TestGetPluginRegistry:
