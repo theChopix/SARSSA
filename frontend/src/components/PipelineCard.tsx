@@ -893,7 +893,7 @@ export default function PipelineCard({
                     const val = card.params[p.name] ?? (p.default != null ? String(p.default) : "");
                     const entries: [string, string][] = [[p.name, val]];
                     const label = card.params[`${p.name}_label`];
-                    if (label) entries.push(["label", label]);
+                    if (label) entries.push([`${p.name}_label`, label]);
                     return entries;
                   })
                 )
