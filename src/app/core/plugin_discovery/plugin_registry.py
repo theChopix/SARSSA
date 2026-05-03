@@ -7,7 +7,7 @@ registry consumable by the frontend.
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from app.config.config import PLUGIN_CATEGORIES
 from app.core.plugin_discovery.plugin_manager import PluginManager
@@ -34,6 +34,41 @@ if TYPE_CHECKING:
 PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
 SKIP_PARAMS = {"self"}
+
+
+def _derive_kind(
+    module_path: str,
+    category_name: str,
+) -> Literal["single", "compare"] | None:
+    """Derive a plugin's kind from its dotted module path.
+
+    A plugin is considered ``"single"`` or ``"compare"`` when the
+    path segment immediately following the category name matches
+    one of those literals.  Any other layout yields ``None`` so
+    categories that do not opt into the single/compare distinction
+    are unaffected.
+
+    Args:
+        module_path: Dotted module path produced by
+            ``_find_plugin_modules`` (e.g.
+            ``"inspection.single.sae_inspection.sae_inspection"``).
+        category_name: Category key the module belongs to
+            (e.g. ``"inspection"``).
+
+    Returns:
+        Literal["single", "compare"] | None: The derived kind, or
+            ``None`` when the path does not include a kind subfolder.
+    """
+    parts = module_path.split(".")
+    if len(parts) < 2 or parts[0] != category_name:
+        return None
+
+    candidate = parts[1]
+    if candidate == "single":
+        return "single"
+    if candidate == "compare":
+        return "compare"
+    return None
 
 
 def _build_ui_hint_map(
@@ -261,12 +296,14 @@ def _discover_implementations(
         )
         display_name = plugin_instance.name or _make_display_name(module_path)
         display = _convert_display_spec(plugin_instance.io_spec.display)
+        kind = _derive_kind(module_path, category_name)
         implementations.append(
             ImplementationInfo(
                 plugin_name=module_path,
                 display_name=display_name,
                 params=params,
                 display=display,
+                kind=kind,
             )
         )
 

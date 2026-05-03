@@ -70,6 +70,42 @@ class TestImplementationInfoIntegration:
                 assert impl.display_name, f"{impl.plugin_name} has empty display_name"
 
 
+class TestKindIntegration:
+    """Tests for kind derivation against the real plugin folder."""
+
+    def test_labeling_evaluation_single_plugins_have_single_kind(self) -> None:
+        """Verify every labeling_evaluation/single/* plugin gets kind="single"."""
+        registry = get_plugin_registry()
+        entry = registry["labeling_evaluation"]
+        single_impls = [impl for impl in entry.implementations if ".single." in impl.plugin_name]
+        assert single_impls, "expected at least one single plugin under labeling_evaluation"
+        for impl in single_impls:
+            assert impl.kind == "single", (
+                f"{impl.plugin_name} expected kind='single' but got {impl.kind}"
+            )
+
+    def test_inspection_flat_plugin_has_no_kind(self) -> None:
+        """Verify the un-migrated inspection.sae_inspection has kind=None."""
+        registry = get_plugin_registry()
+        entry = registry["inspection"]
+        flat_impls = [
+            impl
+            for impl in entry.implementations
+            if not (".single." in impl.plugin_name or ".compare." in impl.plugin_name)
+        ]
+        for impl in flat_impls:
+            assert impl.kind is None, f"{impl.plugin_name} unexpectedly has kind={impl.kind}"
+
+    def test_kind_only_set_for_known_subfolders(self) -> None:
+        """Verify no plugin reports a kind outside the allowed literals."""
+        registry = get_plugin_registry()
+        for entry in registry.values():
+            for impl in entry.implementations:
+                assert impl.kind in (None, "single", "compare"), (
+                    f"{impl.plugin_name} has invalid kind={impl.kind}"
+                )
+
+
 class TestExtractParametersIntegration:
     """Tests for parameter extraction across all real plugins."""
 
