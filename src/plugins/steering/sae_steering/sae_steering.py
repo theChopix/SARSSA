@@ -11,6 +11,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     DisplayRowSpec,
+    DynamicDropdownHint,
     ItemRowsDisplaySpec,
     OutputArtifactSpec,
     OutputParamSpec,
@@ -59,8 +60,8 @@ class Plugin(BasePlugin):
             ArtifactSpec("training_sae", "", "sae", "sae_model"),
             ArtifactSpec(
                 "neuron_labeling",
-                "top_neuron_per_tag.json",
-                "top_neuron_per_tag",
+                "neuron_labels.json",
+                "neuron_labels",
                 "json",
             ),
         ],
@@ -84,8 +85,8 @@ class Plugin(BasePlugin):
         output_params=[
             OutputParamSpec("user_id", "user_id_param"),
             OutputParamSpec("user_original_id", "user_original_id"),
-            OutputParamSpec("tag", "tag_param"),
-            OutputParamSpec("neuron_id", "neuron_id"),
+            OutputParamSpec("neuron_id", "neuron_id_param"),
+            OutputParamSpec("label", "label_param"),
             OutputParamSpec("alpha", "alpha_param"),
             OutputParamSpec("k", "k_param"),
         ],
@@ -106,12 +107,42 @@ class Plugin(BasePlugin):
                 ),
             ],
         ),
+        param_ui_hints=[
+            DynamicDropdownHint(
+                param_name="neuron_id",
+                artifact_step="neuron_labeling",
+                artifact_file="neuron_labels.json",
+                artifact_loader="json",
+                formatter="_format_neuron_choices",
+            ),
+        ],
     )
+
+    @staticmethod
+    def _format_neuron_choices(
+        data: dict[str, str],
+    ) -> list[dict[str, str]]:
+        """Format neuron_labels.json into dropdown options.
+
+        Args:
+            data: Mapping of neuron ID to label string.
+
+        Returns:
+            list[dict[str, str]]: Options with ``"label"``
+                and ``"value"`` keys.
+        """
+        return [
+            {
+                "label": f"{label} [neuron id {nid}]",
+                "value": nid,
+            }
+            for nid, label in data.items()
+        ]
 
     def run(
         self,
         user_id: int,
-        tag: str,
+        neuron_id: str,
         alpha: float = 0.3,
         k: int = 10,
     ) -> None:
@@ -119,7 +150,8 @@ class Plugin(BasePlugin):
 
         Args:
             user_id: Index of the user in the dataset (0-based).
-            tag: Concept tag to steer toward (must exist in top_neuron_per_tag).
+            neuron_id: SAE neuron ID to steer toward (as string
+                from dropdown selection).
             alpha: Steering strength in [0, 1].
             k: Number of recommendations to return.
         """
@@ -131,13 +163,14 @@ class Plugin(BasePlugin):
 
         if user_id < 0 or user_id >= self.full_csr.shape[0]:
             raise ValueError(f"user_id {user_id} out of range [0, {self.full_csr.shape[0] - 1}]")
-        if tag not in self.top_neuron_per_tag:
-            raise ValueError(f"Tag '{tag}' not found in top_neuron_per_tag mapping")
+        if neuron_id not in self.neuron_labels:
+            raise ValueError(f"Neuron ID '{neuron_id}' not found in neuron_labels mapping")
         if not (0.0 <= alpha <= 1.0):
             raise ValueError(f"alpha must be in [0, 1], got {alpha}")
 
-        self.neuron_id = self.top_neuron_per_tag[tag]
-        logger.info(f"Tag '{tag}' → neuron {self.neuron_id}")
+        self.neuron_id = int(neuron_id)
+        self.label = self.neuron_labels[neuron_id]
+        logger.info(f"Neuron {self.neuron_id} ('{self.label}')")
 
         # User interaction vector — shape (1, num_items)
         interaction_vec = torch.tensor(
@@ -164,11 +197,11 @@ class Plugin(BasePlugin):
         # output params
         self.user_id_param = user_id
         self.user_original_id = str(self.users[user_id])
-        self.tag_param = tag
         self.alpha_param = alpha
         self.k_param = k
 
         logger.info(
-            f"User {user_id} | tag='{tag}' | neuron={self.neuron_id} | alpha={alpha} | "
+            f"User {user_id} | neuron={self.neuron_id} "
+            f"('{self.label}') | alpha={alpha} | "
             f"interacted={len(self.interacted_items)} items"
         )

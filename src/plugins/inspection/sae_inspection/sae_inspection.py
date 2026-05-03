@@ -11,6 +11,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     DisplayRowSpec,
+    DynamicDropdownHint,
     ItemRowsDisplaySpec,
     OutputArtifactSpec,
     OutputParamSpec,
@@ -42,8 +43,8 @@ class Plugin(BasePlugin):
             ),
             ArtifactSpec(
                 "neuron_labeling",
-                "top_neuron_per_tag.json",
-                "top_neuron_per_tag",
+                "neuron_labels.json",
+                "neuron_labels",
                 "json",
             ),
             ArtifactSpec("neuron_labeling", "item_acts.pt", "item_acts", "pt"),
@@ -57,8 +58,8 @@ class Plugin(BasePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("tag", "tag_param"),
-            OutputParamSpec("neuron_id", "neuron_id"),
+            OutputParamSpec("neuron_id", "neuron_id_param"),
+            OutputParamSpec("label", "label_param"),
             OutputParamSpec("k", "k_param"),
         ],
         display=ItemRowsDisplaySpec(
@@ -70,24 +71,56 @@ class Plugin(BasePlugin):
                 ),
             ],
         ),
+        param_ui_hints=[
+            DynamicDropdownHint(
+                param_name="neuron_id",
+                artifact_step="neuron_labeling",
+                artifact_file="neuron_labels.json",
+                artifact_loader="json",
+                formatter="_format_neuron_choices",
+            ),
+        ],
     )
+
+    @staticmethod
+    def _format_neuron_choices(
+        data: dict[str, str],
+    ) -> list[dict[str, str]]:
+        """Format neuron_labels.json into dropdown options.
+
+        Args:
+            data: Mapping of neuron ID to label string.
+
+        Returns:
+            list[dict[str, str]]: Options with ``"label"``
+                and ``"value"`` keys.
+        """
+        return [
+            {
+                "label": f"{label} [neuron id {nid}]",
+                "value": nid,
+            }
+            for nid, label in data.items()
+        ]
 
     def run(
         self,
-        tag: str,
+        neuron_id: str,
         k: int = 10,
     ) -> None:
         """Inspect which items activate a concept neuron the most.
 
         Args:
-            tag: Concept tag to inspect (must exist in top_neuron_per_tag).
+            neuron_id: SAE neuron ID to inspect (as string
+                from dropdown selection).
             k: Number of top items to return.
         """
-        if tag not in self.top_neuron_per_tag:
-            raise ValueError(f"Tag '{tag}' not found in top_neuron_per_tag mapping")
+        if neuron_id not in self.neuron_labels:
+            raise ValueError(f"Neuron ID '{neuron_id}' not found in neuron_labels mapping")
 
-        self.neuron_id = self.top_neuron_per_tag[tag]
-        logger.info(f"Tag '{tag}' → neuron {self.neuron_id}")
+        self.neuron_id = int(neuron_id)
+        self.label = self.neuron_labels[neuron_id]
+        logger.info(f"Neuron {self.neuron_id} ('{self.label}')")
 
         # Get activations for the target neuron across all items
         neuron_activations = self.item_acts[:, self.neuron_id]  # (num_items,)
@@ -100,7 +133,6 @@ class Plugin(BasePlugin):
         self.top_k_activations = topk_values.numpy().tolist()
 
         # output params
-        self.tag_param = tag
         self.k_param = k
 
-        logger.info(f"Tag '{tag}' | neuron={self.neuron_id} | top-{k} items retrieved")
+        logger.info(f"Neuron {self.neuron_id} ('{self.label}') | top-{k} items retrieved")
