@@ -46,9 +46,10 @@ import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react"
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import { fetchParamChoices } from "../api/plugins";
+import { fetchEligiblePipelineRuns } from "../api/pipelines";
 import type { ParamChoice } from "../api/plugins";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
-import type { MlflowInfo, PipelineContext } from "../types/pipeline";
+import type { MlflowInfo, PipelineContext, PipelineRun } from "../types/pipeline";
 import type { CardStatus, CardMode } from "../store/pipelineStore";
 
 // ── Props ───────────────────────────────────────────────
@@ -110,12 +111,14 @@ function ParamRow({
   onChange,
   onLabelChange,
   context,
+  allParams,
 }: {
   param: ParameterInfo;
   value: string;
   onChange: (value: string) => void;
   onLabelChange?: (label: string) => void;
   context: PipelineContext | null;
+  allParams: Record<string, string>;
 }) {
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -130,13 +133,21 @@ function ParamRow({
       </span>
 
       {/* Widget: dropdown, slider, or text input */}
-      {param.widget === "dropdown" && param.widget_config?.choices_endpoint ? (
+      {param.widget === "past_runs_dropdown" && param.widget_config ? (
+        <PastRunsDropdownSelect
+          param={param}
+          value={value}
+          onChange={onChange}
+          onLabelChange={onLabelChange}
+        />
+      ) : param.widget === "dropdown" && param.widget_config?.choices_endpoint ? (
         <DropdownSelect
           param={param}
           value={value}
           onChange={onChange}
           onLabelChange={onLabelChange}
           context={context}
+          allParams={allParams}
         />
       ) : param.widget === "slider" && param.widget_config ? (
         <div className="flex-1 flex items-center gap-2">
@@ -168,14 +179,117 @@ function ParamRow({
   );
 }
 
+// ── Past runs dropdown ──────────────────────────────────
+
+/**
+ * A `<select>` dropdown that lists eligible past pipeline runs.
+ *
+ * Used by *compare* plugins to pick the past run to compare against.
+ * Fetches `GET /pipelines/runs?required_steps=...` once on mount,
+ * filtered by the `widget_config.required_steps` declared on the
+ * plugin's `PastRunsDropdownHint`.
+ */
+function PastRunsDropdownSelect({
+  param,
+  value,
+  onChange,
+  onLabelChange,
+}: {
+  param: ParameterInfo;
+  value: string;
+  onChange: (value: string) => void;
+  onLabelChange?: (label: string) => void;
+}) {
+  const [runs, setRuns] = useState<PipelineRun[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const requiredSteps = param.widget_config!.required_steps ?? [];
+  // Stable identity of the required-steps list as a single string so
+  // the effect only refires when the contents actually change.
+  const requiredStepsKey = requiredSteps.join("|");
+
+  const loadRuns = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const fetched = await fetchEligiblePipelineRuns(
+        requiredStepsKey ? requiredStepsKey.split("|") : []
+      );
+      setRuns(fetched);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load runs");
+    } finally {
+      setLoading(false);
+    }
+  }, [requiredStepsKey]);
+
+  useEffect(() => {
+    loadRuns();
+  }, [loadRuns]);
+
+  if (loading) {
+    return (
+      <span className="flex-1 text-sm text-gray-400 italic flex items-center gap-1">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading past runs…
+      </span>
+    );
+  }
+
+  if (error) {
+    return (
+      <span className="flex-1 text-sm text-red-500">{error}</span>
+    );
+  }
+
+  if (runs.length === 0) {
+    return (
+      <span className="flex-1 text-sm text-gray-400 italic">
+        No eligible past runs
+      </span>
+    );
+  }
+
+  const formatLabel = (run: PipelineRun) =>
+    `${run.run_name ?? run.run_id} (${run.status})`;
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        const next = e.target.value;
+        onChange(next);
+        const picked = runs.find((r) => r.run_id === next);
+        if (picked) onLabelChange?.(formatLabel(picked));
+      }}
+      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
+                 focus:outline-none focus:ring-2 focus:ring-blue-400
+                 text-gray-800 bg-white cursor-pointer"
+    >
+      <option value="">— select past run —</option>
+      {runs.map((run) => (
+        <option key={run.run_id} value={run.run_id}>
+          {formatLabel(run)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 // ── Dropdown select for dynamic choices ─────────────────
 
 /**
  * A `<select>` dropdown that fetches its options from the
  * backend param-choices endpoint.
  *
- * Requires a `run_id` from the pipeline context (looked up
- * via `widget_config.run_id_source`).
+ * The `run_id` to query with is resolved one of two ways:
+ *
+ * - **Default**: looked up in the current pipeline context via
+ *   `widget_config.run_id_source` (e.g. `"neuron_labeling"`).
+ * - **Cascading**: when `widget_config.source_run_param` is set,
+ *   the dropdown reads the current value of that *other parameter*
+ *   on the same plugin form (a parent pipeline run id selected
+ *   via a `past_runs_dropdown`) and refetches whenever it changes.
  */
 function DropdownSelect({
   param,
@@ -183,12 +297,14 @@ function DropdownSelect({
   onChange,
   onLabelChange,
   context,
+  allParams,
 }: {
   param: ParameterInfo;
   value: string;
   onChange: (value: string) => void;
   onLabelChange?: (label: string) => void;
   context: PipelineContext | null;
+  allParams: Record<string, string>;
 }) {
   const [options, setOptions] = useState<ParamChoice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -200,7 +316,18 @@ function DropdownSelect({
 
   const endpoint = param.widget_config!.choices_endpoint!;
   const sourceStep = param.widget_config!.run_id_source;
-  const runId = sourceStep ? context?.[sourceStep]?.run_id : null;
+  const sourceRunParam = param.widget_config!.source_run_param;
+
+  // Cascading source wins when set; otherwise fall back to the
+  // current pipeline's upstream-step run id.
+  const cascadeValue = sourceRunParam ? allParams[sourceRunParam] : undefined;
+  const runId = sourceRunParam
+    ? cascadeValue && cascadeValue.length > 0
+      ? cascadeValue
+      : null
+    : sourceStep
+    ? context?.[sourceStep]?.run_id ?? null
+    : null;
 
   // Fetch options when the run_id becomes available.
   const loadOptions = useCallback(async () => {
@@ -221,6 +348,20 @@ function DropdownSelect({
   useEffect(() => {
     loadOptions();
   }, [loadOptions]);
+
+  // When the cascade source changes, drop any stale value that no
+  // longer matches an option from the new source.  Skipped while
+  // options are still loading so a transient empty list does not
+  // wipe a valid selection.
+  useEffect(() => {
+    if (!sourceRunParam || !runId || loading) return;
+    if (!value) return;
+    if (options.length === 0) return;
+    const stillValid = options.some((o) => o.value === value);
+    if (!stillValid) {
+      onChange("");
+    }
+  }, [options, value, sourceRunParam, runId, loading, onChange]);
 
   // Close dropdown when clicking outside.
   useEffect(() => {
@@ -244,7 +385,9 @@ function DropdownSelect({
   if (!runId) {
     return (
       <span className="flex-1 text-sm text-gray-400 italic">
-        Run the {sourceStep ?? "upstream"} step first
+        {sourceRunParam
+          ? `Pick a value for ${sourceRunParam} first`
+          : `Run the ${sourceStep ?? "upstream"} step first`}
       </span>
     );
   }
@@ -725,6 +868,7 @@ export default function PipelineCard({
                   : undefined
               }
               context={context}
+              allParams={card.params}
             />
           ))}
         </div>
