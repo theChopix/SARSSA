@@ -46,16 +46,27 @@ export interface CategoryInfo {
  * - `run_id_source`    – Pipeline context key whose `run_id` should
  *                         be passed as a query param when fetching
  *                         choices (e.g. `"neuron_labeling"`).
+ * - `source_run_param` – Name of another parameter on the same
+ *                         plugin whose value is a parent pipeline
+ *                         run id.  When set, the dropdown sources
+ *                         its choices from that run instead of the
+ *                         current pipeline's upstream step and
+ *                         refetches whenever that param changes.
  * - `slider_min`       – Minimum value for slider widgets.
  * - `slider_max`       – Maximum value for slider widgets.
  * - `slider_step`      – Step increment for slider widgets.
+ * - `required_steps`   – Step keys an eligible past run must have
+ *                         completed (used when
+ *                         `widget = "past_runs_dropdown"`).
  */
 export interface WidgetConfig {
   choices_endpoint: string | null;
   run_id_source: string | null;
+  source_run_param: string | null;
   slider_min: number | null;
   slider_max: number | null;
   slider_step: number | null;
+  required_steps: string[] | null;
 }
 
 // ── Plugin parameter metadata ───────────────────────────

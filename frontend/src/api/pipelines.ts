@@ -60,6 +60,43 @@ export async function fetchPipelineRuns(): Promise<PipelineRun[]> {
   return (await response.json()) as PipelineRun[];
 }
 
+/**
+ * Fetch past pipeline runs filtered to those whose `context.json`
+ * contains every step in `requiredSteps`.
+ *
+ * Used by the `past_runs_dropdown` widget so a compare plugin only
+ * surfaces runs that have already completed the prerequisite stages.
+ *
+ * @param requiredSteps - Step keys that must be present in each
+ *                        returned run's context (e.g.
+ *                        `["dataset_loading", "neuron_labeling"]`).
+ *                        An empty array yields the unfiltered list.
+ * @returns Eligible runs, newest first.
+ *
+ * @throws {Error} If the HTTP request fails (non-2xx status).
+ */
+export async function fetchEligiblePipelineRuns(
+  requiredSteps: string[]
+): Promise<PipelineRun[]> {
+  const params = new URLSearchParams();
+  for (const step of requiredSteps) {
+    params.append("required_steps", step);
+  }
+  const query = params.toString();
+  const url = query
+    ? `${API_BASE_URL}/pipelines/runs?${query}`
+    : `${API_BASE_URL}/pipelines/runs`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch eligible pipeline runs: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return (await response.json()) as PipelineRun[];
+}
+
 // ── GET /pipelines/runs/{run_id}/context ────────────────
 
 /**
