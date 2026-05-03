@@ -129,7 +129,7 @@ function ParamRow({
         ({param.type})
       </span>
 
-      {/* Widget: dropdown or text input */}
+      {/* Widget: dropdown, slider, or text input */}
       {param.widget === "dropdown" && param.widget_config?.choices_endpoint ? (
         <DropdownSelect
           param={param}
@@ -138,6 +138,21 @@ function ParamRow({
           onLabelChange={onLabelChange}
           context={context}
         />
+      ) : param.widget === "slider" && param.widget_config ? (
+        <div className="flex-1 flex items-center gap-2">
+          <input
+            type="range"
+            min={param.widget_config.slider_min ?? 0}
+            max={param.widget_config.slider_max ?? 1}
+            step={param.widget_config.slider_step ?? 0.01}
+            value={value || String(param.default ?? 0)}
+            onChange={(e) => onChange(e.target.value)}
+            className="flex-1 accent-blue-500 cursor-pointer"
+          />
+          <span className="text-sm text-gray-700 font-mono min-w-[3rem] text-right">
+            {value || String(param.default ?? 0)}
+          </span>
+        </div>
       ) : (
         <input
           type="text"

@@ -46,10 +46,16 @@ export interface CategoryInfo {
  * - `run_id_source`    – Pipeline context key whose `run_id` should
  *                         be passed as a query param when fetching
  *                         choices (e.g. `"neuron_labeling"`).
+ * - `slider_min`       – Minimum value for slider widgets.
+ * - `slider_max`       – Maximum value for slider widgets.
+ * - `slider_step`      – Step increment for slider widgets.
  */
 export interface WidgetConfig {
   choices_endpoint: string | null;
   run_id_source: string | null;
+  slider_min: number | null;
+  slider_max: number | null;
+  slider_step: number | null;
 }
 
 // ── Plugin parameter metadata ───────────────────────────

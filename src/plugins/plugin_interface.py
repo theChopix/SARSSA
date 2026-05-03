@@ -212,6 +212,25 @@ class DynamicDropdownHint(ParamUIHint):
 
 
 @dataclass
+class SliderHint(ParamUIHint):
+    """Render a parameter as a range slider.
+
+    The frontend displays an ``<input type="range">`` with the
+    configured bounds and step size, along with the current numeric
+    value.
+
+    Attributes:
+        min_value: Minimum allowed value.
+        max_value: Maximum allowed value.
+        step: Increment between allowed values.
+    """
+
+    min_value: float = 0.0
+    max_value: float = 1.0
+    step: float = 0.01
+
+
+@dataclass
 class PluginIOSpec:
     """Full I/O contract for a plugin.
 

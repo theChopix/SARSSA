@@ -16,6 +16,7 @@ from plugins.plugin_interface import (
     OutputArtifactSpec,
     OutputParamSpec,
     PluginIOSpec,
+    SliderHint,
 )
 from utils.plugin_logger import get_logger
 from utils.torch.models.steered_model import SteeredModel
@@ -114,6 +115,12 @@ class Plugin(BasePlugin):
                 artifact_file="neuron_labels.json",
                 artifact_loader="json",
                 formatter="_format_neuron_choices",
+            ),
+            SliderHint(
+                param_name="alpha",
+                min_value=0.0,
+                max_value=1.0,
+                step=0.01,
             ),
         ],
     )

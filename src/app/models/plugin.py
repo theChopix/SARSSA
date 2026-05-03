@@ -43,10 +43,16 @@ class WidgetConfig(BaseModel):
         run_id_source: Pipeline context key whose ``run_id`` the
             frontend should pass as query param when fetching
             choices (e.g. ``"neuron_labeling"``).
+        slider_min: Minimum value for slider widgets.
+        slider_max: Maximum value for slider widgets.
+        slider_step: Step increment for slider widgets.
     """
 
     choices_endpoint: str | None = None
     run_id_source: str | None = None
+    slider_min: float | None = None
+    slider_max: float | None = None
+    slider_step: float | None = None
 
 
 class ParameterInfo(BaseModel):

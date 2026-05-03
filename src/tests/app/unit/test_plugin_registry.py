@@ -36,6 +36,7 @@ from plugins.plugin_interface import (
     ItemRowsDisplaySpec,
     ParamUIHint,
     PluginIOSpec,
+    SliderHint,
 )
 
 # ── Helpers for building mock plugin directory trees ──────────────
@@ -550,6 +551,22 @@ class TestResolveWidget:
         )
         assert config.run_id_source == "neuron_labeling"
 
+    def test_slider_hint_returns_slider(self) -> None:
+        """Verify SliderHint produces slider widget with config."""
+        hint = SliderHint(
+            param_name="alpha",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        )
+        widget, config = _resolve_widget(hint, "steering", "sae.sae")
+        assert widget == "slider"
+        assert config is not None
+        assert isinstance(config, WidgetConfig)
+        assert config.slider_min == 0.0
+        assert config.slider_max == 1.0
+        assert config.slider_step == 0.01
+
     def test_base_hint_returns_text(self) -> None:
         """Verify base ParamUIHint falls back to text widget."""
         hint = ParamUIHint(param_name="x")
@@ -613,3 +630,26 @@ class TestExtractParametersWithUIHints:
         assert neuron_param.widget == "dropdown"
         assert k_param.widget == "text"
         assert k_param.widget_config is None
+
+    def test_param_with_slider_hint(self) -> None:
+        """Verify param with SliderHint gets slider widget."""
+        hint = SliderHint(
+            param_name="alpha",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.05,
+        )
+        plugin = _make_mock_plugin(
+            {"alpha": (float, 0.3)},
+            param_ui_hints=[hint],
+        )
+        params = _extract_parameters_from_instance(
+            plugin,
+            "steering",
+            "steering.sae.sae",
+        )
+        assert params[0].widget == "slider"
+        assert params[0].widget_config is not None
+        assert params[0].widget_config.slider_min == 0.0
+        assert params[0].widget_config.slider_max == 1.0
+        assert params[0].widget_config.slider_step == 0.05
