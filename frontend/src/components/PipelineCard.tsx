@@ -489,21 +489,24 @@ export default function PipelineCard({
 
   const busy = pipelineRunning || anyStepRunning;
 
-  // Guard: if registry hasn't loaded yet, render nothing.
-  if (!entry || !card) return null;
+  // ── Hooks (must run unconditionally, before any early return) ──
 
-  const { category_info, implementations } = entry;
+  // Active kind tab — local component state, ephemeral on purpose.
+  // Lazy initializer reads from `entry` because the registry may
+  // not have loaded yet on first render; defaults to "single" when
+  // nothing is known.
+  const [activeKind, setActiveKind] = useState<"single" | "compare">(() => {
+    const impls = entry?.implementations ?? [];
+    for (const k of ["single", "compare"] as const) {
+      if (impls.some((i) => i.kind === k)) return k;
+    }
+    return "single";
+  });
 
-  // Find the currently selected implementation object.
-  const selectedImpl = implementations.find(
-    (impl) => impl.plugin_name === card.selectedPlugin
-  );
-
-  // Is this a multi_run card?
-  const isMultiRun = category_info.type === "multi_run";
-
-  // Card mode from the store ("setup" or "load").
-  const cardMode: CardMode = card.mode;
+  // Card mode from the store ("setup" or "load") — used by the
+  // effect below; safe to read before the guard via optional
+  // chaining.
+  const cardMode: CardMode | undefined = card?.mode;
 
   // Fetch past runs when any card switches to "load" mode.
   useEffect(() => {
@@ -511,6 +514,37 @@ export default function PipelineCard({
       loadPastRuns();
     }
   }, [cardMode, loadPastRuns]);
+
+  // Guard: if registry hasn't loaded yet, render nothing.
+  if (!entry || !card || cardMode === undefined) return null;
+
+  const { category_info, implementations } = entry;
+
+  // ── Single / compare tabs ──────────────────────────
+  // Derive the set of kinds present in this category from the
+  // implementations themselves.  When non-empty we render a tab
+  // strip and filter the plugin list to the active tab.
+  const availableKinds: ("single" | "compare")[] = (
+    ["single", "compare"] as const
+  ).filter((k) => implementations.some((impl) => impl.kind === k));
+  const hasKindTabs = availableKinds.length > 0;
+
+  // Visible implementations after applying the active-tab filter.
+  // Categories that don't opt into kinds (e.g. dataset_loading) keep
+  // every implementation visible.
+  const visibleImplementations = hasKindTabs
+    ? implementations.filter((impl) => impl.kind === activeKind)
+    : implementations;
+
+  // Find the currently selected implementation object — but only
+  // among the visible ones so the parameter form below disappears
+  // when the user switches tabs away from the selected plugin.
+  const selectedImpl = visibleImplementations.find(
+    (impl) => impl.plugin_name === card.selectedPlugin
+  );
+
+  // Is this a multi_run card?
+  const isMultiRun = category_info.type === "multi_run";
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
@@ -624,10 +658,36 @@ export default function PipelineCard({
         </select>
       )}
 
+      {/* ── Single / compare kind tabs ─────────────────── */}
+      {hasKindTabs &&
+        (isMultiRun || (cardMode === "setup" && card.status !== "done")) && (
+        <div
+          className="flex rounded-md overflow-hidden border border-gray-300 self-start"
+        >
+          {availableKinds.map((kind, i) => (
+            <button
+              key={kind}
+              onClick={() => setActiveKind(kind)}
+              disabled={busy}
+              className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer
+                          disabled:cursor-not-allowed ${
+                i > 0 ? "border-l border-gray-300" : ""
+              } ${
+                activeKind === kind
+                  ? "bg-blue-500 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {kind}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Plugin list ("Set up new" mode or multi_run) ── */}
       {(isMultiRun || (cardMode === "setup" && card.status !== "done")) && (
         <div className="flex flex-col gap-0.5">
-          {implementations.map((impl) => (
+          {visibleImplementations.map((impl) => (
             <PluginRow
               key={impl.plugin_name}
               impl={impl}

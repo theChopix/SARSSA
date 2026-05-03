@@ -155,12 +155,16 @@ export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
  * - `display_name` – Human-readable name for the UI.
  * - `params`       – Array of parameters the user can configure.
  * - `display`      – Optional display spec for visual output rendering.
+ * - `kind`         – Plugin variant ("single" / "compare") derived from
+ *                    the folder layout, or `null` when the category does
+ *                    not opt into the single/compare distinction.
  */
 export interface ImplementationInfo {
   plugin_name: string;
   display_name: string;
   params: ParameterInfo[];
   display: DisplaySpec | null;
+  kind: "single" | "compare" | null;
 }
 
 // ── Full category entry in the registry ─────────────────
