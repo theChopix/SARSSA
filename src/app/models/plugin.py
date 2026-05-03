@@ -35,7 +35,32 @@ class WidgetConfig(BaseModel):
     """Configuration payload for a non-default parameter widget.
 
     Only the fields relevant to the chosen ``widget`` type are
-    populated; the rest remain ``None``.
+    populated; every other field stays ``None`` (or ``None`` /
+    empty list for collections).  The valid combinations are:
+
+    - ``widget="dropdown"`` (regular dynamic dropdown):
+      ``choices_endpoint`` + ``run_id_source``.  The frontend
+      resolves the upstream step's run id from the current
+      pipeline context and calls the param-choices endpoint with
+      it.
+
+    - ``widget="dropdown"`` (cascading variant): same fields as the
+      regular dropdown, plus ``source_run_param`` pointing to
+      another parameter on the same plugin.  When set, the
+      frontend uses that param's current value (a parent pipeline
+      run id) instead of resolving via ``run_id_source``, and
+      refetches whenever the watched param changes.
+
+    - ``widget="past_runs_dropdown"``: ``required_steps`` only.
+      The frontend hits ``/pipelines/runs?required_steps=...``
+      directly to list eligible past runs; no
+      ``choices_endpoint`` / ``run_id_source`` is needed.
+
+    - ``widget="slider"``: ``slider_min`` + ``slider_max`` +
+      ``slider_step`` define the slider's bounds and increment.
+
+    - ``widget="text"`` (default): ``WidgetConfig`` is omitted
+      entirely (``ParameterInfo.widget_config`` is ``None``).
 
     Attributes:
         choices_endpoint: URL path for fetching dynamic dropdown
