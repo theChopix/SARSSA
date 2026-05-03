@@ -41,6 +41,64 @@ class TestListRuns:
         assert len(data) == 1
         assert data[0]["run_id"] == "r1"
 
+    def test_required_steps_query_routes_to_eligible_filter(
+        self,
+        client: TestClient,
+    ) -> None:
+        """Verify ?required_steps= delegates to get_eligible_pipeline_runs."""
+        eligible_payload: list[dict[str, Any]] = [
+            {
+                "run_id": "r2",
+                "run_name": "eligible",
+                "status": "FINISHED",
+                "start_time": 1700000000001,
+            },
+        ]
+        with (
+            patch(
+                "app.api.routes_pipelines.get_eligible_pipeline_runs",
+                return_value=eligible_payload,
+            ) as mock_eligible,
+            patch(
+                "app.api.routes_pipelines.get_pipeline_runs",
+                return_value=[],
+            ) as mock_all,
+        ):
+            response = client.get(
+                "/pipelines/runs",
+                params=[
+                    ("required_steps", "dataset_loading"),
+                    ("required_steps", "neuron_labeling"),
+                ],
+            )
+
+        assert response.status_code == 200
+        assert response.json() == eligible_payload
+        mock_eligible.assert_called_once_with(
+            ["dataset_loading", "neuron_labeling"],
+        )
+        mock_all.assert_not_called()
+
+    def test_no_required_steps_uses_unfiltered_query(
+        self,
+        client: TestClient,
+    ) -> None:
+        """Verify the unfiltered path is used when no query param is sent."""
+        with (
+            patch(
+                "app.api.routes_pipelines.get_eligible_pipeline_runs",
+            ) as mock_eligible,
+            patch(
+                "app.api.routes_pipelines.get_pipeline_runs",
+                return_value=[],
+            ) as mock_all,
+        ):
+            response = client.get("/pipelines/runs")
+
+        assert response.status_code == 200
+        mock_all.assert_called_once_with()
+        mock_eligible.assert_not_called()
+
 
 class TestGetContext:
     """Tests for GET /pipelines/runs/{run_id}/context."""

@@ -45,6 +45,41 @@ def get_pipeline_runs() -> list[dict[str, Any]]:
     ]
 
 
+def get_eligible_pipeline_runs(
+    required_steps: list[str],
+) -> list[dict[str, Any]]:
+    """List past pipeline runs that contain all *required_steps*.
+
+    A run is eligible when its ``context.json`` artifact maps every
+    entry in *required_steps* to a value (typically a per-step run
+    id).  Runs whose ``context.json`` is missing or unreadable are
+    silently dropped — they cannot be used as a compare source.
+
+    Args:
+        required_steps: Step keys that must be present in the
+            past run's ``context.json``.  An empty list returns
+            every top-level pipeline run.
+
+    Returns:
+        list[dict[str, Any]]: Subset of :func:`get_pipeline_runs`
+            whose context contains all *required_steps*, preserving
+            the newest-first ordering.
+    """
+    all_runs = get_pipeline_runs()
+    if not required_steps:
+        return all_runs
+
+    eligible: list[dict[str, Any]] = []
+    for run in all_runs:
+        try:
+            context = get_run_context(run["run_id"])
+        except FileNotFoundError:
+            continue
+        if all(step in context for step in required_steps):
+            eligible.append(run)
+    return eligible
+
+
 def get_run_context(run_id: str) -> dict[str, Any]:
     """Load the ``context.json`` artifact from a pipeline parent run.
 

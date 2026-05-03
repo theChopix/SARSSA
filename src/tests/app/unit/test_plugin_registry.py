@@ -36,6 +36,7 @@ from plugins.plugin_interface import (
     DynamicDropdownHint,
     ItemRowsDisplaySpec,
     ParamUIHint,
+    PastRunsDropdownHint,
     PluginIOSpec,
     SliderHint,
 )
@@ -704,6 +705,27 @@ class TestResolveWidget:
         )
         assert config.run_id_source == "neuron_labeling"
 
+    def test_past_runs_dropdown_hint_returns_widget(self) -> None:
+        """Verify PastRunsDropdownHint produces past_runs_dropdown widget."""
+        hint = PastRunsDropdownHint(
+            param_name="past_run_id",
+            required_steps=["dataset_loading", "neuron_labeling"],
+        )
+        widget, config = _resolve_widget(hint, "inspection", "inspection.compare.x.x")
+        assert widget == "past_runs_dropdown"
+        assert config is not None
+        assert isinstance(config, WidgetConfig)
+        assert config.required_steps == ["dataset_loading", "neuron_labeling"]
+        assert config.choices_endpoint is None
+        assert config.run_id_source is None
+
+    def test_past_runs_dropdown_hint_empty_required_steps(self) -> None:
+        """Verify empty required_steps still produces a valid widget."""
+        hint = PastRunsDropdownHint(param_name="past_run_id")
+        _, config = _resolve_widget(hint, "inspection", "inspection.compare.x.x")
+        assert config is not None
+        assert config.required_steps == []
+
     def test_slider_hint_returns_slider(self) -> None:
         """Verify SliderHint produces slider widget with config."""
         hint = SliderHint(
@@ -783,6 +805,25 @@ class TestExtractParametersWithUIHints:
         assert neuron_param.widget == "dropdown"
         assert k_param.widget == "text"
         assert k_param.widget_config is None
+
+    def test_param_with_past_runs_dropdown_hint(self) -> None:
+        """Verify param with PastRunsDropdownHint gets past_runs_dropdown widget."""
+        hint = PastRunsDropdownHint(
+            param_name="past_run_id",
+            required_steps=["dataset_loading"],
+        )
+        plugin = _make_mock_plugin(
+            {"past_run_id": (str, "")},
+            param_ui_hints=[hint],
+        )
+        params = _extract_parameters_from_instance(
+            plugin,
+            "inspection",
+            "inspection.compare.sae_inspection.sae_inspection",
+        )
+        assert params[0].widget == "past_runs_dropdown"
+        assert params[0].widget_config is not None
+        assert params[0].widget_config.required_steps == ["dataset_loading"]
 
     def test_param_with_slider_hint(self) -> None:
         """Verify param with SliderHint gets slider widget."""

@@ -102,13 +102,22 @@ def _resolve_widget(
         tuple[str, WidgetConfig | None]: The widget type string
             and optional widget configuration.
     """
-    from plugins.plugin_interface import DynamicDropdownHint, SliderHint
+    from plugins.plugin_interface import (
+        DynamicDropdownHint,
+        PastRunsDropdownHint,
+        SliderHint,
+    )
 
     if isinstance(hint, DynamicDropdownHint):
         endpoint = f"/plugins/param-choices/{category_name}/{plugin_name}/{hint.param_name}"
         return "dropdown", WidgetConfig(
             choices_endpoint=endpoint,
             run_id_source=hint.artifact_step,
+        )
+
+    if isinstance(hint, PastRunsDropdownHint):
+        return "past_runs_dropdown", WidgetConfig(
+            required_steps=list(hint.required_steps),
         )
 
     if isinstance(hint, SliderHint):
