@@ -5,8 +5,7 @@ the top-K items for which that neuron activates the most (sorted by
 activation strength, descending).
 """
 
-import torch
-
+from plugins.inspection._top_k import compute_top_k_for_neuron
 from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
@@ -115,26 +114,21 @@ class Plugin(BasePlugin):
                 from dropdown selection).
             k: Number of top items to return.
         """
-        if neuron_id not in self.neuron_labels:
-            raise ValueError(f"Neuron ID '{neuron_id}' not found in neuron_labels mapping")
+        result = compute_top_k_for_neuron(
+            neuron_id=neuron_id,
+            neuron_labels=self.neuron_labels,
+            items=self.items,
+            item_acts=self.item_acts,
+            k=k,
+        )
 
-        self.neuron_id = int(neuron_id)
-        self.label = self.neuron_labels[neuron_id]
-        logger.info(f"Neuron {self.neuron_id} ('{self.label}')")
+        self.neuron_id = result["neuron_id"]
+        self.label = result["label"]
+        self.top_k_item_ids = result["top_k_item_ids"]
+        self.top_k_activations = result["top_k_activations"]
 
-        # Get activations for the target neuron across all items
-        neuron_activations = self.item_acts[:, self.neuron_id]  # (num_items,)
-
-        # Top-k items by activation (descending)
-        k = min(k, len(neuron_activations))
-        topk_values, topk_indices = torch.topk(neuron_activations, k)
-
-        self.top_k_item_ids = self.items[topk_indices.numpy()].tolist()
-        self.top_k_activations = topk_values.numpy().tolist()
-
-        # output params
         self.neuron_id_param = neuron_id
         self.label_param = self.label
-        self.k_param = k
+        self.k_param = result["k"]
 
-        logger.info(f"Neuron {self.neuron_id} ('{self.label}') | top-{k} items retrieved")
+        logger.info(f"Neuron {self.neuron_id} ('{self.label}') | top-{result['k']} items retrieved")
