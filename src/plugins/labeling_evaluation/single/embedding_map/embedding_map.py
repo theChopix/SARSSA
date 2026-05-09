@@ -1,10 +1,9 @@
 import tempfile
 
 import mlflow
-import numpy as np
 import plotly.graph_objects as go
-import umap
 
+from plugins.labeling_evaluation._embedding_map import compute_label_embedding_coords
 from plugins.plugin_interface import (
     ArtifactDisplaySpec,
     ArtifactFileSpec,
@@ -14,7 +13,6 @@ from plugins.plugin_interface import (
     OutputParamSpec,
     PluginIOSpec,
 )
-from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
 from utils.plugin_logger import get_logger
 
 logger = get_logger(__name__)
@@ -69,25 +67,20 @@ class Plugin(BasePlugin):
         umap_random_state: int = 42,
         point_size: int = 8,
     ) -> None:
-        logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
-
-        embedder = OpenAIEmbeddingLLM(model=embedding_model)
-        embeddings = np.array([embedder.generate_embedding(t) for t in self.label_texts])
-
         logger.info(
-            f"Embeddings shape: {embeddings.shape}. "
-            f"Running UMAP (n_neighbors={umap_n_neighbors}, min_dist={umap_min_dist}, "
+            f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}; "
+            f"UMAP (n_neighbors={umap_n_neighbors}, min_dist={umap_min_dist}, "
             f"metric={umap_metric})"
         )
 
-        reducer = umap.UMAP(
-            n_components=2,
-            n_neighbors=umap_n_neighbors,
-            min_dist=umap_min_dist,
-            metric=umap_metric,
-            random_state=umap_random_state,
+        self.umap_coords = compute_label_embedding_coords(
+            label_texts=self.label_texts,
+            embedding_model=embedding_model,
+            umap_n_neighbors=umap_n_neighbors,
+            umap_min_dist=umap_min_dist,
+            umap_metric=umap_metric,
+            umap_random_state=umap_random_state,
         )
-        self.umap_coords = reducer.fit_transform(embeddings)
 
         hover_texts = [
             f"<b>Neuron {nid}</b><br>{self.neuron_labels[nid]}" for nid in self.neuron_ids
