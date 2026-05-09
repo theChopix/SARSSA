@@ -88,8 +88,8 @@ class Plugin(BaseComparePlugin):
         display=ItemRowsDisplaySpec(
             type="item_rows",
             rows=[
-                DisplayRowSpec("current_top_k_item_ids", "Current Run"),
-                DisplayRowSpec("past_top_k_item_ids", "Past Run"),
+                DisplayRowSpec("current_top_k_item_ids", "Top Items for Concept - Current Run"),
+                DisplayRowSpec("past_top_k_item_ids", "Top Items for Concept - Past Run"),
             ],
         ),
         param_ui_hints=[
