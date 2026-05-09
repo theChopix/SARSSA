@@ -24,7 +24,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, ChevronDown } from "lucide-react";
 
 import { fetchStepArtifact, fetchEnrichedItems } from "../api/items";
 import { ItemCard } from "./ItemCard";
@@ -67,6 +67,7 @@ function ItemRow({
     loading: true,
     error: null,
   });
+  const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,37 +115,53 @@ function ItemRow({
 
   return (
     <div className="space-y-2">
-      {/* Row label */}
-      <h4 className="text-sm font-medium text-gray-700">{row.label}</h4>
+      {/* Collapsible row header */}
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="flex w-full items-center gap-2 text-left text-sm font-medium text-gray-700 hover:text-gray-900"
+        aria-expanded={expanded}
+      >
+        <ChevronDown
+          className={`h-4 w-4 text-gray-400 transition-transform ${
+            expanded ? "" : "-rotate-90"
+          }`}
+        />
+        <h4>{row.label}</h4>
+      </button>
 
-      {/* Loading skeleton */}
-      {state.loading && (
-        <div className="flex items-center gap-2 py-4 text-gray-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-xs">Loading items…</span>
-        </div>
-      )}
+      {expanded && (
+        <>
+          {/* Loading skeleton */}
+          {state.loading && (
+            <div className="flex items-center gap-2 py-4 text-gray-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-xs">Loading items…</span>
+            </div>
+          )}
 
-      {/* Error state */}
-      {state.error && (
-        <div className="flex items-center gap-2 py-2 text-red-500">
-          <AlertCircle className="h-4 w-4" />
-          <span className="text-xs">{state.error}</span>
-        </div>
-      )}
+          {/* Error state */}
+          {state.error && (
+            <div className="flex items-center gap-2 py-2 text-red-500">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-xs">{state.error}</span>
+            </div>
+          )}
 
-      {/* Item cards — horizontal scroll */}
-      {!state.loading && !state.error && state.items.length > 0 && (
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {state.items.map((item) => (
-            <ItemCard key={item.id} item={item} />
-          ))}
-        </div>
-      )}
+          {/* Item cards — horizontal scroll */}
+          {!state.loading && !state.error && state.items.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {state.items.map((item) => (
+                <ItemCard key={item.id} item={item} />
+              ))}
+            </div>
+          )}
 
-      {/* Empty state */}
-      {!state.loading && !state.error && state.items.length === 0 && (
-        <p className="text-xs text-gray-400 py-2">No items to display.</p>
+          {/* Empty state */}
+          {!state.loading && !state.error && state.items.length === 0 && (
+            <p className="text-xs text-gray-400 py-2">No items to display.</p>
+          )}
+        </>
       )}
     </div>
   );
