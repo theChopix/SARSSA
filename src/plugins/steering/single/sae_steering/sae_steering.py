@@ -1,11 +1,12 @@
 """SAE-based steering plugin for recommender systems.
 
 Given a user (by index), a concept tag, and a steering strength alpha,
-returns the user's interaction history, the base-model's top-K recommendations,
-and the SAE neuron-boosted top-K recommendations.
+returns the user's interaction history, the base-model's top-K
+recommendations, and the SAE neuron-boosted top-K recommendations.
+The analytical core lives in
+:func:`plugins.steering._steer.compute_steered_recommendations` so
+the compare variant can apply it to two contexts.
 """
-
-import torch
 
 from plugins.plugin_interface import (
     ArtifactSpec,
@@ -18,8 +19,8 @@ from plugins.plugin_interface import (
     PluginIOSpec,
     SliderHint,
 )
+from plugins.steering._steer import compute_steered_recommendations
 from utils.plugin_logger import get_logger
-from utils.torch.models.steered_model import SteeredModel
 from utils.torch.runtime import set_device
 
 logger = get_logger(__name__)
@@ -165,47 +166,30 @@ class Plugin(BasePlugin):
         device = set_device()
         logger.info(f"Using device: {device}")
 
-        self.base_model.to(device)
-        self.sae.to(device)
-
-        if user_id < 0 or user_id >= self.full_csr.shape[0]:
-            raise ValueError(f"user_id {user_id} out of range [0, {self.full_csr.shape[0] - 1}]")
-        if neuron_id not in self.neuron_labels:
-            raise ValueError(f"Neuron ID '{neuron_id}' not found in neuron_labels mapping")
-        if not (0.0 <= alpha <= 1.0):
-            raise ValueError(f"alpha must be in [0, 1], got {alpha}")
-
-        self.neuron_id = int(neuron_id)
-        self.label = self.neuron_labels[neuron_id]
-        logger.info(f"Neuron {self.neuron_id} ('{self.label}')")
-
-        # User interaction vector — shape (1, num_items)
-        interaction_vec = torch.tensor(
-            self.full_csr[user_id].toarray(), dtype=torch.float32, device=device
+        result = compute_steered_recommendations(
+            full_csr=self.full_csr,
+            items=self.items,
+            users=self.users,
+            base_model=self.base_model,
+            sae=self.sae,
+            neuron_labels=self.neuron_labels,
+            user_id=user_id,
+            neuron_id=neuron_id,
+            alpha=alpha,
+            k=k,
+            device=device,
         )
 
-        # Interacted items
-        interacted_indices = self.full_csr[user_id].indices.tolist()
-        self.interacted_items = self.items[interacted_indices].tolist()
+        self.neuron_id = result["neuron_id"]
+        self.label = result["label"]
+        self.interacted_items = result["interacted_items"]
+        self.original_recommendations = result["original_recommendations"]
+        self.steered_recommendations = result["steered_recommendations"]
 
-        # Original recommendations (base model only, no SAE)
-        self.base_model.eval()
-        _, orig_indices = self.base_model.recommend(interaction_vec, k=k, mask_interactions=True)
-        self.original_recommendations = self.items[orig_indices[0]].tolist()
-
-        # Steered recommendations (base model + SAE + neuron boost)
-        steered_model = SteeredModel(self.base_model, self.sae, alpha=alpha)
-        steered_model.eval()
-        _, steered_indices = steered_model.recommend(
-            interaction_vec, neuron_ids=[self.neuron_id], k=k, mask_interactions=True
-        )
-        self.steered_recommendations = self.items[steered_indices[0]].tolist()
-
-        # output params
-        self.user_id_param = user_id
-        self.user_original_id = str(self.users[user_id])
+        self.user_id_param = result["user_id"]
+        self.user_original_id = result["user_original_id"]
         self.neuron_id_param = neuron_id
-        self.label_param = self.label
+        self.label_param = result["label"]
         self.alpha_param = alpha
         self.k_param = k
 
