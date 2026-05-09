@@ -129,7 +129,7 @@ class TestGetParamChoicesEndpoint:
     ) -> None:
         """Verify 422 when run_id query param is not provided."""
         response = client.get(
-            "/plugins/param-choices/steering/steering.sae_steering.sae_steering/neuron_id",
+            "/plugins/param-choices/steering/steering.single.sae_steering.sae_steering/neuron_id",
         )
         assert response.status_code == 422
 

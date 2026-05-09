@@ -40,7 +40,7 @@ export type PipelineContext = Record<string, { run_id: string }>;
  * Sent to `POST /pipelines/run-async` (as part of an array)
  * or `POST /pipelines/runs/{run_id}/execute-step` (single step).
  *
- * - `plugin` – Dotted module path (e.g. "steering.sae_steering.sae_steering").
+ * - `plugin` – Dotted module path (e.g. "steering.single.sae_steering.sae_steering").
  * - `params` – Key-value pairs forwarded to the plugin's `run()` method.
  */
 export interface StepDefinition {
