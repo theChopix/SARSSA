@@ -360,7 +360,7 @@ class TestExecuteStep:
         response = client.post(
             "/pipelines/runs/parent_123/execute-step",
             json={
-                "plugin": "steering.sae_steering.sae_steering",
+                "plugin": "steering.single.sae_steering.sae_steering",
                 "params": {"alpha": 0.5},
             },
         )
@@ -436,7 +436,10 @@ class TestExecuteStepAsync:
         """Verify steps_requested contains exactly the one submitted step."""
         response = client.post(
             "/pipelines/runs/run_abc/execute-step-async",
-            json={"plugin": "steering.sae_steering.sae_steering", "params": {"alpha": 0.3}},
+            json={
+                "plugin": "steering.single.sae_steering.sae_steering",
+                "params": {"alpha": 0.3},
+            },
         )
         task_id = response.json()["task_id"]
 
@@ -445,7 +448,7 @@ class TestExecuteStepAsync:
         task = get_task(task_id)
         assert task is not None
         assert len(task.steps_requested) == 1
-        assert task.steps_requested[0]["plugin"] == "steering.sae_steering.sae_steering"
+        assert task.steps_requested[0]["plugin"] == "steering.single.sae_steering.sae_steering"
 
     @patch("app.api.routes_pipelines.run_step_worker")
     def test_spawns_step_worker(self, mock_worker: MagicMock, client: TestClient) -> None:

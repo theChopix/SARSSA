@@ -141,7 +141,7 @@ export async function fetchRunContext(
  * @example
  * ```ts
  * const result = await executeStep("abc123", {
- *   plugin: "steering.sae_steering.sae_steering",
+ *   plugin: "steering.single.sae_steering.sae_steering",
  *   params: { alpha: 0.5 },
  * });
  * console.log(result.step_run_id); // "def456"
@@ -185,7 +185,7 @@ export async function executeStep(
  * @example
  * ```ts
  * const { task_id } = await executeStepAsync("abc123", {
- *   plugin: "steering.sae_steering.sae_steering",
+ *   plugin: "steering.single.sae_steering.sae_steering",
  *   params: { alpha: 0.5 },
  * });
  * // poll getTaskStatus(task_id) every 2 s …
