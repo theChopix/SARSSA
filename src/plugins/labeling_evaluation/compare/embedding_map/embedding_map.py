@@ -68,6 +68,7 @@ class Plugin(BaseComparePlugin):
             ),
         ],
         output_params=[
+            OutputParamSpec("embedding_provider", "embedding_provider_param"),
             OutputParamSpec("embedding_model", "embedding_model_param"),
             OutputParamSpec("umap_n_neighbors", "umap_n_neighbors_param"),
             OutputParamSpec("umap_min_dist", "umap_min_dist_param"),
@@ -103,6 +104,7 @@ class Plugin(BaseComparePlugin):
     def run(
         self,
         past_run_id: str,
+        embedding_provider: str = "openai",
         embedding_model: str = "text-embedding-3-small",
         umap_n_neighbors: int = 15,
         umap_min_dist: float = 0.1,
@@ -116,8 +118,10 @@ class Plugin(BaseComparePlugin):
             past_run_id: MLflow run id of the past pipeline run to
                 compare against.  Loaded automatically by
                 :class:`BaseComparePlugin` into ``self.past_context``.
-            embedding_model: OpenAI embedding model identifier
-                (e.g. ``"text-embedding-3-small"``).
+            embedding_provider: Embedder provider name resolved by
+                the registry (e.g. ``"openai"``).
+            embedding_model: Provider-specific model identifier
+                (e.g. ``"text-embedding-3-small"`` for OpenAI).
             umap_n_neighbors: ``n_neighbors`` knob forwarded to UMAP.
             umap_min_dist: ``min_dist`` knob forwarded to UMAP.
             umap_metric: Distance metric forwarded to UMAP.
@@ -133,10 +137,11 @@ class Plugin(BaseComparePlugin):
         past_label_texts = [str(past_neuron_labels[nid]) for nid in past_neuron_ids]
 
         logger.info(
-            "Embedding %d current + %d past labels with %s; "
+            "Embedding %d current + %d past labels with %s:%s; "
             "UMAP (n_neighbors=%d, min_dist=%s, metric=%s)",
             len(self.current_label_texts),
             len(past_label_texts),
+            embedding_provider,
             embedding_model,
             umap_n_neighbors,
             umap_min_dist,
@@ -146,6 +151,7 @@ class Plugin(BaseComparePlugin):
         combined_texts = self.current_label_texts + past_label_texts
         combined_coords = compute_label_embedding_coords(
             label_texts=combined_texts,
+            embedding_provider=embedding_provider,
             embedding_model=embedding_model,
             umap_n_neighbors=umap_n_neighbors,
             umap_min_dist=umap_min_dist,
@@ -203,6 +209,7 @@ class Plugin(BaseComparePlugin):
             legend={"title": {"text": "Run"}},
         )
 
+        self.embedding_provider_param = embedding_provider
         self.embedding_model_param = embedding_model
         self.umap_n_neighbors_param = umap_n_neighbors
         self.umap_min_dist_param = umap_min_dist

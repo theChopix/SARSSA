@@ -2,20 +2,26 @@
 
 Both ``labeling_evaluation.single.embedding_map`` and
 ``labeling_evaluation.compare.embedding_map`` invoke this helper so
-the analytical core (text embedding via OpenAI, then 2-D UMAP
-projection) lives in one place.  The compare variant feeds the
-*concatenation* of two label sets through the helper so both sides
-share the same UMAP coordinate space.
+the analytical core (text embedding, then 2-D UMAP projection)
+lives in one place.  The compare variant feeds the *concatenation*
+of two label sets through the helper so both sides share the same
+UMAP coordinate space.
+
+The embedding step delegates to
+:func:`plugins.labeling_evaluation._embedding_cache.embed_labels`,
+which constructs the concrete embedder via the provider registry
+and memoizes the result per ``(labels, provider, model)``.
 """
 
 import numpy as np
 import umap
 
-from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
+from plugins.labeling_evaluation._embedding_cache import embed_labels
 
 
 def compute_label_embedding_coords(
     label_texts: list[str],
+    embedding_provider: str,
     embedding_model: str,
     umap_n_neighbors: int,
     umap_min_dist: float,
@@ -28,8 +34,10 @@ def compute_label_embedding_coords(
         label_texts: Strings to embed.  Order is preserved through
             both the embedding and the UMAP fit so the returned
             coordinates align row-wise with the input.
-        embedding_model: OpenAI embedding model identifier
-            (e.g. ``"text-embedding-3-small"``).
+        embedding_provider: Embedder provider name resolved by the
+            registry (e.g. ``"openai"``).
+        embedding_model: Provider-specific model identifier (e.g.
+            ``"text-embedding-3-small"`` for OpenAI).
         umap_n_neighbors: ``n_neighbors`` knob forwarded to UMAP.
         umap_min_dist: ``min_dist`` knob forwarded to UMAP.
         umap_metric: Distance metric forwarded to UMAP.
@@ -45,8 +53,7 @@ def compute_label_embedding_coords(
     if not label_texts:
         raise ValueError("label_texts must not be empty")
 
-    embedder = OpenAIEmbeddingLLM(model=embedding_model)
-    embeddings = np.array([embedder.generate_embedding(t) for t in label_texts])
+    embeddings = embed_labels(label_texts, embedding_provider, embedding_model)
 
     reducer = umap.UMAP(
         n_components=2,
