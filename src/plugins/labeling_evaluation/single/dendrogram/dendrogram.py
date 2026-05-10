@@ -2,10 +2,10 @@ import tempfile
 
 import matplotlib.pyplot as plt
 import mlflow
-import numpy as np
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import pdist
 
+from plugins.labeling_evaluation._embedding_cache import embed_labels
 from plugins.plugin_interface import (
     ArtifactDisplaySpec,
     ArtifactFileSpec,
@@ -15,7 +15,6 @@ from plugins.plugin_interface import (
     OutputParamSpec,
     PluginIOSpec,
 )
-from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
 from utils.plugin_logger import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +35,7 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("linkage_matrix", "linkage_matrix.npy", "npy"),
         ],
         output_params=[
+            OutputParamSpec("embedding_provider", "embedding_provider_param"),
             OutputParamSpec("embedding_model", "embedding_model_param"),
             OutputParamSpec("linkage_method", "linkage_method_param"),
             OutputParamSpec("num_neurons", "num_neurons"),
@@ -60,16 +60,19 @@ class Plugin(BasePlugin):
 
     def run(
         self,
+        embedding_provider: str = "openai",
         embedding_model: str = "text-embedding-3-small",
         linkage_method: str = "average",
         figure_width: int = 20,
         base_height: int = 10,
         label_font_size: int = 6,
     ) -> None:
-        logger.info(f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}")
+        logger.info(
+            f"Embedding {len(self.label_texts)} neuron labels with "
+            f"{embedding_provider}:{embedding_model}"
+        )
 
-        embedder = OpenAIEmbeddingLLM(model=embedding_model)
-        embeddings = np.array([embedder.generate_embedding(t) for t in self.label_texts])
+        embeddings = embed_labels(self.label_texts, embedding_provider, embedding_model)
 
         # pairwise cosine distance then hierarchical clustering
         distances = pdist(embeddings, metric="cosine")
@@ -101,6 +104,7 @@ class Plugin(BasePlugin):
         plt.tight_layout()
 
         # output params
+        self.embedding_provider_param = embedding_provider
         self.embedding_model_param = embedding_model
         self.linkage_method_param = linkage_method
         self.num_neurons = len(self.neuron_ids)
