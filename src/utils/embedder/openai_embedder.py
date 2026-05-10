@@ -16,3 +16,8 @@ class OpenAIEmbeddingLLM(EmbeddingLLM):
 
     def generate_embedding(self, text: str) -> list[float]:
         return self.model_.embed_query(text)
+
+    def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        return self.model_.embed_documents(texts)
