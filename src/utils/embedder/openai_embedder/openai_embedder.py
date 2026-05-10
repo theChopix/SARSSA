@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 
-from .embedder import EmbeddingLLM
+from utils.embedder.embedder import EmbeddingLLM
 
 load_dotenv()
 

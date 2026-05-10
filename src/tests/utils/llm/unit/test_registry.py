@@ -13,7 +13,7 @@ import pytest
 class TestCreateChatLLM:
     """Tests for the ``create_chat_llm`` factory."""
 
-    @patch("utils.llm.openai_llm.ChatOpenAI")
+    @patch("utils.llm.openai_llm.openai_llm.ChatOpenAI")
     def test_openai_returns_openai_chat_llm(
         self,
         mock_chat_openai_cls: MagicMock,
@@ -34,7 +34,7 @@ class TestCreateChatLLM:
         assert llm.model == "gpt-4o-mini"
         assert llm.temperature == 0.0
 
-    @patch("utils.llm.openai_llm.ChatOpenAI")
+    @patch("utils.llm.openai_llm.openai_llm.ChatOpenAI")
     def test_default_max_tokens_propagates(
         self,
         mock_chat_openai_cls: MagicMock,
@@ -54,7 +54,7 @@ class TestCreateChatLLM:
         assert isinstance(llm, OpenAIChatLLM)
         assert llm.max_tokens == 5000
 
-    @patch("utils.llm.openai_llm.ChatOpenAI")
+    @patch("utils.llm.openai_llm.openai_llm.ChatOpenAI")
     def test_explicit_max_tokens_propagates(
         self,
         mock_chat_openai_cls: MagicMock,

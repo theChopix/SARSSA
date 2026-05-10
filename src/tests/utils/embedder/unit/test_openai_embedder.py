@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 class TestOpenAIEmbeddingLLMGenerateEmbeddings:
     """Tests for ``OpenAIEmbeddingLLM.generate_embeddings``."""
 
-    @patch("utils.embedder.openai_embedder.OpenAIEmbeddings")
+    @patch("utils.embedder.openai_embedder.openai_embedder.OpenAIEmbeddings")
     def test_forwards_to_embed_documents_once(
         self,
         mock_embeddings_cls: MagicMock,
@@ -34,7 +34,7 @@ class TestOpenAIEmbeddingLLMGenerateEmbeddings:
         inner.embed_documents.assert_called_once_with(["hello", "world"])
         inner.embed_query.assert_not_called()
 
-    @patch("utils.embedder.openai_embedder.OpenAIEmbeddings")
+    @patch("utils.embedder.openai_embedder.openai_embedder.OpenAIEmbeddings")
     def test_empty_input_returns_empty_list_without_call(
         self,
         mock_embeddings_cls: MagicMock,
@@ -59,7 +59,7 @@ class TestOpenAIEmbeddingLLMGenerateEmbeddings:
 class TestOpenAIEmbeddingLLMGenerateEmbedding:
     """Tests for the existing single-text ``generate_embedding`` path."""
 
-    @patch("utils.embedder.openai_embedder.OpenAIEmbeddings")
+    @patch("utils.embedder.openai_embedder.openai_embedder.OpenAIEmbeddings")
     def test_forwards_to_embed_query(
         self,
         mock_embeddings_cls: MagicMock,

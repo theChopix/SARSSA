@@ -13,7 +13,7 @@ import pytest
 class TestCreateEmbedder:
     """Tests for the ``create_embedder`` factory."""
 
-    @patch("utils.embedder.openai_embedder.OpenAIEmbeddings")
+    @patch("utils.embedder.openai_embedder.openai_embedder.OpenAIEmbeddings")
     def test_openai_returns_openai_embedder(
         self,
         mock_embeddings_cls: MagicMock,
