@@ -112,6 +112,7 @@ function ParamRow({
   onLabelChange,
   context,
   allParams,
+  disabled = false,
 }: {
   param: ParameterInfo;
   value: string;
@@ -119,6 +120,7 @@ function ParamRow({
   onLabelChange?: (label: string) => void;
   context: PipelineContext | null;
   allParams: Record<string, string>;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -139,6 +141,7 @@ function ParamRow({
           value={value}
           onChange={onChange}
           onLabelChange={onLabelChange}
+          disabled={disabled}
         />
       ) : param.widget === "dropdown" && param.widget_config?.choices_endpoint ? (
         <DropdownSelect
@@ -148,6 +151,7 @@ function ParamRow({
           onLabelChange={onLabelChange}
           context={context}
           allParams={allParams}
+          disabled={disabled}
         />
       ) : param.widget === "slider" && param.widget_config ? (
         <div className="flex-1 flex items-center gap-2">
@@ -158,7 +162,9 @@ function ParamRow({
             step={param.widget_config.slider_step ?? 0.01}
             value={value || String(param.default ?? 0)}
             onChange={(e) => onChange(e.target.value)}
-            className="flex-1 accent-blue-500 cursor-pointer"
+            disabled={disabled}
+            className="flex-1 accent-blue-500 cursor-pointer
+                       disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span className="text-sm text-gray-700 font-mono min-w-[3rem] text-right">
             {value || String(param.default ?? 0)}
@@ -170,9 +176,12 @@ function ParamRow({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={param.required ? "required" : ""}
+          disabled={disabled}
           className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
                      focus:outline-none focus:ring-2 focus:ring-blue-400
-                     text-gray-800 bg-white"
+                     text-gray-800 bg-white
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     disabled:bg-gray-100"
         />
       )}
     </div>
@@ -194,11 +203,13 @@ function PastRunsDropdownSelect({
   value,
   onChange,
   onLabelChange,
+  disabled = false,
 }: {
   param: ParameterInfo;
   value: string;
   onChange: (value: string) => void;
   onLabelChange?: (label: string) => void;
+  disabled?: boolean;
 }) {
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [loading, setLoading] = useState(false);
@@ -262,9 +273,12 @@ function PastRunsDropdownSelect({
         const picked = runs.find((r) => r.run_id === next);
         if (picked) onLabelChange?.(formatLabel(picked));
       }}
+      disabled={disabled}
       className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
                  focus:outline-none focus:ring-2 focus:ring-blue-400
-                 text-gray-800 bg-white cursor-pointer"
+                 text-gray-800 bg-white cursor-pointer
+                 disabled:opacity-50 disabled:cursor-not-allowed
+                 disabled:bg-gray-100"
     >
       <option value="">— select past run —</option>
       {runs.map((run) => (
@@ -298,6 +312,7 @@ function DropdownSelect({
   onLabelChange,
   context,
   allParams,
+  disabled = false,
 }: {
   param: ParameterInfo;
   value: string;
@@ -305,6 +320,7 @@ function DropdownSelect({
   onLabelChange?: (label: string) => void;
   context: PipelineContext | null;
   allParams: Record<string, string>;
+  disabled?: boolean;
 }) {
   const [options, setOptions] = useState<ParamChoice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -380,6 +396,15 @@ function DropdownSelect({
     if (open) searchRef.current?.focus();
   }, [open]);
 
+  // Close the option panel if the dropdown is disabled mid-interaction
+  // (e.g. the user expanded it just before hitting "Execute step").
+  useEffect(() => {
+    if (disabled && open) {
+      setOpen(false);
+      setFilter("");
+    }
+  }, [disabled, open]);
+
   // ── Render states ───────────────────────────────────
 
   if (!runId) {
@@ -416,10 +441,13 @@ function DropdownSelect({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        disabled={disabled}
         className="w-full px-2 py-1 text-sm border border-gray-300 rounded
                    focus:outline-none focus:ring-2 focus:ring-blue-400
                    text-gray-800 bg-white text-left flex items-center justify-between
-                   cursor-pointer"
+                   cursor-pointer
+                   disabled:opacity-50 disabled:cursor-not-allowed
+                   disabled:bg-gray-100"
       >
         <span className={selectedLabel ? "" : "text-gray-400"}>
           {selectedLabel ?? "— select —"}
@@ -869,6 +897,7 @@ export default function PipelineCard({
               }
               context={context}
               allParams={card.params}
+              disabled={card.status === "running"}
             />
           ))}
         </div>
