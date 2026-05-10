@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
-from .llm import ChatLLM
+from utils.llm.llm import ChatLLM
 
 load_dotenv()
 
