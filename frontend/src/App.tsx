@@ -73,7 +73,6 @@ function HomePage() {
   const clearError = usePipelineStore((s) => s.clearError);
   const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
   const totalSteps = usePipelineStore((s) => s.totalSteps);
-  const loadMlflowInfo = usePipelineStore((s) => s.loadMlflowInfo);
   const cancellationPending = usePipelineStore((s) => s.cancellationPending);
   const cancelPipeline = usePipelineStore((s) => s.cancelPipeline);
   const anyStepRunning = usePipelineStore((s) =>
@@ -85,8 +84,7 @@ function HomePage() {
   // to fetch all available plugins and categories.
   useEffect(() => {
     loadRegistry();
-    loadMlflowInfo();
-  }, [loadRegistry, loadMlflowInfo]);
+  }, [loadRegistry]);
 
   // ── Split categories into two rows ──────────────────
   // `useMemo` caches this computation so it only re-runs
