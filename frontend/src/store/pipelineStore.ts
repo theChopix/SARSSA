@@ -380,11 +380,16 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
   setParam: (category: string, paramName: string, value: string) => {
     const cards = { ...get().cards };
+    const current = cards[category];
+    const isRunning = current.status === "running";
     cards[category] = {
-      ...cards[category],
-      params: { ...cards[category].params, [paramName]: value },
-      status: "idle",
-      stepRunId: null,
+      ...current,
+      params: { ...current.params, [paramName]: value },
+      // Preserve "running" so cascade-driven onChange("") (from the
+      // dropdown stale-value cleanup effect) does not flip the card
+      // back to "idle" while the backend is still computing.
+      status: isRunning ? current.status : "idle",
+      stepRunId: isRunning ? current.stepRunId : null,
     };
     set({ cards });
   },
