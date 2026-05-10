@@ -104,6 +104,7 @@ class TestCompareEmbeddingMapRun:
             "past_b",
             "past_c",
         ]
+        assert passed_kwargs["embedding_provider"] == "openai"
         assert passed_kwargs["embedding_model"] == "text-embedding-3-small"
         assert passed_kwargs["umap_n_neighbors"] == 10
         assert passed_kwargs["umap_min_dist"] == 0.05
@@ -111,6 +112,7 @@ class TestCompareEmbeddingMapRun:
         assert passed_kwargs["umap_random_state"] == 7
 
         assert plugin.past_run_id_param == "parent_xyz"
+        assert plugin.embedding_provider_param == "openai"
         assert plugin.embedding_model_param == "text-embedding-3-small"
         assert plugin.num_neurons_current_param == 2
         assert plugin.num_neurons_past_param == 3

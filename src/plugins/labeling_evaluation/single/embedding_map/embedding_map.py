@@ -33,6 +33,7 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("umap_coords", "umap_coords.npy", "npy"),
         ],
         output_params=[
+            OutputParamSpec("embedding_provider", "embedding_provider_param"),
             OutputParamSpec("embedding_model", "embedding_model_param"),
             OutputParamSpec("umap_n_neighbors", "umap_n_neighbors_param"),
             OutputParamSpec("umap_min_dist", "umap_min_dist_param"),
@@ -60,6 +61,7 @@ class Plugin(BasePlugin):
 
     def run(
         self,
+        embedding_provider: str = "openai",
         embedding_model: str = "text-embedding-3-small",
         umap_n_neighbors: int = 15,
         umap_min_dist: float = 0.1,
@@ -68,13 +70,15 @@ class Plugin(BasePlugin):
         point_size: int = 8,
     ) -> None:
         logger.info(
-            f"Embedding {len(self.label_texts)} neuron labels with {embedding_model}; "
+            f"Embedding {len(self.label_texts)} neuron labels with "
+            f"{embedding_provider}:{embedding_model}; "
             f"UMAP (n_neighbors={umap_n_neighbors}, min_dist={umap_min_dist}, "
             f"metric={umap_metric})"
         )
 
         self.umap_coords = compute_label_embedding_coords(
             label_texts=self.label_texts,
+            embedding_provider=embedding_provider,
             embedding_model=embedding_model,
             umap_n_neighbors=umap_n_neighbors,
             umap_min_dist=umap_min_dist,
@@ -110,6 +114,7 @@ class Plugin(BasePlugin):
         )
 
         # output params
+        self.embedding_provider_param = embedding_provider
         self.embedding_model_param = embedding_model
         self.umap_n_neighbors_param = umap_n_neighbors
         self.umap_min_dist_param = umap_min_dist
