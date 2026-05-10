@@ -74,6 +74,7 @@ include = [
     "src/utils/embedder/openai_embedder.py",
     "src/utils/embedder/registry.py",
     "src/utils/llm/openai_llm.py",
+    "src/utils/llm/registry.py",
     "src/plugins/**/*.py",
     "src/tests/plugins/**/*.py"
 ]
