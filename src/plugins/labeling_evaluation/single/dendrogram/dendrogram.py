@@ -1,4 +1,5 @@
 import tempfile
+from typing import Annotated
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -60,12 +61,40 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        embedding_provider: str = "openai",
-        embedding_model: str = "text-embedding-3-small",
-        linkage_method: str = "average",
-        figure_width: int = 20,
-        base_height: int = 10,
-        label_font_size: int = 6,
+        embedding_provider: Annotated[
+            str,
+            "Embedding backend used to turn the neuron label texts into "
+            "vectors (e.g. 'openai'); must be a provider known to the "
+            "embedder registry.",
+        ] = "openai",
+        embedding_model: Annotated[
+            str,
+            "Provider-specific embedding model identifier (e.g. "
+            "'text-embedding-3-small' for OpenAI). Determines the semantic "
+            "space the labels are embedded into.",
+        ] = "text-embedding-3-small",
+        linkage_method: Annotated[
+            str,
+            "Hierarchical-clustering linkage method passed to SciPy (e.g. "
+            "'average', 'single', 'complete', 'ward'). Controls how cluster "
+            "distances are aggregated and therefore the tree's shape.",
+        ] = "average",
+        figure_width: Annotated[
+            int,
+            "Width of the rendered dendrogram figure, in inches. Larger "
+            "values give the horizontal distance axis more room.",
+        ] = 20,
+        base_height: Annotated[
+            int,
+            "Minimum height of the dendrogram figure, in inches. Actual "
+            "height grows with the label count (~0.25 in per label); this "
+            "sets the floor for small label sets.",
+        ] = 10,
+        label_font_size: Annotated[
+            int,
+            "Font size of the per-leaf neuron-label text. Lower values keep "
+            "many labels legible without overlap.",
+        ] = 6,
     ) -> None:
         logger.info(
             f"Embedding {len(self.label_texts)} neuron labels with "
