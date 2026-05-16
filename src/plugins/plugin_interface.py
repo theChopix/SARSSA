@@ -77,6 +77,9 @@ class OutputArtifactSpec:
             (e.g. ``"neuron_labels.json"``).
         saver: Saver strategy identifier. Supported values:
             ``"json"``, ``"npz"``, ``"npy"``, ``"pt"``, ``"model"``.
+            The ``"model"`` saver writes a fixed ``config.json`` +
+            ``model.pt`` at the artifact root and ignores ``filename``
+            (which must be ``""``); at most one ``"model"`` per plugin.
     """
 
     attr: str
@@ -540,7 +543,9 @@ class BasePlugin(ABC):
 
         Raises:
             ValueError: If ``spec.saver`` is not a recognised
-                strategy.
+                strategy, or if the ``"model"`` saver is given a
+                non-empty ``filename`` (it writes a fixed
+                ``config.json`` + ``model.pt`` and ignores it).
         """
         value = getattr(self, spec.attr)
         path = os.path.join(tmp_dir, spec.filename)
@@ -557,6 +562,16 @@ class BasePlugin(ABC):
 
                 torch.save(value, path)
             case "model":
+                if spec.filename:
+                    raise ValueError(
+                        "The 'model' saver writes a fixed 'config.json' + "
+                        "'model.pt' at the run's artifact root and ignores "
+                        f'filename; OutputArtifactSpec.filename must be "" '
+                        f"(got {spec.filename!r}). Only one 'model' artifact "
+                        "per plugin is supported; load it back with the "
+                        "'base_model' or 'sae_model' loader."
+                    )
+
                 import torch
 
                 config = value.get_config()

@@ -408,6 +408,20 @@ class TestSaveArtifact:
         with pytest.raises(ValueError, match="csv"):
             plugin._save_artifact(str(tmp_path), spec)
 
+    def test_model_saver_rejects_nonempty_filename(self, tmp_path: Any) -> None:
+        """Verify the 'model' saver fails fast on a non-empty filename.
+
+        The saver writes a fixed config.json + model.pt at the artifact
+        root and ignores filename; a non-empty filename is a usage error
+        and must raise rather than silently overwrite.
+        """
+        plugin = _make_plugin()
+        plugin.trained_model = MagicMock()
+        spec = OutputArtifactSpec("trained_model", "my_model.pt", "model")
+
+        with pytest.raises(ValueError, match="must be"):
+            plugin._save_artifact(str(tmp_path), spec)
+
 
 # ── load_context (integration of sub-helpers) ───────────────────────
 
