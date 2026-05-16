@@ -12,7 +12,7 @@ and the past-run label that was the nearest neighbour.
 
 import json
 import tempfile
-from typing import Any
+from typing import Annotated, Any
 
 import mlflow
 import numpy as np
@@ -101,9 +101,24 @@ class Plugin(BaseComparePlugin):
 
     def run(
         self,
-        past_run_id: str,
-        embedding_provider: str = "openai",
-        embedding_model: str = "text-embedding-3-small",
+        past_run_id: Annotated[
+            str,
+            "A previously completed pipeline run to compare against; its "
+            "neuron labels are embedded so each current-run label can be "
+            "matched to its nearest past-run label.",
+        ],
+        embedding_provider: Annotated[
+            str,
+            "Embedding backend used to turn the neuron label texts into "
+            "vectors (e.g. 'openai'); must be a provider known to the "
+            "embedder registry.",
+        ] = "openai",
+        embedding_model: Annotated[
+            str,
+            "Provider-specific embedding model identifier (e.g. "
+            "'text-embedding-3-small' for OpenAI). Determines the semantic "
+            "space the labels are embedded into.",
+        ] = "text-embedding-3-small",
     ) -> None:
         """Compute nearest distances and render the bar-chart figure.
 
