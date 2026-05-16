@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Annotated
 
 import mlflow
 import numpy as np
@@ -237,15 +238,56 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        epochs: int = 100,
-        batch_size: int = 64,
-        factors: int = 256,
-        lr: float = 0.0001,
-        early_stop: int = 10,
-        seed: int = 43,
-        target_ratio: float = 0.2,
-        beta1: float = 0.9,
-        beta2: float = 0.99,
+        epochs: Annotated[
+            int,
+            "Maximum passes over the training set (early stopping may end "
+            "training sooner). Higher allows fuller convergence at the cost "
+            "of runtime.",
+        ] = 100,
+        batch_size: Annotated[
+            int,
+            "Users per gradient update. Larger batches are faster per epoch "
+            "with smoother gradients but use more memory and may need a "
+            "higher learning rate.",
+        ] = 64,
+        factors: Annotated[
+            int,
+            "Dimensionality of the latent user/item embedding. Higher adds "
+            "model capacity to fit more patterns but risks overfitting and "
+            "costs more memory/compute.",
+        ] = 256,
+        lr: Annotated[
+            float,
+            "Adam optimizer step size. Too high diverges or oscillates; too "
+            "low trains slowly. Typical range 1e-4 to 1e-3.",
+        ] = 0.0001,
+        early_stop: Annotated[
+            int,
+            "Stop after this many consecutive epochs without validation "
+            "NDCG@20 improvement. 0 disables early stopping (run all "
+            "epochs).",
+        ] = 10,
+        seed: Annotated[
+            int,
+            "Random seed for weight initialization and training. Fix for "
+            "reproducible models across runs.",
+        ] = 43,
+        target_ratio: Annotated[
+            float,
+            "Fraction of each user's interactions hidden as prediction "
+            "targets during validation/test scoring; the rest form the "
+            "input. E.g. 0.2 predicts 20% from the other 80%.",
+        ] = 0.2,
+        beta1: Annotated[
+            float,
+            "Adam first-moment (momentum) decay: how strongly past "
+            "gradients smooth each update. Standard value 0.9.",
+        ] = 0.9,
+        beta2: Annotated[
+            float,
+            "Adam second-moment decay: controls per-parameter adaptive "
+            "step scaling. Standard value 0.99.",
+        ] = 0.99,
     ):
         """Execute the ELSA training pipeline.
 

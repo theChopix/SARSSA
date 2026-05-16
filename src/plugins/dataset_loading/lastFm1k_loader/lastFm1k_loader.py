@@ -1,3 +1,5 @@
+from typing import Annotated
+
 import polars as pl
 
 from plugins.dataset_loading._dataset_loader import DatasetLoader
@@ -95,9 +97,23 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        seed: int = 42,
-        val_ratio: float = 0.1,
-        test_ratio: float = 0.1,
+        seed: Annotated[
+            int,
+            "Random seed for the train/validation/test split. Fix for "
+            "reproducible splits across runs; change to resample the "
+            "partition.",
+        ] = 42,
+        val_ratio: Annotated[
+            float,
+            "Fraction of each user's interactions held out for validation "
+            "(used for early stopping and tuning). E.g. 0.1 = 10% per user.",
+        ] = 0.1,
+        test_ratio: Annotated[
+            float,
+            "Fraction of each user's interactions held out as the final "
+            "test set, never seen during training or tuning. E.g. 0.1 = "
+            "10% per user.",
+        ] = 0.1,
     ) -> None:
         """Load and prepare the LastFM1k dataset.
 

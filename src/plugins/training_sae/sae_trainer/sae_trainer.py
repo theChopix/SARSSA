@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Annotated
 
 import mlflow
 import numpy as np
@@ -385,27 +386,127 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        epochs: int = 4000,
-        early_stop: int = 250,
-        batch_size: int = 64,
-        embedding_dim: int = 2048,
-        top_k: int = 128,
-        sample_users: bool = False,
-        model: str = "TopKSAE",
-        note: str = "",
-        target_ratio: float = 0.2,
-        normalize: bool = False,
-        seed: int = 42,
-        reconstruction_loss: str = "Cosine",
-        auxiliary_coef: float = 1 / 32,
-        contrastive_coef: float = 0.3,
-        lr: float = 1e-5,
-        beta1: float = 0.9,
-        beta2: float = 0.99,
-        l1_coef: float = 3e-4,
-        evaluate_every: int = 10,
-        n_batches_to_dead: int = 5,
-        topk_aux: int = 512,
+        epochs: Annotated[
+            int,
+            "Maximum SAE training epochs (early stopping may end training "
+            "sooner). Higher allows fuller convergence at the cost of "
+            "runtime.",
+        ] = 4000,
+        early_stop: Annotated[
+            int,
+            "Stop after this many consecutive evaluations without "
+            "validation-loss improvement. 0 disables early stopping. "
+            "Counted in evaluation steps, not raw epochs.",
+        ] = 250,
+        batch_size: Annotated[
+            int,
+            "User embeddings per gradient update. Larger batches are faster "
+            "per epoch and give more stable sparsity statistics but use "
+            "more memory.",
+        ] = 64,
+        embedding_dim: Annotated[
+            int,
+            "Width of the SAE's sparse hidden layer (the dictionary size). "
+            "Larger yields more, finer-grained interpretable features but "
+            "is slower; usually a multiple of the base model's factor count "
+            "(the expansion ratio).",
+        ] = 2048,
+        top_k: Annotated[
+            int,
+            "Active features allowed per input for TopKSAE/BatchTopKSAE "
+            "(the sparsity level). Lower is sparser and more interpretable "
+            "but reconstructs worse; unused by BasicSAE, which relies on "
+            "l1_coef instead.",
+        ] = 128,
+        sample_users: Annotated[
+            bool,
+            "If true, randomly mask part of each user's interactions every "
+            "epoch as data augmentation. Improves robustness but slows "
+            "training (forces on-the-fly encoding).",
+        ] = False,
+        model: Annotated[
+            str,
+            "Sparse-autoencoder variant. 'TopKSAE'/'BatchTopKSAE' enforce a "
+            "hard active-feature budget (top_k); 'BasicSAE' uses a soft L1 "
+            "penalty (l1_coef) instead.",
+        ] = "TopKSAE",
+        note: Annotated[
+            str,
+            "Free-text note logged to MLflow for your own bookkeeping. Has no effect on training.",
+        ] = "",
+        target_ratio: Annotated[
+            float,
+            "Fraction of each user's interactions hidden as targets when "
+            "scoring recommendation quality in evaluation. E.g. 0.2 "
+            "predicts 20% from the other 80%.",
+        ] = 0.2,
+        normalize: Annotated[
+            bool,
+            "If true, L2-normalize the sparse embeddings: can stabilize "
+            "training and make feature magnitudes comparable, but discards "
+            "activation-scale information.",
+        ] = False,
+        seed: Annotated[
+            int,
+            "Random seed for weight init and data ordering. Fix for "
+            "reproducible SAE features across runs.",
+        ] = 42,
+        reconstruction_loss: Annotated[
+            str,
+            "How reconstruction error against the base embedding is "
+            "measured: 'Cosine' (direction only, scale-invariant) or 'L2' "
+            "(squared Euclidean, scale-sensitive).",
+        ] = "Cosine",
+        auxiliary_coef: Annotated[
+            float,
+            "Weight of the auxiliary loss that revives dead neurons by "
+            "making them reconstruct the residual. Higher reduces dead "
+            "features but can disturb the main reconstruction.",
+        ] = 1 / 32,
+        contrastive_coef: Annotated[
+            float,
+            "Weight of the contrastive loss pulling together augmented "
+            "views of the same user. >0 enables it (and on-the-fly "
+            "encoding); higher favors view-invariant features.",
+        ] = 0.3,
+        lr: Annotated[
+            float,
+            "Adam step size for the SAE. SAEs are sensitive: too high "
+            "causes feature collapse, too low stalls learning. Typical "
+            "range ~1e-5 to 1e-4.",
+        ] = 1e-5,
+        beta1: Annotated[
+            float,
+            "Adam first-moment (momentum) decay. Standard value 0.9.",
+        ] = 0.9,
+        beta2: Annotated[
+            float,
+            "Adam second-moment decay (per-parameter adaptive step scaling). Standard value 0.99.",
+        ] = 0.99,
+        l1_coef: Annotated[
+            float,
+            "Strength of the L1 sparsity penalty on activations. Higher is "
+            "sparser and more interpretable but reconstructs worse. Primary "
+            "sparsity control for BasicSAE.",
+        ] = 3e-4,
+        evaluate_every: Annotated[
+            int,
+            "Run validation (losses + recommendation metrics) every N "
+            "epochs. Smaller gives finer monitoring and earlier early-stop "
+            "decisions but more overhead.",
+        ] = 10,
+        n_batches_to_dead: Annotated[
+            int,
+            "A feature is flagged dead after this many consecutive batches "
+            "with zero activation; dead features are what the auxiliary "
+            "loss tries to revive.",
+        ] = 5,
+        topk_aux: Annotated[
+            int,
+            "How many dead features the auxiliary loss reactivates per step "
+            "(its top-k budget). Higher revives more aggressively but adds "
+            "reconstruction noise.",
+        ] = 512,
     ):
         """Execute the SAE training pipeline.
 
