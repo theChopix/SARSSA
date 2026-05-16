@@ -33,8 +33,8 @@ class ArtifactSpec:
         attr: Attribute name set on the plugin instance after
             loading (e.g. ``"train_csr"``).
         loader: Loader strategy identifier. Supported values:
-            ``"npz"``, ``"npy"``, ``"json"``, ``"model_dir"``,
-            ``"pt"``.
+            ``"npz"``, ``"npy"``, ``"json"``, ``"base_model"``,
+            ``"sae_model"``, ``"pt"``.
         loader_kwargs: Extra keyword arguments forwarded to the
             loader function.
     """
@@ -76,7 +76,7 @@ class OutputArtifactSpec:
         filename: Target filename in MLflow
             (e.g. ``"neuron_labels.json"``).
         saver: Saver strategy identifier. Supported values:
-            ``"json"``, ``"npz"``, ``"npy"``, ``"pt"``.
+            ``"json"``, ``"npz"``, ``"npy"``, ``"pt"``, ``"model"``.
     """
 
     attr: str
