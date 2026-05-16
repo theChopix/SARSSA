@@ -1,0 +1,88 @@
+# SARSSA — build & run the full stack:
+#
+#   * backend  — FastAPI app (uvicorn)            http://localhost:8000
+#   * mlflow   — MLflow tracking + UI server       http://localhost:5000
+#   * frontend — React/Vite build served by nginx  http://localhost:5173
+#
+# The backend writes experiment data straight to a SQLite DB
+# (`sqlite:///mlflow.db`) and artifacts to `./mlartifacts`, both relative
+# to /app/src. The `mlflow` UI service reads the *same* files via the
+# shared bind mounts below — this mirrors the local `just run` + `just
+# mlflow` setup, so no application code or config is changed.
+#
+# Secrets (OPENAI_API_KEY, CHAT_MODEL, EMBEDDING_MODEL) come from the
+# project's .env file at runtime — they are never baked into the image.
+
+name: sarssa
+
+services:
+  backend:
+    image: sarssa-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    working_dir: /app/src
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Datasets — code defaults to ../data/<dataset> (i.e. /app/data).
+      - ./data:/app/data
+      # Shared MLflow state (backend writes, mlflow service serves).
+      - ./src/mlflow.db:/app/src/mlflow.db
+      - ./src/mlartifacts:/app/src/mlartifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  mlflow:
+    # Reuses the backend image (mlflow is a runtime dependency); only the
+    # command differs. The build section is identical to `backend`, so
+    # the same image tag is produced and Docker's layer cache makes this
+    # a no-op rebuild — Compose just won't try to pull it from a registry.
+    image: sarssa-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    depends_on:
+      - backend
+    working_dir: /app/src
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri
+      - sqlite:///mlflow.db
+      - --default-artifact-root
+      - ./mlartifacts
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src/mlflow.db:/app/src/mlflow.db
+      - ./src/mlartifacts:/app/src/mlartifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    image: sarssa-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    restart: unless-stopped

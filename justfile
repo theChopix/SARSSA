@@ -115,3 +115,21 @@ remove PACKAGE:
 # Update all dependencies
 update:
     uv sync --upgrade
+
+# --- Docker ---------------------------------------------------------------
+
+# Build all Docker images (backend + frontend)
+docker-build:
+    docker compose build
+
+# Build and start the full stack (backend, mlflow, frontend)
+docker-up:
+    docker compose up --build -d
+
+# Stop and remove the stack containers
+docker-down:
+    docker compose down
+
+# Tail logs from all services
+docker-logs:
+    docker compose logs -f

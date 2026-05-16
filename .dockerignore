@@ -1,0 +1,47 @@
+# Keep the build context small and never bake secrets or local state into
+# the image. Datasets, the MLflow DB and artifacts are bind-mounted at
+# runtime instead (see docker-compose.yml).
+
+.git
+.gitignore
+
+# Secrets — provided to containers at runtime via compose `env_file`.
+.env
+.env.*
+
+# Python virtualenvs / caches
+.venv
+.venv_
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Node (frontend has its own image / .dockerignore)
+frontend/node_modules
+frontend/dist
+
+# Runtime state & experiment tracking (bind-mounted, not copied)
+data
+src/mlruns
+src/mlartifacts
+src/mlflow.db
+mlruns
+mlartifacts
+mlflow.db
+*.db
+*.sqlite3
+
+# Logs & misc
+*.log
+*.out
+*.err
+
+# Docs / one-off material not needed to run the app
+docs
+examples
+my_tools
+audit*.md
+project_specification.pdf
+*.ipynb

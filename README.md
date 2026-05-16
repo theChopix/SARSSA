@@ -117,3 +117,62 @@ uv run ty
 uv run pre-commit install
 uv run pre-commit run --all-files
 ```
+
+## Running with Docker
+
+The whole stack is containerised with Docker Compose:
+
+| Service    | Description                          | URL                     |
+|------------|--------------------------------------|-------------------------|
+| `backend`  | FastAPI app (uvicorn)                | http://localhost:8000   |
+| `mlflow`   | MLflow tracking + UI server          | http://localhost:5000   |
+| `frontend` | React/Vite build served by nginx     | http://localhost:5173   |
+
+### Prerequisites
+
+- Docker Engine with the Compose plugin (`docker compose`)
+- A `.env` file in the project root containing `OPENAI_API_KEY`,
+  `CHAT_MODEL` and `EMBEDDING_MODEL`. Secrets are read at runtime and are
+  never baked into the image.
+
+### Build and run
+
+```bash
+docker compose up --build -d   # or: just docker-up
+```
+
+Then open the UI at **http://localhost:5173**. Use this exact port — the
+backend's CORS allow-list and the frontend's hardcoded API URL expect the
+frontend on `localhost:5173` and the backend on `localhost:8000`.
+
+Useful commands:
+
+```bash
+just docker-build   # build images only
+just docker-up      # build + start in the background
+just docker-down    # stop and remove containers
+just docker-logs    # tail logs from all services
+```
+
+### Persistence & shared state
+
+The backend logs experiments to a SQLite database (`src/mlflow.db`) and
+writes artifacts to `src/mlartifacts/`. The `mlflow` UI service reads the
+**same** files through shared bind mounts, exactly like running
+`just run` and `just mlflow` side by side locally. Datasets are mounted
+from `./data` (download them with `just download-movielens` /
+`just download-lastfm` on the host before starting the stack).
+
+These paths are bind-mounted, so they must exist on the host before the
+first run (they are created by normal local use and tracked in your
+working tree). On a fresh checkout, create them first:
+
+```bash
+mkdir -p src/mlartifacts data
+touch src/mlflow.db
+```
+
+> **Image size note:** `pyproject.toml` pins `torch==2.7.1`, which the
+> lockfile resolves to the CUDA build. The backend image is therefore
+> several GB. It runs fine CPU-only; switch the `torch` requirement to a
+> CPU wheel index if you need a smaller image.

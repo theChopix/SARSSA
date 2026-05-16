@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+#
+# Backend image for SARSSA.
+#
+# This single image is reused by two compose services:
+#   * `backend` — the FastAPI app (uvicorn, port 8000)
+#   * `mlflow`  — the MLflow tracking/UI server (port 5000)
+# Both run with the working directory set to /app/src, exactly like the
+# `just run` / `just mlflow` recipes do (`cd src && ...`), so the relative
+# paths used by the code (`sqlite:///mlflow.db`, `./mlartifacts`,
+# `../data/...`) resolve identically to local development.
+
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS base
+
+ENV UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+# Resolve dependencies first so this layer is cached unless the lock changes.
+# The project itself is not an installable package (no [build-system]), so
+# `--no-install-project` is required; runtime code is found via the working
+# directory (/app/src) just like in local dev.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
+
+# Application source. The SQLite DB, MLflow artifacts and datasets are bind
+# -mounted at runtime (see docker-compose.yml), not baked into the image.
+COPY src ./src
+COPY scripts ./scripts
+
+WORKDIR /app/src
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
