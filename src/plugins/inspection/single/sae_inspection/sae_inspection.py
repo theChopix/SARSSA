@@ -5,6 +5,8 @@ the top-K items for which that neuron activates the most (sorted by
 activation strength, descending).
 """
 
+from typing import Annotated
+
 from plugins.inspection._top_k import compute_top_k_for_neuron
 from plugins.plugin_interface import (
     ArtifactSpec,
@@ -104,8 +106,16 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        neuron_id: str,
-        k: int = 10,
+        neuron_id: Annotated[
+            str,
+            "SAE concept neuron (from the neuron-labeling step) to inspect; "
+            "returns the items it activates on most strongly.",
+        ],
+        k: Annotated[
+            int,
+            "Number of top-activating items to return, ranked by activation "
+            "strength (highest first).",
+        ] = 10,
     ) -> None:
         """Inspect which items activate a concept neuron the most.
 

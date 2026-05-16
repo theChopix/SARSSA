@@ -8,6 +8,8 @@ The analytical core lives in
 the compare variant can apply it to two contexts.
 """
 
+from typing import Annotated
+
 from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
@@ -149,10 +151,28 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        user_id: int,
-        neuron_id: str,
-        alpha: float = 0.3,
-        k: int = 10,
+        user_id: Annotated[
+            int,
+            "0-based index of the user whose recommendations to steer; "
+            "returns their history plus original and steered "
+            "recommendations.",
+        ],
+        neuron_id: Annotated[
+            str,
+            "SAE concept neuron (from the neuron-labeling step) whose "
+            "direction is amplified in the user's embedding to steer their "
+            "recommendations.",
+        ],
+        alpha: Annotated[
+            float,
+            "Steering strength in [0, 1]. 0 leaves recommendations "
+            "unchanged; higher pushes them more strongly toward the concept "
+            "at the cost of fit to the user's history.",
+        ] = 0.3,
+        k: Annotated[
+            int,
+            "Number of recommendations to return for the original and steered lists.",
+        ] = 10,
     ) -> None:
         """Steer recommendations for a single user toward a concept.
 

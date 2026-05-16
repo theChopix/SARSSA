@@ -6,6 +6,8 @@ each neuron activates on, side-by-side.  Both halves share the same
 analytical core via :func:`plugins.inspection._top_k.compute_top_k_for_neuron`.
 """
 
+from typing import Annotated
+
 from plugins.compare_plugin_interface import BaseComparePlugin
 from plugins.inspection._top_k import compute_top_k_for_neuron
 from plugins.plugin_interface import (
@@ -134,10 +136,26 @@ class Plugin(BaseComparePlugin):
 
     def run(
         self,
-        past_run_id: str,
-        neuron_id: str,
-        past_neuron_id: str,
-        k: int = 10,
+        past_run_id: Annotated[
+            str,
+            "A previously completed pipeline run to compare against; its "
+            "dataset and SAE artifacts form the past-side counterpart.",
+        ],
+        neuron_id: Annotated[
+            str,
+            "SAE concept neuron (from the neuron-labeling step) to inspect; "
+            "returns the items it activates on most strongly.",
+        ],
+        past_neuron_id: Annotated[
+            str,
+            "Concept neuron from the past run to inspect on the past side, "
+            "independent of the current run's neuron_id.",
+        ],
+        k: Annotated[
+            int,
+            "Number of top-activating items to return, ranked by activation "
+            "strength (highest first).",
+        ] = 10,
     ) -> None:
         """Compute top-k items for the current and past neurons.
 

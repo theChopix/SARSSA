@@ -8,6 +8,8 @@ the same analytical core via
 :func:`plugins.steering._steer.compute_steered_recommendations`.
 """
 
+from typing import Annotated
+
 from plugins.compare_plugin_interface import BaseComparePlugin
 from plugins.plugin_interface import (
     ArtifactSpec,
@@ -201,12 +203,38 @@ class Plugin(BaseComparePlugin):
 
     def run(
         self,
-        past_run_id: str,
-        user_id: int,
-        neuron_id: str,
-        past_neuron_id: str,
-        alpha: float = 0.3,
-        k: int = 10,
+        past_run_id: Annotated[
+            str,
+            "A previously completed pipeline run to compare against; its "
+            "dataset and SAE artifacts form the past-side counterpart.",
+        ],
+        user_id: Annotated[
+            int,
+            "0-based index of the user whose recommendations to steer; "
+            "returns their history plus original and steered "
+            "recommendations.",
+        ],
+        neuron_id: Annotated[
+            str,
+            "SAE concept neuron (from the neuron-labeling step) whose "
+            "direction is amplified in the user's embedding to steer their "
+            "recommendations.",
+        ],
+        past_neuron_id: Annotated[
+            str,
+            "Concept neuron from the past run to steer toward on the past "
+            "side, independent of the current run's neuron_id.",
+        ],
+        alpha: Annotated[
+            float,
+            "Steering strength in [0, 1]. 0 leaves recommendations "
+            "unchanged; higher pushes them more strongly toward the concept "
+            "at the cost of fit to the user's history.",
+        ] = 0.3,
+        k: Annotated[
+            int,
+            "Number of recommendations to return for the original and steered lists.",
+        ] = 10,
     ) -> None:
         """Steer recommendations for one user on both the current and past runs.
 
