@@ -4,8 +4,9 @@ All tests use mock filesystem structures and mock plugin instances
 to avoid coupling to the real src/plugins/ directory.
 """
 
+import inspect
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,6 +18,7 @@ from app.core.plugin_discovery.plugin_registry import (
     _extract_parameters_from_instance,
     _find_plugin_modules,
     _make_display_name,
+    _parse_annotation,
     _resolve_widget,
     get_plugin_registry,
 )
@@ -92,7 +94,7 @@ def _build_nested_category(
 
 
 def _make_mock_plugin(
-    params: dict[str, tuple[type, Any]],
+    params: dict[str, tuple[Any, Any]],
     plugin_name: str | None = None,
     display: ItemRowsDisplaySpec | ArtifactDisplaySpec | None = None,
     param_ui_hints: list[ParamUIHint] | None = None,
@@ -100,8 +102,10 @@ def _make_mock_plugin(
     """Create a mock plugin whose run() has the given signature params.
 
     Args:
-        params: Mapping of param name to (type, default).
-            Use ``inspect.Parameter.empty`` for required params.
+        params: Mapping of param name to (annotation, default). The
+            annotation may be a plain type or a ``typing.Annotated``
+            alias (e.g. ``Annotated[int, "description"]``). Use
+            ``inspect.Parameter.empty`` for required params.
         plugin_name: Optional custom display name for the plugin.
             Mirrors ``BasePlugin.name``.
         display: Optional display spec to attach to
@@ -182,6 +186,56 @@ class TestFindPluginModules:
         assert modules == ["my_cat.intermediate.leaf.leaf"]
 
 
+class TestParseAnnotation:
+    """Tests for _parse_annotation (pure function, no mocking needed)."""
+
+    def test_empty_annotation_returns_str_and_none(self) -> None:
+        """Verify an unannotated parameter yields ('str', None)."""
+        assert _parse_annotation(inspect.Parameter.empty) == ("str", None)
+
+    def test_plain_type_returns_name_and_none(self) -> None:
+        """Verify a plain type yields its name and no description."""
+        assert _parse_annotation(int) == ("int", None)
+        assert _parse_annotation(float) == ("float", None)
+        assert _parse_annotation(str) == ("str", None)
+
+    def test_annotated_returns_type_and_description(self) -> None:
+        """Verify Annotated yields wrapped type name and description."""
+        ann = Annotated[int, "Number of recommendations"]
+        assert _parse_annotation(ann) == ("int", "Number of recommendations")
+
+    def test_first_string_metadata_wins(self) -> None:
+        """Verify the first string in metadata is used."""
+        ann = Annotated[float, "primary", "secondary"]
+        assert _parse_annotation(ann) == ("float", "primary")
+
+    def test_non_string_metadata_skipped(self) -> None:
+        """Verify a string after non-string metadata is still found."""
+        ann = Annotated[int, object(), "the description"]
+        assert _parse_annotation(ann) == ("int", "the description")
+
+    def test_annotated_without_string_returns_none(self) -> None:
+        """Verify Annotated with no string metadata yields None."""
+        ann = Annotated[int, object()]
+        assert _parse_annotation(ann) == ("int", None)
+
+    def test_whitespace_description_normalised_to_none(self) -> None:
+        """Verify a whitespace-only description becomes None."""
+        ann = Annotated[int, "   "]
+        assert _parse_annotation(ann) == ("int", None)
+
+    def test_description_is_stripped(self) -> None:
+        """Verify surrounding whitespace is stripped from description."""
+        ann = Annotated[str, "  trimmed  "]
+        assert _parse_annotation(ann) == ("str", "trimmed")
+
+    def test_annotation_without_name_falls_back_defensively(self) -> None:
+        """Verify an annotation lacking __name__ does not raise."""
+        type_name, description = _parse_annotation(int | None)
+        assert type_name == "str"
+        assert description is None
+
+
 class TestExtractParametersFromInstance:
     """Tests for _extract_parameters_from_instance with mock plugins."""
 
@@ -240,6 +294,33 @@ class TestExtractParametersFromInstance:
         params = _extract_parameters_from_instance(mock_plugin)
         for p in params:
             assert isinstance(p, ParameterInfo)
+
+    def test_annotated_param_surfaces_description(self) -> None:
+        """Verify an Annotated param exposes type and description."""
+        mock_plugin = _make_mock_plugin(
+            {"k": (Annotated[int, "Number of recommendations"], 10)},
+        )
+        params = _extract_parameters_from_instance(mock_plugin)
+
+        assert params[0].name == "k"
+        assert params[0].type == "int"
+        assert params[0].default == 10
+        assert params[0].description == "Number of recommendations"
+
+    def test_plain_param_has_no_description(self) -> None:
+        """Verify a non-Annotated param has description None."""
+        mock_plugin = _make_mock_plugin({"k": (int, 10)})
+        params = _extract_parameters_from_instance(mock_plugin)
+        assert params[0].description is None
+
+    def test_unannotated_param_has_no_description(self) -> None:
+        """Verify a param with no annotation has description None."""
+        mock_plugin = _make_mock_plugin(
+            {"tag": (inspect.Parameter.empty, inspect.Parameter.empty)},
+        )
+        params = _extract_parameters_from_instance(mock_plugin)
+        assert params[0].type == "str"
+        assert params[0].description is None
 
 
 class TestDeriveKind:
@@ -873,3 +954,31 @@ class TestExtractParametersWithUIHints:
         assert params[0].widget_config.slider_min == 0.0
         assert params[0].widget_config.slider_max == 1.0
         assert params[0].widget_config.slider_step == 0.05
+
+    def test_param_keeps_widget_and_description_together(self) -> None:
+        """Verify a hinted param surfaces its widget and description.
+
+        A description (from ``Annotated``) and a UI hint are
+        orthogonal: a param may declare both and neither must clobber
+        the other.
+        """
+        hint = SliderHint(
+            param_name="alpha",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.05,
+        )
+        plugin = _make_mock_plugin(
+            {"alpha": (Annotated[float, "Steering strength in [0, 1]"], 0.3)},
+            param_ui_hints=[hint],
+        )
+        params = _extract_parameters_from_instance(
+            plugin,
+            "steering",
+            "steering.sae.sae",
+        )
+
+        assert params[0].widget == "slider"
+        assert params[0].widget_config is not None
+        assert params[0].type == "float"
+        assert params[0].description == "Steering strength in [0, 1]"

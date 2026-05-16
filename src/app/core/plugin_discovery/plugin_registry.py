@@ -7,7 +7,7 @@ registry consumable by the frontend.
 
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from app.config.config import PLUGIN_CATEGORIES
 from app.core.plugin_discovery.plugin_manager import PluginManager
@@ -131,6 +131,58 @@ def _resolve_widget(
     return "text", None
 
 
+def _first_description(metadata: tuple[Any, ...]) -> str | None:
+    """Return the first usable string in annotation metadata.
+
+    Args:
+        metadata: The ``__metadata__`` tuple of a ``typing.Annotated``
+            alias.
+
+    Returns:
+        str | None: The first stripped, non-empty string entry, or
+            ``None`` when no usable string is present.
+    """
+    for item in metadata:
+        if isinstance(item, str):
+            stripped = item.strip()
+            if stripped:
+                return stripped
+    return None
+
+
+def _parse_annotation(annotation: Any) -> tuple[str, str | None]:
+    """Resolve a parameter annotation to a type name and description.
+
+    Handles three shapes of ``inspect.Parameter.annotation``:
+
+    - ``inspect.Parameter.empty`` (no annotation) → ``("str", None)``.
+    - A plain type (e.g. ``int``) → its name with no description.
+    - A ``typing.Annotated`` alias → the wrapped type's name plus the
+      first non-empty string found in its metadata, if any.
+
+    A defensive ``getattr(..., "str")`` fallback is used for annotations
+    that expose no ``__name__`` (e.g. ``int | None``) so introspection
+    never raises.
+
+    Args:
+        annotation: The raw ``inspect.Parameter.annotation`` value.
+
+    Returns:
+        tuple[str, str | None]: The display type name and the first
+            non-empty, stripped string description from the
+            annotation's metadata, or ``None`` when absent.
+    """
+    if annotation is inspect.Parameter.empty:
+        return "str", None
+
+    metadata = getattr(annotation, "__metadata__", None)
+    if metadata is not None:
+        wrapped = annotation.__origin__
+        return getattr(wrapped, "__name__", "str"), _first_description(metadata)
+
+    return getattr(annotation, "__name__", "str"), None
+
+
 def _extract_parameters_from_instance(
     plugin_instance: "BasePlugin",
     category_name: str = "",
@@ -160,9 +212,7 @@ def _extract_parameters_from_instance(
             continue
 
         has_default = param.default is not inspect.Parameter.empty
-        type_name = (
-            param.annotation.__name__ if param.annotation is not inspect.Parameter.empty else "str"
-        )
+        type_name, description = _parse_annotation(param.annotation)
 
         widget = "text"
         widget_config = None
@@ -181,6 +231,7 @@ def _extract_parameters_from_instance(
                 required=not has_default,
                 widget=widget,
                 widget_config=widget_config,
+                description=description,
             )
         )
 

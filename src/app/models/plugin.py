@@ -102,6 +102,11 @@ class ParameterInfo(BaseModel):
         required: Whether the parameter must be provided by the user.
         widget: Frontend widget type. Defaults to ``"text"``.
         widget_config: Extra configuration for non-default widgets.
+        description: Human-readable explanation of the parameter,
+            extracted from a ``typing.Annotated`` string on the
+            ``run()`` signature. ``None`` when the parameter has no
+            annotated description; the frontend then renders no info
+            icon for it.
     """
 
     name: str
@@ -110,6 +115,7 @@ class ParameterInfo(BaseModel):
     required: bool = True
     widget: str = "text"
     widget_config: WidgetConfig | None = None
+    description: str | None = None
 
 
 class DisplayRowSpec(BaseModel):
