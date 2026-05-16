@@ -189,6 +189,12 @@ def execute_step(run_id: str, step: StepDefinition) -> dict[str, Any]:
     Used for phase-2 (multi-run) plugins where the user triggers
     individual steps from the UI on a completed pipeline run.
 
+    Blocks until the step completes, then re-persists ``context.json``
+    on the parent run so the new step is visible to downstream steps.
+    This is the synchronous equivalent of
+    ``POST /runs/{run_id}/execute-step-async``; both leave the parent
+    run's context in the same state.
+
     Args:
         run_id: MLflow run ID of the parent pipeline run.
         step: Plugin name and parameters to execute.
@@ -201,6 +207,7 @@ def execute_step(run_id: str, step: StepDefinition) -> dict[str, Any]:
     engine = PipelineEngine()
     engine.resume_run(run_id)
     engine.execute_step(step.plugin, step.params or {}, context)
+    engine.finalize_run(context)
 
     category = step.plugin.split(".")[0]
     return {
