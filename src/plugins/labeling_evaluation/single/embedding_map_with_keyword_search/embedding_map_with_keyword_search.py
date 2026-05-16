@@ -13,7 +13,7 @@ Renders an interactive UMAP scatter plot of neuron labels and adds:
 
 import json
 import tempfile
-from typing import Any
+from typing import Annotated, Any
 
 import mlflow
 import plotly.graph_objects as go
@@ -112,15 +112,58 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        keyword: str,
-        k: int = 10,
-        embedding_provider: str = "openai",
-        embedding_model: str = "text-embedding-3-small",
-        umap_n_neighbors: int = 15,
-        umap_min_dist: float = 0.1,
-        umap_metric: str = "cosine",
-        umap_random_state: int = 42,
-        point_size: int = 8,
+        keyword: Annotated[
+            str,
+            "Search term embedded with the same model as the labels; "
+            "labels are ranked by cosine similarity to it on the raw "
+            "high-dimensional embeddings. Must be non-empty.",
+        ],
+        k: Annotated[
+            int,
+            "Maximum number of closest labels to highlight, ranked by "
+            "cosine similarity to the keyword. Clamped to the number of "
+            "available labels.",
+        ] = 10,
+        embedding_provider: Annotated[
+            str,
+            "Embedding backend used to turn the neuron label texts into "
+            "vectors (e.g. 'openai'); must be a provider known to the "
+            "embedder registry.",
+        ] = "openai",
+        embedding_model: Annotated[
+            str,
+            "Provider-specific embedding model identifier (e.g. "
+            "'text-embedding-3-small' for OpenAI). Determines the semantic "
+            "space the labels are embedded into.",
+        ] = "text-embedding-3-small",
+        umap_n_neighbors: Annotated[
+            int,
+            "UMAP n_neighbors: how many neighbours define local structure. "
+            "Low values emphasise fine local clusters; high values preserve "
+            "more global layout.",
+        ] = 15,
+        umap_min_dist: Annotated[
+            float,
+            "UMAP min_dist: minimum spacing between points in the 2-D "
+            "projection. Low values pack similar labels into tight clumps; "
+            "high values spread them out more evenly.",
+        ] = 0.1,
+        umap_metric: Annotated[
+            str,
+            "Distance metric UMAP uses to compare the high-dimensional "
+            "label embeddings (e.g. 'cosine', 'euclidean').",
+        ] = "cosine",
+        umap_random_state: Annotated[
+            int,
+            "Seed for UMAP. Fix it for a reproducible layout across runs; "
+            "changing it yields a different but equivalent projection.",
+        ] = 42,
+        point_size: Annotated[
+            int,
+            "Diameter of the scatter markers in the projection. Purely "
+            "cosmetic; does not affect the embeddings, projection, or any "
+            "ranking.",
+        ] = 8,
     ) -> None:
         """Compute coords + top-k matches and build the interactive figure.
 
