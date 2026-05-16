@@ -1,3 +1,5 @@
+from typing import Annotated
+
 import numpy as np
 import scipy.sparse as sp
 
@@ -63,8 +65,17 @@ class Plugin(BasePlugin):
 
     def run(
         self,
-        batch_size: int = 1024,
-        seed: int = 42,
+        batch_size: Annotated[
+            int,
+            "Items encoded per forward pass when computing SAE activations. "
+            "Larger is faster but uses more memory; does not change the "
+            "resulting neuron labels.",
+        ] = 1024,
+        seed: Annotated[
+            int,
+            "Random seed for the activation computation. Fix for "
+            "reproducible neuron labels across runs.",
+        ] = 42,
     ) -> None:
         """Compute TF-IDF neuron labels from SAE activations.
 
