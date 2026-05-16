@@ -83,6 +83,9 @@ export interface WidgetConfig {
  * - `required`      – `true` when the user must provide a value.
  * - `widget`        – Frontend widget type (`"text"` or `"dropdown"`).
  * - `widget_config` – Extra configuration for non-default widgets.
+ * - `description`   – Human-readable explanation from a `typing.Annotated`
+ *                      string on the `run()` signature, or `null` when the
+ *                      param has none (no info icon is rendered then).
  */
 export interface ParameterInfo {
   name: string;
@@ -91,6 +94,7 @@ export interface ParameterInfo {
   required: boolean;
   widget: string;
   widget_config: WidgetConfig | null;
+  description: string | null;
 }
 
 // ── Display spec (visual output metadata) ───────────────
