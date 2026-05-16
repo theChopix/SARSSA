@@ -399,6 +399,46 @@ class TestExecuteStep:
 
         mock_engine.resume_run.assert_called_once_with("my_run_42")
 
+    @patch("app.api.routes_pipelines.PipelineEngine")
+    @patch("app.api.routes_pipelines.get_run_context")
+    def test_finalizes_context(
+        self,
+        mock_get_ctx: MagicMock,
+        mock_engine_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify the sync endpoint re-persists context.json.
+
+        The sync path must call ``finalize_run`` with the context
+        mutated by ``execute_step`` so the new step is visible to
+        downstream steps, matching the async variant.
+        """
+        mock_get_ctx.return_value = {"dataset_loading": {"run_id": "old"}}
+
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any]
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "new_step_run"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        response = client.post(
+            "/pipelines/runs/parent_123/execute-step",
+            json={"plugin": "steering.single.sae_steering.sae_steering", "params": {}},
+        )
+
+        assert response.status_code == 200
+        mock_engine.finalize_run.assert_called_once_with(
+            {
+                "dataset_loading": {"run_id": "old"},
+                "steering": {"run_id": "new_step_run"},
+            }
+        )
+
 
 class TestExecuteStepAsync:
     """Tests for POST /pipelines/runs/{run_id}/execute-step-async."""
