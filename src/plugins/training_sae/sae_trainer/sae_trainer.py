@@ -16,7 +16,7 @@ from plugins.plugin_interface import (
 from utils.data_loading.data_loader import DataLoader
 from utils.plugin_logger import get_logger
 from utils.plugin_notifier import PluginNotifier
-from utils.torch.evalution import evaluate_sparse_encoder
+from utils.torch.evaluation import evaluate_sparse_encoder
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.model_registry import get_sae_model_class
 from utils.torch.models.sae_model import SAE
