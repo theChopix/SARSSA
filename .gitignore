@@ -3,6 +3,7 @@
 # =========================
 .env
 .env.*
+!.env.sample
 .venv/
 .venv_/
 venv/
