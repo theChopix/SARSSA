@@ -92,6 +92,14 @@ download-movielens:
 download-lastfm:
     bash scripts/download_lastFm1k_dataset.sh
 
+# Download all MovieLens artifacts (ratings, tags, metadata, descriptions) from OSF
+download-movielens-all:
+    bash scripts/download_movieLens_all.sh
+
+# Download all LastFM-1K artifacts from OSF
+download-lastfm-all:
+    bash scripts/download_lastFm1k_all.sh
+
 # Sync dependencies (update lock file)
 sync:
     uv sync
