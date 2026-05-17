@@ -11,7 +11,7 @@ from plugins.plugin_interface import (
     PluginIOSpec,
 )
 from utils.plugin_logger import get_logger
-from utils.torch.evalution import compute_sae_item_activations
+from utils.torch.evaluation import compute_sae_item_activations
 from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
