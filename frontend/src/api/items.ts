@@ -6,6 +6,7 @@
  */
 
 import { API_BASE_URL } from "../constants";
+import { ApiError } from "./errors";
 import type { EnrichResponse } from "../types/items";
 
 /**
@@ -41,8 +42,9 @@ export async function fetchEnrichedItems(
   const response = await fetch(`${API_BASE_URL}/items/enrich?${params}`);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch enriched items: ${response.status} ${response.statusText}`
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to fetch enriched items"
     );
   }
 
@@ -98,8 +100,9 @@ export async function fetchStepArtifact(
   const response = await fetch(`${API_BASE_URL}/items/artifact?${params}`);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch artifact '${filename}': ${response.status} ${response.statusText}`
+    throw await ApiError.fromResponse(
+      response,
+      `Failed to fetch artifact '${filename}'`
     );
   }
 

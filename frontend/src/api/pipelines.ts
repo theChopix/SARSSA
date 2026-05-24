@@ -25,6 +25,7 @@
  */
 
 import { API_BASE_URL } from "../constants";
+import { ApiError } from "./errors";
 import type {
   ExecuteStepAsyncResponse,
   ExecuteStepResponse,
@@ -52,9 +53,7 @@ export async function fetchPipelineRuns(): Promise<PipelineRun[]> {
   const response = await fetch(`${API_BASE_URL}/pipelines/runs`);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch pipeline runs: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to fetch pipeline runs");
   }
 
   return (await response.json()) as PipelineRun[];
@@ -89,8 +88,9 @@ export async function fetchEligiblePipelineRuns(
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch eligible pipeline runs: ${response.status} ${response.statusText}`
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to fetch eligible pipeline runs"
     );
   }
 
@@ -118,9 +118,7 @@ export async function fetchRunContext(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch run context: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to fetch run context");
   }
 
   return (await response.json()) as PipelineContext;
@@ -161,9 +159,7 @@ export async function executeStep(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to execute step: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to execute step");
   }
 
   return (await response.json()) as ExecuteStepResponse;
@@ -205,9 +201,7 @@ export async function executeStepAsync(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to start step async: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to start step async");
   }
 
   return (await response.json()) as ExecuteStepAsyncResponse;
@@ -250,8 +244,9 @@ export async function startPipelineTask(
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to start pipeline task: ${response.status} ${response.statusText}`
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to start pipeline task"
     );
   }
 
@@ -286,9 +281,7 @@ export async function getTaskStatus(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch task status: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to fetch task status");
   }
 
   return (await response.json()) as TaskStatusResponse;
@@ -324,9 +317,7 @@ export async function cancelTask(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to cancel task: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to cancel task");
   }
 
   return (await response.json()) as { message: string };
@@ -353,9 +344,7 @@ export async function fetchMlflowInfo(): Promise<MlflowInfo> {
   const response = await fetch(`${API_BASE_URL}/pipelines/mlflow-info`);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch MLflow info: ${response.status} ${response.statusText}`
-    );
+    throw await ApiError.fromResponse(response, "Failed to fetch MLflow info");
   }
 
   return (await response.json()) as MlflowInfo;

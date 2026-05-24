@@ -38,6 +38,7 @@ import {
   executeStepAsync,
   cancelTask,
 } from "../api/pipelines";
+import { ApiError } from "../api/errors";
 import type { PluginRegistry } from "../types/plugin";
 import type {
   MlflowInfo,
@@ -321,9 +322,22 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   },
 
   loadFromPreviousRun: async (runId: string, upToCategory: string) => {
-    const fullContext = await fetchRunContext(runId);
-    const { registry, cards: prev } = get();
+    let fullContext: PipelineContext;
+    try {
+      fullContext = await fetchRunContext(runId);
+    } catch (error) {
+      const msg =
+        error instanceof ApiError && error.status === 404
+          ? `Cannot load run ${runId}: its context.json is missing. ` +
+            `The run exists in MLflow but its artifacts are unavailable.`
+          : `Failed to load run ${runId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`;
+      set({ errorMessage: msg });
+      return;
+    }
 
+    const { registry, cards: prev } = get();
     if (!registry) return;
 
     // Determine which one_time categories are at or before the target.
@@ -362,7 +376,13 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       }
     }
 
-    set({ context: scopedContext, currentRunId: runId, targetRunId: runId, cards });
+    set({
+      context: scopedContext,
+      currentRunId: runId,
+      targetRunId: runId,
+      cards,
+      errorMessage: null,
+    });
   },
 
   selectPlugin: (category: string, pluginName: string) => {

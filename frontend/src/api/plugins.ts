@@ -24,6 +24,7 @@
  */
 
 import { API_BASE_URL } from "../constants";
+import { ApiError } from "./errors";
 import type { PluginRegistry } from "../types/plugin";
 
 /** A single option returned by the param-choices endpoint. */
@@ -50,8 +51,9 @@ export async function fetchPluginRegistry(): Promise<PluginRegistry> {
   const response = await fetch(`${API_BASE_URL}/plugins/registry`);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch plugin registry: ${response.status} ${response.statusText}`
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to fetch plugin registry"
     );
   }
 
@@ -78,8 +80,9 @@ export async function fetchParamChoices(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch param choices: ${response.status} ${response.statusText}`
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to fetch param choices"
     );
   }
 
