@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import mlflow
 from mlflow.entities import Run
+from mlflow.exceptions import MlflowException
 
 from app.config.config import EXPERIMENT_NAME
 
@@ -94,7 +95,19 @@ def get_run_context(run_id: str) -> dict[str, Any]:
         FileNotFoundError: If ``context.json`` is not found in the
             run's artifacts.
     """
-    artifact_path = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="context.json")
+    try:
+        artifact_path = mlflow.artifacts.download_artifacts(
+            run_id=run_id, artifact_path="context.json"
+        )
+    except MlflowException as exc:
+        # MLflow raises MlflowException (not FileNotFoundError) when the
+        # artifact is absent — e.g. an orphaned run whose metadata is in
+        # mlflow.db but whose artifacts are gone. Normalise to the
+        # FileNotFoundError this function documents and that every caller
+        # already handles (routes_pipelines, routes_plugins,
+        # get_eligible_pipeline_runs), so one bad run can't 500 the
+        # whole /pipelines/runs listing.
+        raise FileNotFoundError(f"context.json not found for run {run_id}") from exc
 
     with open(artifact_path) as f:
         context: dict[str, Any] = json.load(f)
