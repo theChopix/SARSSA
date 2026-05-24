@@ -39,7 +39,7 @@ class TestGetPluginRegistry:
             assert "implementations" in entry, f"Missing implementations for {key}"
 
     def test_category_info_has_expected_fields(self, client: TestClient) -> None:
-        """Verify category_info contains order, type, and display_name."""
+        """Verify category_info contains order, type, display_name, and description."""
         response = client.get("/plugins/registry")
         data = response.json()
 
@@ -48,6 +48,8 @@ class TestGetPluginRegistry:
             assert "order" in info, f"Missing order for {key}"
             assert "type" in info, f"Missing type for {key}"
             assert "display_name" in info, f"Missing display_name for {key}"
+            assert "description" in info, f"Missing description for {key}"
+            assert info["description"], f"Empty description for {key}"
 
     def test_every_category_has_at_least_one_implementation(self, client: TestClient) -> None:
         """Verify each category discovered at least one plugin."""

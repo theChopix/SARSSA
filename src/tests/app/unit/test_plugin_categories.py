@@ -33,6 +33,15 @@ class TestPluginCategoryKeys:
             )
 
 
+class TestCategoryDescriptions:
+    """Tests for the per-category description field."""
+
+    def test_every_category_has_a_description(self) -> None:
+        """Verify every shipped category configures a non-empty description."""
+        for name, info in PLUGIN_CATEGORIES.items():
+            assert info.description, f"Category '{name}' is missing a description in config.yaml"
+
+
 class TestHasVisualResults:
     """Tests for the has_visual_results category flag."""
 

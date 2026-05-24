@@ -25,12 +25,17 @@
  *                    "multi_run" plugins can be triggered repeatedly
  *                    from the UI after the pipeline finishes.
  * - `display_name` – Human-readable label shown in the UI.
+ * - `description`  – Short human-readable explanation of what the
+ *                    category does, surfaced as a hover tooltip next
+ *                    to the card title. `null` when no description is
+ *                    configured; no info icon is rendered then.
  */
 export interface CategoryInfo {
   order: number;
   type: "one_time" | "multi_run";
   display_name: string;
   has_visual_results: boolean;
+  description: string | null;
 }
 
 // ── Widget configuration ────────────────────────────────

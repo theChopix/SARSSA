@@ -23,12 +23,17 @@ class CategoryInfo(BaseModel):
         has_visual_results: Whether plugins in this category
             produce visual output that the frontend should
             render in a results panel.
+        description: Short human-readable explanation of what the
+            category does. Surfaced as a hover tooltip next to the
+            card title on the frontend. ``None`` when no description
+            is configured; the frontend then renders no info icon.
     """
 
     order: int
     type: CategoryType
     display_name: str
     has_visual_results: bool = False
+    description: str | None = None
 
 
 class WidgetConfig(BaseModel):

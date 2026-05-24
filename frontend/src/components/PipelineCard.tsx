@@ -41,8 +41,8 @@
  *   └─────────────────────────────────────┘
  */
 
-import { useEffect, useState, useCallback, useRef, useId } from "react";
-import { Settings, CheckCircle2, Loader2, AlertCircle, Eye, Info } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import { fetchParamChoices } from "../api/plugins";
@@ -51,6 +51,7 @@ import type { ParamChoice } from "../api/plugins";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
 import type { MlflowInfo, PipelineContext, PipelineRun } from "../types/pipeline";
 import type { CardStatus, CardMode } from "../store/pipelineStore";
+import InfoTooltip from "./InfoTooltip";
 
 // ── Props ───────────────────────────────────────────────
 
@@ -92,53 +93,6 @@ function StatusIcon({ status }: { status: CardStatus }) {
   }
 }
 
-// ── Param info tooltip ──────────────────────────────────
-
-/**
- * ParamInfoTooltip — an accessible info icon with a hover/focus tooltip.
- *
- * Rendered only when a parameter has a non-empty description. The trigger
- * is a real <button>, so the tooltip is reachable by keyboard (Tab); the
- * bubble reveals on hover *and* on focus-within and is wired to the button
- * via `aria-describedby` for screen readers.
- *
- *   ┌──────────────────────────────┐
- *   │ Number of recommendations    │  ← bubble (above the icon)
- *   └──────────────────────────────┘
- *          ⓘ                          ← focusable trigger
- */
-function ParamInfoTooltip({ text }: { text: string }) {
-  const tooltipId = useId();
-
-  return (
-    <span className="relative inline-flex group">
-      <button
-        type="button"
-        aria-label="Parameter description"
-        aria-describedby={tooltipId}
-        className="inline-flex items-center justify-center rounded-full
-                   text-gray-400 hover:text-gray-600 focus:text-gray-600
-                   focus:outline-none focus:ring-2 focus:ring-blue-400
-                   cursor-help"
-      >
-        <Info className="h-3.5 w-3.5" />
-      </button>
-
-      <span
-        id={tooltipId}
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-0 mb-1 z-50
-                   w-max max-w-xs whitespace-normal break-words rounded
-                   bg-gray-800 px-2 py-1 text-xs text-white shadow-lg
-                   opacity-0 transition-opacity duration-100
-                   group-hover:opacity-100 group-focus-within:opacity-100"
-      >
-        {text}
-      </span>
-    </span>
-  );
-}
-
 // ── Parameter form row ──────────────────────────────────
 
 /**
@@ -174,7 +128,12 @@ function ParamRow({
       {/* Parameter name + optional description tooltip */}
       <span className="flex items-center gap-1 min-w-[100px]">
         <span className="text-sm text-gray-700">{param.name}</span>
-        {param.description && <ParamInfoTooltip text={param.description} />}
+        {param.description && (
+          <InfoTooltip
+            text={param.description}
+            ariaLabel="Parameter description"
+          />
+        )}
       </span>
 
       {/* Type badge */}
@@ -769,9 +728,17 @@ export default function PipelineCard({
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
       {/* ── Card header ──────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-900">
-          {category_info.display_name}
-        </h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-base font-semibold text-gray-900">
+            {category_info.display_name}
+          </h3>
+          {category_info.description && (
+            <InfoTooltip
+              text={category_info.description}
+              ariaLabel="Category description"
+            />
+          )}
+        </div>
         <StatusIcon status={card.status} />
       </div>
 

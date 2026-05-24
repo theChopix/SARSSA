@@ -9,30 +9,37 @@ plugin_categories:
     order: 0
     type: "one_time"
     display_name: "Dataset Loading"
+    description: "Load and split the recommender dataset."
   training_cfm:
     order: 1
     type: "one_time"
     display_name: "Training CFM"
+    description: "Train the collaborative filtering model."
   training_sae:
     order: 2
     type: "one_time"
     display_name: "Training SAE"
+    description: "Train a sparse autoencoder on CFM embeddings."
   neuron_labeling:
     order: 3
     type: "one_time"
     display_name: "Neuron Labeling"
+    description: "Assign human-readable labels to SAE neurons."
   labeling_evaluation:
     order: 4
     type: "multi_run"
     display_name: "Labeling Evaluation"
     has_visual_results: true
+    description: "Visualize the structure of the neuron labels."
   inspection:
     order: 5
     type: "multi_run"
     display_name: "Inspection"
     has_visual_results: true
+    description: "Explore which items an SAE neuron represents."
   steering:
     order: 6
     type: "multi_run"
     display_name: "Steering"
     has_visual_results: true
+    description: "Recommend with chosen neurons boosted or suppressed."

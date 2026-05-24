@@ -173,7 +173,9 @@ const SECTIONS: GuideSection[] = [
           widget kind) and the frontend renders the appropriate input —
           a text box, a slider, a dropdown of dynamic choices, or a
           "past runs" picker. Hover the ⓘ icon next to a parameter
-          name to read its description.
+          name to read its description. The same ⓘ appears next to
+          each card title with a one-line summary of what that
+          category does.
         </p>
         <p className="text-sm text-gray-700 leading-relaxed">
           Adding a new plugin on the backend — your own dataset loader,
