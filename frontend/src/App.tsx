@@ -8,6 +8,7 @@
  * Routes:
  *   `/`                        → HomePage (pipeline cards)
  *   `/results/:categoryKey`    → ResultsPage (visual enrichment)
+ *   `/guide`                   → GuidePage (in-app user guide)
  *
  * ┌──────────────────────────────────────────────────────┐
  * │  React hooks refresher                                │
@@ -30,6 +31,7 @@ import { Loader2, X, Ban } from "lucide-react";
 import PipelineCard from "./components/PipelineCard";
 import { Layout } from "./components/Layout";
 import { ResultsPage } from "./pages/ResultsPage";
+import { GuidePage } from "./pages/GuidePage";
 import { usePipelineStore } from "./store/pipelineStore";
 import type { StepDefinition } from "./types/pipeline";
 
@@ -323,6 +325,7 @@ function App() {
         <Route element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="results/:categoryKey" element={<ResultsPage />} />
+          <Route path="guide" element={<GuidePage />} />
         </Route>
       </Routes>
     </BrowserRouter>
