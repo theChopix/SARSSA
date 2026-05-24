@@ -32,6 +32,11 @@ services:
       # Shared MLflow state (backend writes, mlflow service serves).
       - ./src/mlflow.db:/app/src/mlflow.db
       - ./src/mlartifacts:/app/src/mlartifacts
+      # MLflow records host-absolute artifact paths in mlflow.db at run-creation
+      # time and never re-resolves them. This second mount makes the host's
+      # artifacts directory reachable inside the container at the same absolute
+      # path, so runs created locally still load in Docker.
+      - ${PWD}/src/mlartifacts:${PWD}/src/mlartifacts
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
       interval: 30s
@@ -68,6 +73,9 @@ services:
     volumes:
       - ./src/mlflow.db:/app/src/mlflow.db
       - ./src/mlartifacts:/app/src/mlartifacts
+      # Same host-absolute mount as the backend — the MLflow UI also serves
+      # artifacts by the absolute path stored in mlflow.db.
+      - ${PWD}/src/mlartifacts:${PWD}/src/mlartifacts
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 30s
