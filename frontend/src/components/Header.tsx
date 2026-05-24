@@ -22,7 +22,14 @@ export function Header() {
 
   return (
     <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
-      <h1 className="text-lg font-bold text-gray-900">SARSSAe</h1>
+      <h1>
+        <Link
+          to="/"
+          className="text-lg font-bold tracking-wide text-gray-900 hover:text-gray-700"
+        >
+          SARSSAe
+        </Link>
+      </h1>
       <nav className="flex items-center gap-6">
         <Link
           to="/guide"
