@@ -11,13 +11,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.core.plugin_discovery.naming import make_plugin_display_name
 from app.core.plugin_discovery.plugin_registry import (
     _build_ui_hint_map,
     _convert_display_spec,
     _derive_kind,
     _extract_parameters_from_instance,
     _find_plugin_modules,
-    _make_display_name,
     _parse_annotation,
     _resolve_widget,
     get_plugin_registry,
@@ -412,7 +412,7 @@ class TestDeriveKind:
 
 
 class TestMakeDisplayName:
-    """Tests for _make_display_name (pure function, no mocking needed)."""
+    """Tests for make_plugin_display_name (pure function, no mocking needed)."""
 
     @pytest.mark.parametrize(
         ("module_path", "expected"),
@@ -429,7 +429,7 @@ class TestMakeDisplayName:
             module_path: Dotted plugin module path.
             expected: Expected human-readable display name.
         """
-        assert _make_display_name(module_path) == expected
+        assert make_plugin_display_name(module_path) == expected
 
 
 class TestDiscoverImplementationsDisplayName:

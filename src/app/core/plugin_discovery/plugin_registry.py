@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from app.config.config import PLUGIN_CATEGORIES
+from app.core.plugin_discovery.naming import make_plugin_display_name
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.models.plugin import (
     ArtifactDisplayModel,
@@ -270,24 +271,6 @@ def _find_plugin_modules(category_dir: Path, prefix: str) -> list[str]:
     return modules
 
 
-def _make_display_name(plugin_module_path: str) -> str:
-    """Derive a human-readable display name from a dotted module path.
-
-    Takes the second-to-last segment (the implementation directory name)
-    and converts it from snake_case to Title Case.
-
-    Args:
-        plugin_module_path: Dotted module path
-            (e.g. ``dataset_loading.movieLens_loader.movieLens_loader``).
-
-    Returns:
-        str: Human-readable name (e.g. ``Movieles Loader``).
-    """
-    parts = plugin_module_path.split(".")
-    impl_name = parts[-2]
-    return impl_name.replace("_", " ").title()
-
-
 def _convert_display_spec(
     spec: "DisplaySpec | None",
 ) -> ItemRowsDisplayModel | ArtifactDisplayModel | None:
@@ -355,7 +338,7 @@ def _discover_implementations(
             category_name,
             module_path,
         )
-        display_name = plugin_instance.name or _make_display_name(module_path)
+        display_name = plugin_instance.name or make_plugin_display_name(module_path)
         display = _convert_display_spec(plugin_instance.io_spec.display)
         kind = _derive_kind(module_path, category_name)
         implementations.append(
