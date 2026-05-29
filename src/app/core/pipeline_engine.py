@@ -6,6 +6,10 @@ from typing import Any
 import mlflow
 
 from app.config.config import EXPERIMENT_NAME
+from app.core.plugin_discovery.naming import (
+    format_step_run_name,
+    make_plugin_display_name,
+)
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from utils.plugin_notifier import PluginNotifier
 
@@ -75,6 +79,32 @@ class PipelineEngine:
         mlflow.end_run()
         return self._parent_run_id
 
+    def _next_execution_order(self) -> int:
+        """Return the 1-based execution position of the next nested step.
+
+        Counts the nested runs already attached to the active parent run
+        (via the ``mlflow.parentRunId`` tag) and adds one.  This is the
+        single source of truth that works both in batch mode and across
+        separate phase-2 ``execute-step`` calls, neither of which keeps
+        an in-memory counter.
+
+        Note:
+            If two phase-2 steps are executed concurrently on the same
+            parent run they may read the same count and receive the same
+            number.  MLflow run names need not be unique, so this is
+            tolerated rather than locked against.
+
+        Returns:
+            int: The next 1-based execution order.
+        """
+        client = mlflow.tracking.MlflowClient()
+        parent = client.get_run(self._parent_run_id)
+        children = client.search_runs(
+            experiment_ids=[parent.info.experiment_id],
+            filter_string=f"tags.`mlflow.parentRunId` = '{self._parent_run_id}'",
+        )
+        return len(children) + 1
+
     def execute_step(
         self,
         plugin_name: str,
@@ -111,9 +141,13 @@ class PipelineEngine:
         if notifier is not None:
             plugin.notifier = notifier
 
+        order = self._next_execution_order()
+        display_name = plugin.name or make_plugin_display_name(plugin_name)
+        run_name = format_step_run_name(plugin_name, display_name, order)
+
         with (
             mlflow.start_run(run_id=self._parent_run_id),
-            mlflow.start_run(run_name=plugin_name, nested=True) as step_run,
+            mlflow.start_run(run_name=run_name, nested=True) as step_run,
         ):
             plugin.load_context(context)
             plugin.run(**params)

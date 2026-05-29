@@ -26,6 +26,23 @@ def _mock_start_run(run_id: str = "parent_id") -> MagicMock:
     return mock_run
 
 
+def _arm_execution_order(mock_mlflow: MagicMock, existing: int = 0) -> None:
+    """Make ``_next_execution_order`` resolve under a mocked ``mlflow``.
+
+    ``_next_execution_order`` counts the parent run's existing nested
+    children via ``MlflowClient.search_runs`` and adds one.  Under a bare
+    mock, ``search_runs`` returns a ``MagicMock`` that ``len()`` rejects,
+    so tests must supply a concrete list.
+
+    Args:
+        mock_mlflow: The patched ``mlflow`` module mock.
+        existing: How many nested children already exist (the next
+            execution order becomes ``existing + 1``).
+    """
+    client = mock_mlflow.tracking.MlflowClient.return_value
+    client.search_runs.return_value = [MagicMock() for _ in range(existing)]
+
+
 class TestStartRun:
     """Tests for PipelineEngine.start_run."""
 
@@ -120,6 +137,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
 
         engine = PipelineEngine()
         engine.start_run()
@@ -131,6 +149,38 @@ class TestExecuteStep:
 
     @patch("app.core.pipeline_engine.PluginManager")
     @patch("app.core.pipeline_engine.mlflow")
+    def test_nested_run_name_uses_execution_order(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify the nested run name is '[<order>] <category> / <plugin>'.
+
+        The bracket number is the execution sequence (existing children
+        + 1), not the category's config order; the plugin's own ``name``
+        is preferred for the label.
+        """
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        # Three nested children already exist → this step is the 4th.
+        _arm_execution_order(mock_mlflow, existing=3)
+        mock_plugin = MagicMock()
+        mock_plugin.name = "MovieLens Loader"
+        mock_pm.load.return_value = mock_plugin
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("dataset_loading.movieLens_loader.movieLens_loader", {}, {})
+
+        nested_call = mock_mlflow.start_run.call_args_list[-1]
+        assert nested_call.kwargs["nested"] is True
+        assert nested_call.kwargs["run_name"] == "[4] Dataset Loading / MovieLens Loader"
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
     def test_calls_plugin_run_with_params(self, mock_mlflow: MagicMock, mock_pm: MagicMock) -> None:
         """Verify plugin.run() is called with only keyword params."""
         mock_mlflow.start_run.side_effect = [
@@ -138,6 +188,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         mock_plugin = MagicMock()
         mock_pm.load.return_value = mock_plugin
 
@@ -162,6 +213,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         mock_plugin = MagicMock()
         mock_pm.load.return_value = mock_plugin
 
@@ -186,6 +238,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         mock_plugin = MagicMock()
         mock_pm.load.return_value = mock_plugin
 
@@ -208,6 +261,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         call_order: list[str] = []
         mock_plugin = MagicMock()
         mock_plugin.load_context.side_effect = (
@@ -242,6 +296,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
 
         engine = PipelineEngine()
         engine.start_run()
@@ -264,6 +319,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         mock_plugin = MagicMock()
         mock_pm.load.return_value = mock_plugin
         notifier = PluginNotifier()
@@ -287,6 +343,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         mock_plugin = MagicMock()
         original_notifier = mock_plugin.notifier
         mock_pm.load.return_value = mock_plugin
@@ -312,6 +369,7 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
         ]
+        _arm_execution_order(mock_mlflow)
         notifier = PluginNotifier()
         seen_notifier: list[Any] = []
 
@@ -403,6 +461,7 @@ class TestResumeRun:
     def test_allows_execute_step_after_resume(self, mock_mlflow: MagicMock) -> None:
         """Verify execute_step works after resume_run."""
         mock_mlflow.start_run.return_value = _mock_start_run("step_id")
+        _arm_execution_order(mock_mlflow)
 
         engine = PipelineEngine()
         engine.resume_run("parent_id")

@@ -80,7 +80,7 @@ below yourself — the engine calls them, in order (§4). You only
 
 | Attr | Default | Role |
 |------|---------|------|
-| `name` | `None` | Human label for the UI. When `None`, the registry derives one from the directory name (`_make_display_name`, `plugin_registry.py`). |
+| `name` | `None` | Human label for the UI. When `None`, the registry derives one from the directory name (`make_plugin_display_name`, `plugin_discovery/naming.py`). |
 | `io_spec` | shared `PluginIOSpec()` | The I/O contract. **Always declare your own** (see §8). |
 | `notifier` | `NullNotifier()` | Progress channel. The engine swaps in a real `PluginNotifier` before `run()`; outside a pipeline it stays a silent no‑op, so the same code runs in tests unchanged. |
 
@@ -476,7 +476,7 @@ These are real, code‑traced sharp edges — read before authoring.
   as a class attribute — do the same. (`BaseComparePlugin` mutates the
   spec safely via `dataclasses.replace`, not in place.)
 - **`name` is optional but recommended.** Without it the UI label is
-  the directory name title‑cased (`_make_display_name`), e.g.
+  the directory name title‑cased (`make_plugin_display_name`), e.g.
   `movieLens_loader` → `Movielens Loader`. Set `name` for a clean
   label.
 
