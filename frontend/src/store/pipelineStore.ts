@@ -217,11 +217,13 @@ interface PipelineStore {
 
   /**
    * Confirm launch from the modal: clears pendingSteps and
-   * runs the pipeline with the user-provided tags and description.
+   * runs the pipeline with the user-provided tags, description, and
+   * optional pipeline name.
    */
   confirmLaunch: (
     tags: Record<string, string>,
-    description: string
+    description: string,
+    pipelineName: string
   ) => Promise<void>;
 
   /**
@@ -231,7 +233,8 @@ interface PipelineStore {
   runPipeline: (
     steps: StepDefinition[],
     tags?: Record<string, string>,
-    description?: string
+    description?: string,
+    pipelineName?: string
   ) => Promise<void>;
 
   /** Clear the error message banner. */
@@ -467,18 +470,20 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
   confirmLaunch: async (
     tags: Record<string, string>,
-    description: string
+    description: string,
+    pipelineName: string
   ) => {
     const steps = get().pendingSteps;
     if (!steps) return;
     set({ pendingSteps: null });
-    await get().runPipeline(steps, tags, description);
+    await get().runPipeline(steps, tags, description, pipelineName);
   },
 
   runPipeline: async (
     steps: StepDefinition[],
     tags: Record<string, string> = {},
-    description: string = ""
+    description: string = "",
+    pipelineName: string = ""
   ) => {
     // Reset cards that will be executed to idle.
     const cards = { ...get().cards };
@@ -504,7 +509,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         steps,
         existingContext,
         tags,
-        description
+        description,
+        pipelineName
       );
       set({ currentTaskId: task_id });
 
