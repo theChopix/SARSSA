@@ -1,3 +1,8 @@
+# IANA timezone name used for human-readable timestamps (e.g. pipeline
+# run names). Must be a valid zoneinfo key, e.g. "Europe/Prague",
+# "UTC", "America/New_York".
+timezone: "Europe/Prague"
+
 mlflow:
   experiment_name: "pipeline_experiments_02"
   tracking_uri: "sqlite:///mlflow.db"

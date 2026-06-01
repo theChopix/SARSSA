@@ -5,7 +5,7 @@ from typing import Any
 
 import mlflow
 
-from app.config.config import EXPERIMENT_NAME
+from app.config.config import EXPERIMENT_NAME, TIMEZONE
 from app.core.plugin_discovery.naming import (
     format_pipeline_run_name,
     format_step_run_name,
@@ -75,7 +75,9 @@ class PipelineEngine:
             mlflow_tags = {f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()}
 
         run = mlflow.start_run(
-            run_name=format_pipeline_run_name(pipeline_name, datetime.datetime.now()),
+            run_name=format_pipeline_run_name(
+                pipeline_name, datetime.datetime.now(TIMEZONE)
+            ),
             tags=mlflow_tags,
             description=description or None,
         )
