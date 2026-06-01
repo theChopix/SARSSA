@@ -3,6 +3,7 @@
 All MLflow and PluginManager interactions are mocked.
 """
 
+import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -123,6 +124,26 @@ class TestStartRun:
         _, kwargs = mock_mlflow.start_run.call_args
         assert kwargs["tags"] is None
         assert kwargs["description"] is None
+
+    @patch("app.core.pipeline_engine.datetime")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_run_name_uses_configured_timezone(
+        self, mock_mlflow: MagicMock, mock_datetime: MagicMock
+    ) -> None:
+        """Verify the run name timestamp is built in the configured timezone."""
+        from app.config.config import TIMEZONE
+
+        mock_mlflow.start_run.return_value = _mock_start_run("run_42")
+        fixed = datetime.datetime(2026, 5, 31, 14, 7)
+        mock_datetime.datetime.now.return_value = fixed
+
+        engine = PipelineEngine()
+        engine.start_run(pipeline_name="Baseline ELSA")
+
+        # now() must be called with the configured tz, not naive/UTC.
+        mock_datetime.datetime.now.assert_called_once_with(TIMEZONE)
+        _, kwargs = mock_mlflow.start_run.call_args
+        assert kwargs["run_name"] == "Pipeline Run | Baseline ELSA [ 31/05/2026 | 14:07 ]"
 
 
 class TestExecuteStep:

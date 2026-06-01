@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -41,4 +42,5 @@ EXPERIMENT_NAME: str = _config["mlflow"]["experiment_name"]
 TRACKING_URI: str = _config["mlflow"]["tracking_uri"]
 ARTIFACT_ROOT: str = _config["mlflow"]["artifact_root"]
 MLFLOW_UI_BASE_URL: str = _config["mlflow"]["ui_base_url"]
+TIMEZONE: ZoneInfo = ZoneInfo(_config.get("timezone", "UTC"))
 PLUGIN_CATEGORIES: dict[str, CategoryInfo] = _load_plugin_categories(_config["plugin_categories"])
