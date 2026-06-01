@@ -215,10 +215,11 @@ export async function executeStepAsync(
  * The backend spawns a worker thread and returns immediately
  * with a task ID. Use {@link getTaskStatus} to poll for progress.
  *
- * @param steps       - Array of steps to execute in order.
- * @param context     - Optional pre-populated context from a previous run.
- * @param tags        - Optional user-defined key-value tags for the MLflow run.
- * @param description - Optional free-text description for the MLflow run.
+ * @param steps        - Array of steps to execute in order.
+ * @param context      - Optional pre-populated context from a previous run.
+ * @param tags         - Optional user-defined key-value tags for the MLflow run.
+ * @param description  - Optional free-text description for the MLflow run.
+ * @param pipelineName - Optional user-provided label woven into the run name.
  * @returns Object containing the `task_id` to poll.
  *
  * @example
@@ -227,7 +228,8 @@ export async function executeStepAsync(
  *   [{ plugin: "dataset_loading.movieLens_loader.movieLens_loader", params: {} }],
  *   { dataset_loading: { run_id: "abc123" } },
  *   { dataset: "MovieLens", model: "ELSA" },
- *   "Baseline run with default params"
+ *   "Baseline run with default params",
+ *   "Baseline ELSA"
  * );
  * ```
  */
@@ -235,12 +237,19 @@ export async function startPipelineTask(
   steps: StepDefinition[],
   context: Record<string, unknown> = {},
   tags: Record<string, string> = {},
-  description: string = ""
+  description: string = "",
+  pipelineName: string = ""
 ): Promise<{ task_id: string }> {
   const response = await fetch(`${API_BASE_URL}/pipelines/run-async`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ steps, context, tags, description }),
+    body: JSON.stringify({
+      steps,
+      context,
+      tags,
+      description,
+      pipeline_name: pipelineName,
+    }),
   });
 
   if (!response.ok) {

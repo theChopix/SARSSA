@@ -2,8 +2,9 @@
  * LaunchModal — confirmation dialog before starting a pipeline run.
  *
  * Shown when the user clicks "Run up to this step" or "Run full pipeline".
- * Lets the user add key-value tags and a free-text description that will
- * be stored as MLflow tags (prefixed with `sarssa.`) on the parent run.
+ * Lets the user set an optional pipeline name (woven into the parent run
+ * name), plus key-value tags and a free-text description that will be
+ * stored as MLflow tags (prefixed with `sarssa.`) on the parent run.
  *
  * Auto-suggested tags are generated from the selected plugin names and
  * any non-default parameter values.
@@ -12,6 +13,10 @@
  *
  *   ┌────────────────────────────────────────────┐
  *   │  Launch Pipeline Run                       │
+ *   │                                            │
+ *   │  Pipeline name (optional)                  │
+ *   │  ┌────────────────────────────────────┐    │
+ *   │  └────────────────────────────────────┘    │
  *   │                                            │
  *   │  Tags                          [+ Add tag] │
  *   │  ┌──────────┐  ┌──────────────┐   [×]      │
@@ -73,12 +78,14 @@ export default function LaunchModal() {
   const setPendingSteps = usePipelineStore((s) => s.setPendingSteps);
   const confirmLaunch = usePipelineStore((s) => s.confirmLaunch);
 
+  const [pipelineName, setPipelineName] = useState("");
   const [tags, setTags] = useState<TagEntry[]>([]);
   const [description, setDescription] = useState("");
 
   // Reset form state and populate auto-suggestions when modal opens.
   useEffect(() => {
     if (pendingSteps) {
+      setPipelineName("");
       setTags(buildSuggestedTags(pendingSteps));
       setDescription("");
     }
@@ -112,8 +119,8 @@ export default function LaunchModal() {
         tagsRecord[trimmedKey] = entry.value.trim();
       }
     }
-    confirmLaunch(tagsRecord, description.trim());
-  }, [tags, description, confirmLaunch]);
+    confirmLaunch(tagsRecord, description.trim(), pipelineName.trim());
+  }, [tags, description, pipelineName, confirmLaunch]);
 
   const handleCancel = useCallback(() => {
     setPendingSteps(null);
@@ -145,6 +152,25 @@ export default function LaunchModal() {
         <h2 className="text-lg font-bold text-gray-900 mb-4">
           Launch Pipeline Run
         </h2>
+
+        {/* ── Pipeline name ──────────────────────── */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Pipeline name{" "}
+            <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={pipelineName}
+            onChange={(e) => setPipelineName(e.target.value)}
+            maxLength={60}
+            placeholder="e.g. Baseline ELSA run"
+            className="w-full rounded-md border border-gray-300 px-3 py-2
+                       text-sm text-gray-900 placeholder-gray-400
+                       focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+                       outline-none"
+          />
+        </div>
 
         {/* ── Instructions ──────────────────────── */}
         <p className="text-sm text-gray-500 mb-4">
