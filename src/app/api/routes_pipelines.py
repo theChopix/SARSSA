@@ -112,6 +112,7 @@ def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
         initial_context=pipeline_request.context,
         tags=pipeline_request.tags,
         description=pipeline_request.description,
+        pipeline_name=pipeline_request.pipeline_name,
     )
 
     thread = threading.Thread(

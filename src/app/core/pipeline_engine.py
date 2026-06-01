@@ -7,6 +7,7 @@ import mlflow
 
 from app.config.config import EXPERIMENT_NAME
 from app.core.plugin_discovery.naming import (
+    format_pipeline_run_name,
     format_step_run_name,
     make_plugin_display_name,
 )
@@ -40,15 +41,20 @@ class PipelineEngine:
         self,
         tags: dict[str, str] | None = None,
         description: str = "",
+        pipeline_name: str = "",
     ) -> str:
         """Create a new parent pipeline run in MLflow.
 
         Optionally annotates the run with user-provided key-value tags
-        (each key is prefixed with ``sarssa.``) and a description.
+        (each key is prefixed with ``sarssa.``) and a description, and
+        names the run from an optional user-provided pipeline name.
 
         Args:
             tags: User-provided key-value tags for the pipeline run.
             description: User-provided free-text description.
+            pipeline_name: Optional user-provided label woven into the
+                run name (see
+                :func:`~app.core.plugin_discovery.naming.format_pipeline_run_name`).
 
         Returns:
             str: The parent run ID.
@@ -63,14 +69,13 @@ class PipelineEngine:
             )
 
         mlflow.set_experiment(EXPERIMENT_NAME)
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
         mlflow_tags: dict[str, str] | None = None
         if tags:
             mlflow_tags = {f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()}
 
         run = mlflow.start_run(
-            run_name=f"pipeline_run_{timestamp}",
+            run_name=format_pipeline_run_name(pipeline_name, datetime.datetime.now()),
             tags=mlflow_tags,
             description=description or None,
         )

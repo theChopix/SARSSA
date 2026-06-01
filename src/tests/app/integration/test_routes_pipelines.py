@@ -209,6 +209,37 @@ class TestRunAsync:
         assert task is not None
         assert task.description == "Baseline run"
 
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_forwards_pipeline_name_to_task(
+        self, _mock_worker: MagicMock, client: TestClient
+    ) -> None:
+        """Verify pipeline_name from the request body is stored on the task."""
+        response = client.post(
+            "/pipelines/run-async",
+            json={
+                "steps": [{"plugin": "cat.p.p", "params": {}}],
+                "pipeline_name": "Baseline ELSA",
+            },
+        )
+        task_id = response.json()["task_id"]
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.pipeline_name == "Baseline ELSA"
+
+    def test_rejects_overlong_pipeline_name(self, client: TestClient) -> None:
+        """Verify a pipeline_name over 60 characters is rejected with 422."""
+        response = client.post(
+            "/pipelines/run-async",
+            json={
+                "steps": [{"plugin": "cat.p.p", "params": {}}],
+                "pipeline_name": "x" * 61,
+            },
+        )
+        assert response.status_code == 422
+
 
 class TestGetTaskStatus:
     """Tests for GET /pipelines/tasks/{task_id}."""

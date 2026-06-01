@@ -72,6 +72,18 @@ class TestCreateTask:
         task = create_task([])
         assert task.description == ""
 
+    def test_stores_pipeline_name(self) -> None:
+        """Verify pipeline_name is forwarded to the TaskState."""
+        _clear_store()
+        task = create_task([], pipeline_name="Baseline ELSA")
+        assert task.pipeline_name == "Baseline ELSA"
+
+    def test_pipeline_name_defaults_to_empty_string(self) -> None:
+        """Verify pipeline_name defaults to empty string when not provided."""
+        _clear_store()
+        task = create_task([])
+        assert task.pipeline_name == ""
+
     def test_tags_none_becomes_empty_dict(self) -> None:
         """Verify passing None for tags results in an empty dict."""
         _clear_store()

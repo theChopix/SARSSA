@@ -35,7 +35,11 @@ def run_pipeline_worker(task: TaskState) -> None:
     notifier = PluginNotifier()
     task.messages = notifier.messages
     try:
-        run_id = engine.start_run(tags=task.tags, description=task.description)
+        run_id = engine.start_run(
+            tags=task.tags,
+            description=task.description,
+            pipeline_name=task.pipeline_name,
+        )
         task.run_id = run_id
         logger.info("[WORKER] Pipeline run started: %s", run_id)
 
