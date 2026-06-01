@@ -19,6 +19,7 @@ def create_task(
     initial_context: dict[str, Any] | None = None,
     tags: dict[str, str] | None = None,
     description: str = "",
+    pipeline_name: str = "",
     run_id: str | None = None,
 ) -> TaskState:
     """Create a new task, store it, and return it.
@@ -28,6 +29,8 @@ def create_task(
         initial_context: Optional pre-populated context from a previous run.
         tags: User-provided key-value tags for the pipeline run.
         description: User-provided free-text description.
+        pipeline_name: Optional user-provided label woven into the
+            parent run name.
         run_id: Optional pre-existing MLflow parent run ID.  When provided,
             ``task.run_id`` is set immediately so the worker can resume an
             existing run rather than starting a fresh one.
@@ -42,6 +45,7 @@ def create_task(
         initial_context=initial_context or {},
         tags=tags or {},
         description=description,
+        pipeline_name=pipeline_name,
     )
     if run_id is not None:
         task.run_id = run_id

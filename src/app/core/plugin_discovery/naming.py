@@ -1,11 +1,15 @@
 """Human-readable naming helpers for plugins and pipeline steps.
 
-Centralises the two ways a dotted plugin module path is turned into a
-label so the plugin registry and the pipeline engine share one
-definition.
+Centralises the ways a dotted plugin module path (and a parent pipeline
+run) is turned into a label so the plugin registry and the pipeline
+engine share one definition.
 """
 
+import datetime
+
 from app.config.config import PLUGIN_CATEGORIES
+
+_PIPELINE_RUN_TS_FORMAT = "%d/%m/%Y | %H:%M"
 
 
 def make_plugin_display_name(plugin_module_path: str) -> str:
@@ -53,3 +57,32 @@ def format_step_run_name(
     info = PLUGIN_CATEGORIES.get(category)
     category_label = info.display_name if info is not None else category
     return f"[{execution_order}] {category_label} / {plugin_display_name}"
+
+
+def format_pipeline_run_name(
+    user_pipeline_name: str,
+    now: datetime.datetime,
+) -> str:
+    """Build the display name for a parent pipeline run.
+
+    Produces a timestamped label, optionally including a user-provided
+    pipeline name:
+
+    - With a name: ``Pipeline Run | <name> [ 31/05/2026 | 14:07 ]``
+    - Without:     ``Pipeline Run [ 31/05/2026 | 14:07 ]``
+
+    A blank or whitespace-only ``user_pipeline_name`` yields the no-name
+    form.  ``now`` is taken as an argument (rather than read from the
+    clock) so the function stays pure and trivially testable.
+
+    Args:
+        user_pipeline_name: Optional user-supplied label for the run.
+        now: Timestamp to render into the name.
+
+    Returns:
+        str: The formatted parent-run name.
+    """
+    stamp = now.strftime(_PIPELINE_RUN_TS_FORMAT)
+    name = user_pipeline_name.strip()
+    label = f" | {name}" if name else ""
+    return f"Pipeline Run{label} [ {stamp} ]"

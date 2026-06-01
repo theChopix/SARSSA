@@ -210,6 +210,7 @@ class TestWorkerTags:
         mock_engine.start_run.assert_called_once_with(
             tags={"dataset": "MovieLens", "model": "ELSA"},
             description="",
+            pipeline_name="",
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -231,7 +232,32 @@ class TestWorkerTags:
         task.description = "Baseline run"
         run_pipeline_worker(task)
 
-        mock_engine.start_run.assert_called_once_with(tags={}, description="Baseline run")
+        mock_engine.start_run.assert_called_once_with(
+            tags={}, description="Baseline run", pipeline_name=""
+        )
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_passes_pipeline_name_to_engine(self, mock_engine_cls: MagicMock) -> None:
+        """Verify pipeline_name is forwarded to engine.start_run()."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        task.pipeline_name = "Baseline ELSA"
+        run_pipeline_worker(task)
+
+        mock_engine.start_run.assert_called_once_with(
+            tags={}, description="", pipeline_name="Baseline ELSA"
+        )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
     def test_passes_empty_defaults_to_engine(self, mock_engine_cls: MagicMock) -> None:
@@ -251,7 +277,7 @@ class TestWorkerTags:
         task = _make_task()
         run_pipeline_worker(task)
 
-        mock_engine.start_run.assert_called_once_with(tags={}, description="")
+        mock_engine.start_run.assert_called_once_with(tags={}, description="", pipeline_name="")
 
 
 class TestWorkerCancellation:
