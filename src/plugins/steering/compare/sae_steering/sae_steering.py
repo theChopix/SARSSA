@@ -42,6 +42,12 @@ class Plugin(BaseComparePlugin):
     """
 
     name = "SAE Steering (compare)"
+    description = (
+        "Runs the steering experiment on two pipeline runs at once — the current and a "
+        "chosen past run — for the same user, each steered toward its own neuron. Six "
+        "interleaved rows pair the two runs' histories and recommendations so you can "
+        "compare how differently they steer."
+    )
 
     past_run_required_steps = [
         "dataset_loading",

@@ -19,6 +19,12 @@ logger = get_logger(__name__)
 
 class Plugin(BasePlugin):
     name = "TF-IDF Labeling"
+    description = (
+        "Assigns a human-readable label to every autoencoder neuron. It runs the "
+        "autoencoder over all items to measure each neuron's activations, then uses "
+        "TF-IDF over the dataset's tags to pick the tag that most distinctively "
+        "characterizes each neuron. These labels drive inspection, steering and evaluation."
+    )
 
     io_spec = PluginIOSpec(
         required_steps=["dataset_loading", "training_cfm", "training_sae"],

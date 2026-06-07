@@ -20,6 +20,12 @@ logger = get_logger(__name__)
 
 
 class Plugin(BasePlugin):
+    description = (
+        "Projects all neuron-label embeddings into an interactive 2-D map with UMAP. "
+        "Each point is one neuron's label and proximity reflects semantic similarity — "
+        "hover to read labels and visually inspect the clusters and outliers in what the "
+        "autoencoder's neurons collectively represent."
+    )
     io_spec = PluginIOSpec(
         required_steps=["neuron_labeling"],
         input_artifacts=[

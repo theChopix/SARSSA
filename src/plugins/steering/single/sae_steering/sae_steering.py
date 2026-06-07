@@ -36,6 +36,12 @@ class Plugin(BasePlugin):
     """
 
     name = "SAE Steering"
+    description = (
+        "Generates recommendations for one user while amplifying a chosen concept "
+        "neuron. Shows the user's history, the baseline recommendations and the steered "
+        "recommendations together, so you can see how nudging a single interpretable "
+        "concept — strength set by alpha — reshapes what gets recommended."
+    )
 
     io_spec = PluginIOSpec(
         required_steps=[

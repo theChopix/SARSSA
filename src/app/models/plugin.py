@@ -187,6 +187,11 @@ class ImplementationInfo(BaseModel):
         plugin_name: Dotted module path used by PluginManager.load()
             (e.g. ``dataset_loading.movieLens_loader.movieLens_loader``).
         display_name: Human-readable name derived from the module name.
+        description: Short human-readable explanation of what this
+            plugin does. Surfaced as a hover tooltip next to the
+            plugin's radio label on the frontend. ``None`` when the
+            plugin configures no description; the frontend then renders
+            no info icon.
         params: List of configurable parameters from the run() signature.
         display: Optional display specification describing how the
             frontend should render this plugin's output.
@@ -199,6 +204,7 @@ class ImplementationInfo(BaseModel):
 
     plugin_name: str
     display_name: str
+    description: str | None = None
     params: list[ParameterInfo]
     display: ItemRowsDisplayModel | ArtifactDisplayModel | None = None
     kind: Literal["single", "compare"] | None = None

@@ -214,6 +214,12 @@ class Plugin(BasePlugin):
     """
 
     name = "ELSA Trainer"
+    description = (
+        "Trains the base collaborative-filtering recommender — an ELSA shallow "
+        "autoencoder — on the interaction matrix. It learns normalized item embeddings "
+        "and dense user embeddings, optimizing ranking quality (NDCG@20) with early "
+        "stopping. This embedding space is what the sparse autoencoder later decomposes."
+    )
 
     io_spec = PluginIOSpec(
         required_steps=["dataset_loading"],

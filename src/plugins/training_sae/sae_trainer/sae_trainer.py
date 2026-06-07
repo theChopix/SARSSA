@@ -311,6 +311,12 @@ class Plugin(BasePlugin):
     """
 
     name = "SAE Trainer"
+    description = (
+        "Trains a sparse autoencoder on the recommender's dense embeddings, re-encoding "
+        "each into a wider but sparse vector where only a few 'neurons' fire. Each neuron "
+        "ideally captures one interpretable concept while reconstruction preserves "
+        "recommendation quality — the foundation for labeling, inspection and steering."
+    )
 
     io_spec = PluginIOSpec(
         required_steps=["dataset_loading", "training_cfm"],

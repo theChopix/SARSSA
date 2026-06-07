@@ -42,6 +42,12 @@ class Plugin(BaseComparePlugin):
     """
 
     name = "Embedding Map (compare)"
+    description = (
+        "Projects the neuron labels of the current run and a chosen past run into one "
+        "shared 2-D UMAP space, colored by run. Overlapping regions mean the two runs "
+        "captured similar concepts; separate clusters reveal where their labeled "
+        "semantic coverage diverged."
+    )
 
     past_run_required_steps = ["neuron_labeling"]
 

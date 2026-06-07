@@ -63,6 +63,12 @@ class Plugin(BaseComparePlugin):
     """
 
     name = "Embedding Map with Keyword Search (compare)"
+    description = (
+        "Plots two runs' neuron labels in a shared 2-D map and highlights those closest "
+        "to your keyword in each run. Choose whether top matches are ranked separately "
+        "per run or pooled across both — useful for asking whether each run covers a "
+        "concept of interest."
+    )
 
     past_run_required_steps = ["neuron_labeling"]
 

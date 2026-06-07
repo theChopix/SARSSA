@@ -36,6 +36,12 @@ class Plugin(BaseComparePlugin):
     """
 
     name = "SAE Inspection (compare)"
+    description = (
+        "Compares concept neurons across two pipeline runs. Pick a neuron from the "
+        "current run and one from a chosen past run, and view each one's top-activating "
+        "items stacked together — useful for seeing how concepts differ between two "
+        "separately trained autoencoders."
+    )
 
     past_run_required_steps = ["dataset_loading", "neuron_labeling"]
 

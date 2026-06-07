@@ -31,6 +31,12 @@ class Plugin(BasePlugin):
     """
 
     name = "SAE Inspection"
+    description = (
+        "Pick a labeled autoencoder neuron — a concept — and see the top items that "
+        "activate it most strongly, i.e. the items that most embody that concept. "
+        "Reuses precomputed activations for a fast top-K lookup without re-running any "
+        "model."
+    )
 
     io_spec = PluginIOSpec(
         required_steps=["dataset_loading", "neuron_labeling"],

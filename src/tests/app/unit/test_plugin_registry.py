@@ -98,6 +98,7 @@ def _make_mock_plugin(
     plugin_name: str | None = None,
     display: ItemRowsDisplaySpec | ArtifactDisplaySpec | None = None,
     param_ui_hints: list[ParamUIHint] | None = None,
+    description: str | None = None,
 ) -> MagicMock:
     """Create a mock plugin whose run() has the given signature params.
 
@@ -112,6 +113,11 @@ def _make_mock_plugin(
             ``io_spec.display``.
         param_ui_hints: Optional list of UI hints to attach to
             ``io_spec.param_ui_hints``.
+        description: Optional one-line plugin description. Mirrors
+            ``BasePlugin.description``; defaults to ``None`` as a real
+            plugin would unless it sets the attribute. Set explicitly
+            (rather than left as an auto-generated ``MagicMock``) so the
+            ``ImplementationInfo`` it feeds validates as ``str | None``.
 
     Returns:
         MagicMock: A mock with a ``run`` method with proper signature.
@@ -134,6 +140,7 @@ def _make_mock_plugin(
     sig = inspect.Signature(parameters)
     mock_plugin = MagicMock()
     mock_plugin.name = plugin_name
+    mock_plugin.description = description
     mock_plugin.run = MagicMock()
     mock_plugin.run.__signature__ = sig
     mock_plugin.io_spec = PluginIOSpec(
