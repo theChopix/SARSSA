@@ -173,6 +173,10 @@ export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
  * - `plugin_name`  – Dotted module path used to invoke the plugin
  *                     (e.g. "dataset_loading.lastFm1k_loader.lastFm1k_loader").
  * - `display_name` – Human-readable name for the UI.
+ * - `description`  – Short human-readable explanation of what this plugin
+ *                    does, surfaced as a hover tooltip next to the plugin's
+ *                    radio label. `null` when no description is configured;
+ *                    no info icon is rendered then.
  * - `params`       – Array of parameters the user can configure.
  * - `display`      – Optional display spec for visual output rendering.
  * - `kind`         – Plugin variant ("single" / "compare") derived from
@@ -182,6 +186,7 @@ export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
 export interface ImplementationInfo {
   plugin_name: string;
   display_name: string;
+  description: string | null;
   params: ParameterInfo[];
   display: DisplaySpec | null;
   kind: "single" | "compare" | null;

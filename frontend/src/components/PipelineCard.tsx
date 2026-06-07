@@ -532,17 +532,27 @@ function PluginRow({
 }) {
   return (
     <div className="flex items-center justify-between py-1">
-      {/* Radio button + name */}
-      <label className={`flex items-center gap-2 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
-        <input
-          type="radio"
-          checked={isSelected}
-          onChange={onSelect}
-          disabled={disabled}
-          className="accent-blue-500"
-        />
-        <span className="text-sm text-gray-800">{impl.display_name}</span>
-      </label>
+      {/* Radio button + name + optional description tooltip.
+          The tooltip sits OUTSIDE the <label> so clicking the ⓘ
+          does not toggle the radio. */}
+      <div className="flex items-center gap-1.5">
+        <label className={`flex items-center gap-2 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>
+          <input
+            type="radio"
+            checked={isSelected}
+            onChange={onSelect}
+            disabled={disabled}
+            className="accent-blue-500"
+          />
+          <span className="text-sm text-gray-800">{impl.display_name}</span>
+        </label>
+        {impl.description && (
+          <InfoTooltip
+            text={impl.description}
+            ariaLabel="Plugin description"
+          />
+        )}
+      </div>
 
       {/* Configure button (only if plugin has params) */}
       {impl.params.length > 0 && (

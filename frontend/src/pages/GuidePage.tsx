@@ -175,7 +175,8 @@ const SECTIONS: GuideSection[] = [
           "past runs" picker. Hover the ⓘ icon next to a parameter
           name to read its description. The same ⓘ appears next to
           each card title with a one-line summary of what that
-          category does.
+          category does, and next to each plugin's name with a short
+          description of what that plugin does.
         </p>
         <p className="text-sm text-gray-700 leading-relaxed">
           Adding a new plugin on the backend — your own dataset loader,
