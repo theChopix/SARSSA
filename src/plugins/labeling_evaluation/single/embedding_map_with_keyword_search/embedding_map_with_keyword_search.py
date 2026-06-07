@@ -56,6 +56,12 @@ class Plugin(BasePlugin):
     """
 
     name = "Embedding Map with Keyword Search"
+    description = (
+        "The same 2-D UMAP map of neuron labels, plus a keyword search. Your term is "
+        "embedded and placed on the map, and the most semantically similar labels are "
+        "highlighted and listed with similarity scores — handy for checking whether the "
+        "autoencoder has neurons covering a concept of interest."
+    )
 
     io_spec = PluginIOSpec(
         required_steps=["neuron_labeling"],

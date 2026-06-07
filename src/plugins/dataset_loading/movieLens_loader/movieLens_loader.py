@@ -135,6 +135,12 @@ class MovieLensLoader(DatasetLoader):
 
 class Plugin(BasePlugin):
     name = "MovieLens Loader"
+    description = (
+        "Loads the MovieLens movie-ratings dataset, counting each rating of 4 stars "
+        "or higher as a positive interaction. Builds a binary user–item matrix (users "
+        "with ≥50, movies with ≥20 interactions), splits users into train/validation/"
+        "test, and adds movie titles, posters, genres and tags for richer display."
+    )
 
     io_spec = PluginIOSpec(
         output_artifacts=[

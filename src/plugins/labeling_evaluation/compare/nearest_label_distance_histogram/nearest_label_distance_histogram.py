@@ -48,6 +48,12 @@ class Plugin(BaseComparePlugin):
     """
 
     name = "Nearest Label Distance — Histogram (compare)"
+    description = (
+        "Bins each current-run label's distance to its nearest past-run label into a "
+        "histogram. Shows the distribution of label drift — how many concepts stayed "
+        "well-aligned versus drifted far — the companion overview to the per-label bar "
+        "chart."
+    )
 
     past_run_required_steps = ["neuron_labeling"]
 

@@ -317,6 +317,10 @@ class BasePlugin(ABC):
         name: Optional human-readable display name. When set, the
             plugin registry uses this instead of the auto-derived
             name.
+        description: Optional one-line description of what this plugin
+            does. Surfaced as a hover tooltip next to the plugin's
+            radio label in the frontend. ``None`` ⇒ no info icon is
+            rendered.
         io_spec: Declarative I/O contract for the plugin.
         notifier: Notifier for pushing messages to the UI during
             execution.  Defaults to :class:`~utils.plugin_notifier.NullNotifier`
@@ -326,6 +330,7 @@ class BasePlugin(ABC):
     """
 
     name: str | None = None
+    description: str | None = None
     io_spec: PluginIOSpec = PluginIOSpec()
     notifier: PluginNotifier = NullNotifier()
 

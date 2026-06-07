@@ -339,12 +339,17 @@ def _discover_implementations(
             module_path,
         )
         display_name = plugin_instance.name or make_plugin_display_name(module_path)
+        # getattr (not direct access) so a third-party plugin subclassing
+        # an older BasePlugin snapshot without ``description`` can't break
+        # discovery.
+        description = getattr(plugin_instance, "description", None)
         display = _convert_display_spec(plugin_instance.io_spec.display)
         kind = _derive_kind(module_path, category_name)
         implementations.append(
             ImplementationInfo(
                 plugin_name=module_path,
                 display_name=display_name,
+                description=description,
                 params=params,
                 display=display,
                 kind=kind,

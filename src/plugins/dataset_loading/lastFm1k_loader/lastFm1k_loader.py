@@ -62,6 +62,12 @@ class LastFm1kLoader(DatasetLoader):
 
 class Plugin(BasePlugin):
     name = "LastFM-1K Loader"
+    description = (
+        "Loads the Last.fm 1K-users dataset of music listening histories into a "
+        "binary user–item interaction matrix. Keeps users with at least 5 and items "
+        "with at least 10 interactions, then splits users into train, validation and "
+        "test sets — the raw signal every downstream training step consumes."
+    )
 
     io_spec = PluginIOSpec(
         output_artifacts=[

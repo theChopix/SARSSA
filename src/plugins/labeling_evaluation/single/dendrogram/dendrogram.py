@@ -22,6 +22,12 @@ logger = get_logger(__name__)
 
 
 class Plugin(BasePlugin):
+    description = (
+        "Embeds every neuron label and clusters them into a hierarchical tree by "
+        "semantic similarity (cosine distance). The dendrogram reveals how labels group "
+        "into themes and exposes near-duplicate neurons that merge close to the leaves — "
+        "a quick read on the label space's structure and redundancy."
+    )
     io_spec = PluginIOSpec(
         required_steps=["neuron_labeling"],
         input_artifacts=[

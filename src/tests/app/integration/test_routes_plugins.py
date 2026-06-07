@@ -68,8 +68,18 @@ class TestGetPluginRegistry:
             for impl in entry["implementations"]:
                 assert "plugin_name" in impl, f"Missing plugin_name in {key}"
                 assert "display_name" in impl, f"Missing display_name in {key}"
+                assert "description" in impl, f"Missing description in {key}"
                 assert "params" in impl, f"Missing params in {key}"
                 assert "display" in impl, f"Missing display in {key}"
+
+    def test_every_implementation_has_a_description(self, client: TestClient) -> None:
+        """Verify every implementation entry carries a non-empty description."""
+        response = client.get("/plugins/registry")
+        data = response.json()
+
+        for key, entry in data.items():
+            for impl in entry["implementations"]:
+                assert impl["description"], f"Empty description for {impl['plugin_name']} in {key}"
 
     def test_steering_has_display_spec(self, client: TestClient) -> None:
         """Verify steering implementations include a non-null display spec."""

@@ -47,6 +47,12 @@ class Plugin(BaseComparePlugin):
     """
 
     name = "Nearest Label Distance — Bars (compare)"
+    description = (
+        "For each current-run label, measures the cosine distance to its nearest "
+        "past-run label and draws one bar per neuron, sorted by distance. Surfaces which "
+        "specific labels drifted furthest from any reference label in the past run — the "
+        "least-aligned concepts sit leftmost."
+    )
 
     past_run_required_steps = ["neuron_labeling"]
 
