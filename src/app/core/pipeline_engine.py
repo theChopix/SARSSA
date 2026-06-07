@@ -75,9 +75,7 @@ class PipelineEngine:
             mlflow_tags = {f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()}
 
         run = mlflow.start_run(
-            run_name=format_pipeline_run_name(
-                pipeline_name, datetime.datetime.now(TIMEZONE)
-            ),
+            run_name=format_pipeline_run_name(pipeline_name, datetime.datetime.now(TIMEZONE)),
             tags=mlflow_tags,
             description=description or None,
         )
@@ -103,7 +101,13 @@ class PipelineEngine:
 
         Returns:
             int: The next 1-based execution order.
+
+        Raises:
+            RuntimeError: If no parent run is active.
         """
+        if self._parent_run_id is None:
+            raise RuntimeError("No active pipeline run. Call start_run() first.")
+
         client = mlflow.tracking.MlflowClient()
         parent = client.get_run(self._parent_run_id)
         children = client.search_runs(
