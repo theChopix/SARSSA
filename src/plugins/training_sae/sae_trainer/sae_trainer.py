@@ -20,7 +20,7 @@ from utils.torch.evaluation import evaluate_sparse_encoder
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.model_registry import get_sae_model_class
 from utils.torch.models.sae_model import SAE
-from utils.torch.runtime import set_device, set_seed
+from utils.torch.runtime import maybe_compile, set_device, set_seed
 
 logger = get_logger(__name__)
 
@@ -577,6 +577,7 @@ class Plugin(BasePlugin):
             contrastive_coef=contrastive_coef,
             reconstruction_coef=reconstruction_coef,
         ).to(device)
+        sae = maybe_compile(sae, device)
 
         logger.info(f"Initialized {model} with {embedding_dim} dimensions")
 

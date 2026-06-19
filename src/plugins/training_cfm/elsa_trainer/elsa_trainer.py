@@ -18,7 +18,7 @@ from utils.plugin_logger import get_logger
 from utils.plugin_notifier import PluginNotifier
 from utils.torch.evaluation import evaluate_dense_encoder
 from utils.torch.models.base_model.elsa import ELSA
-from utils.torch.runtime import set_device, set_seed
+from utils.torch.runtime import maybe_compile, set_device, set_seed
 
 logger = get_logger(__name__)
 
@@ -322,6 +322,7 @@ class Plugin(BasePlugin):
 
         # Initialize ELSA model and optimizer
         model = ELSA(input_dim=self.num_items, embedding_dim=factors).to(device)
+        model = maybe_compile(model, device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
 
         self.trained_model = train(

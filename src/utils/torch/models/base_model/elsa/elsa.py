@@ -4,6 +4,7 @@ import torch.optim as optim
 
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.model_registry import register_base_model
+from utils.torch.runtime import autocast_context
 
 
 def l2_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
@@ -49,7 +50,8 @@ class ELSA(BaseModel):
     def train_step(
         self, optimizer: optim.Optimizer, batch: torch.Tensor
     ) -> dict[str, torch.Tensor]:
-        losses = self.compute_loss_dict(batch)
+        with autocast_context(batch.device):
+            losses = self.compute_loss_dict(batch)
         optimizer.zero_grad()
         losses["Loss"].backward()
         self.normalize_encoder()

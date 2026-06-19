@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from utils.torch.runtime import autocast_context
+
 
 def l2_normalize(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return x / x.norm(dim=dim, keepdim=True)
@@ -160,7 +162,8 @@ class SAE(nn.Module):
         positive_batch: torch.Tensor | None,
     ) -> dict[str, torch.Tensor]:
         self.train()
-        losses = self.compute_loss_dict(batch, positive_batch)
+        with autocast_context(batch.device):
+            losses = self.compute_loss_dict(batch, positive_batch)
         optimizer.zero_grad()
         losses["Loss"].backward()
         self.normalize_decoder()
