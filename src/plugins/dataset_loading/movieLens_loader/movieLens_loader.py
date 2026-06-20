@@ -25,6 +25,10 @@ class MovieLensLoader(DatasetLoader):
     MIN_USER_INTERACTIONS: int = 5
     MIN_ITEM_INTERACTIONS: int = 1
 
+    # Tag vocabulary filter: keep only tags applied at least this many times,
+    # counted over all users before the item-interaction filter.
+    MIN_TAG_INTERACTIONS: int = 100
+
     RATINGS_FILE: str = "ratings.csv"
     TAGS_FILE: str = "tags.csv"
     DESCRIPTIONS_FILE: str = "descriptions.json"
@@ -55,14 +59,19 @@ class MovieLensLoader(DatasetLoader):
         # Tags
         if self._file_exists(self.TAGS_FILE):
             self.logger.info("Loading tags...")
+            # Tag preprocessing: lowercase/strip, keep only tags applied at
+            # least MIN_TAG_INTERACTIONS times (counted over all users, before
+            # the item filter), then keep only items with interactions. Rows
+            # are NOT de-duplicated, so the tag-item matrix holds raw
+            # co-occurrence counts (summed) rather than binary incidence.
             self.df_tags = (
                 pl.scan_csv(self._resolve_path(self.TAGS_FILE), has_header=True)
                 .select(["movieId", "tag"])
                 .rename({"movieId": "itemId"})
                 .cast({"itemId": pl.String, "tag": pl.String})
                 .with_columns(pl.col("tag").str.to_lowercase().str.strip_chars().alias("tag"))
+                .filter(pl.col("tag").count().over("tag") >= self.MIN_TAG_INTERACTIONS)
                 .filter(pl.col("itemId").is_in(self.items))
-                .unique()
                 .collect()
             )
             self.logger.info("Loaded %d tag entries", len(self.df_tags))
