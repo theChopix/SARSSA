@@ -47,7 +47,7 @@ class Plugin(BasePlugin):
             ArtifactSpec("training_sae", "", "sae", "sae_model"),
         ],
         output_artifacts=[
-            OutputArtifactSpec("item_acts", "item_acts.pt", "pt"),
+            OutputArtifactSpec("item_acts", "item_acts.npz", "npz"),
             OutputArtifactSpec("tag_item_prob", "tag_item_prob.npz", "npz"),
             OutputArtifactSpec("neuron_labels", "neuron_labels.json", "json"),
             OutputArtifactSpec(
@@ -95,7 +95,7 @@ class Plugin(BasePlugin):
         self.sae.to(device)
 
         # compute SAE activations
-        self.item_acts = compute_sae_item_activations(
+        item_acts = compute_sae_item_activations(
             self.base_model,
             self.sae,
             len(self.items),
@@ -108,7 +108,7 @@ class Plugin(BasePlugin):
         self.tag_item_prob.data /= self.tag_item_prob.data.sum()
 
         # aggregate tag → neuron (kept in-memory only; not persisted)
-        tag_neuron = self.tag_item_prob @ self.item_acts.numpy()
+        tag_neuron = self.tag_item_prob @ item_acts.numpy()
 
         tag_neuron_dense = (
             tag_neuron.toarray() if sp.issparse(tag_neuron) else np.asarray(tag_neuron)
@@ -131,10 +131,14 @@ class Plugin(BasePlugin):
             self.tag_ids[int(t)]: int(tfidf_tn[t].argmax()) for t in range(tfidf_tn.shape[0])
         }
 
+        # persist activations sparsely — TopK SAE outputs are ~94% zeros,
+        # so CSR shrinks this artifact ~8x vs. a dense tensor
+        self.item_acts = sp.csr_matrix(item_acts.numpy())
+
         # output params
         self.neuron_labeling = True
         self.num_tags = len(self.tag_ids)
-        self.num_neurons = self.item_acts.shape[1]
+        self.num_neurons = item_acts.shape[1]
 
     @staticmethod
     def _compute_tfidf(x: np.ndarray) -> np.ndarray:

@@ -54,7 +54,7 @@ class Plugin(BasePlugin):
                 "neuron_labels",
                 "json",
             ),
-            ArtifactSpec("neuron_labeling", "item_acts.pt", "item_acts", "pt"),
+            ArtifactSpec("neuron_labeling", "item_acts.npz", "item_acts", "npz"),
         ],
         output_artifacts=[
             OutputArtifactSpec("top_k_item_ids", "top_k_item_ids.json", "json"),

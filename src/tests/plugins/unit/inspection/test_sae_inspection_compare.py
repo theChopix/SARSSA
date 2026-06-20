@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import scipy.sparse as sp
 import torch
 
 from plugins.inspection.compare.sae_inspection.sae_inspection import Plugin
@@ -42,6 +43,7 @@ def _make_past_loader(
     context: dict[str, Any],
     past_neuron_labels: dict[str, str],
     past_items: np.ndarray,
+    past_item_acts: sp.csr_matrix,
 ) -> MagicMock:
     """Build a MagicMock that mimics MLflowRunLoader for the past side.
 
@@ -49,12 +51,11 @@ def _make_past_loader(
         context: Past parent run's ``context.json`` payload.
         past_neuron_labels: Stub ``neuron_labels.json`` for past run.
         past_items: Stub ``items.npy`` for past run.
+        past_item_acts: Stub ``item_acts.npz`` (sparse) for past run.
 
     Returns:
         MagicMock: A loader whose ``get_*_artifact`` methods route
-            by filename to the appropriate stub.  The ``pt`` artifact
-            (``item_acts.pt``) is loaded via ``torch.load`` which the
-            caller mocks separately.
+            by filename to the appropriate stub.
     """
 
     def get_json(filename: str) -> Any:
@@ -71,10 +72,15 @@ def _make_past_loader(
             return past_items
         raise AssertionError(f"unexpected npy artifact: {filename}")
 
+    def get_npz(filename: str) -> sp.csr_matrix:
+        if filename == "item_acts.npz":
+            return past_item_acts
+        raise AssertionError(f"unexpected npz artifact: {filename}")
+
     loader = MagicMock()
     loader.get_json_artifact.side_effect = get_json
     loader.get_npy_artifact.side_effect = get_npy
-    loader.download_artifact.return_value = "/tmp/item_acts.pt"
+    loader.get_npz_artifact.side_effect = get_npz
     return loader
 
 
@@ -83,10 +89,8 @@ class TestCompareSaeInspectionRun:
 
     @patch("plugins.compare_plugin_interface.MLflowRunLoader")
     @patch("plugins.plugin_interface.MLflowRunLoader")
-    @patch("torch.load")
     def test_run_populates_both_sides(
         self,
-        mock_torch_load: MagicMock,
         mock_base_loader_cls: MagicMock,
         mock_compare_loader_cls: MagicMock,
     ) -> None:
@@ -99,17 +103,19 @@ class TestCompareSaeInspectionRun:
             context=past_context,
             past_neuron_labels={"0": "past_a", "1": "past_b"},
             past_items=np.array(["p_item_0", "p_item_1", "p_item_2"]),
+            past_item_acts=sp.csr_matrix(
+                np.array(
+                    [
+                        [0.1, 0.4],
+                        [0.6, 0.3],
+                        [0.2, 0.9],
+                    ]
+                )
+            ),
         )
 
         mock_compare_loader_cls.return_value = past_loader
         mock_base_loader_cls.return_value = past_loader
-        mock_torch_load.return_value = torch.tensor(
-            [
-                [0.1, 0.4],
-                [0.6, 0.3],
-                [0.2, 0.9],
-            ]
-        )
 
         plugin = _build_plugin()
         plugin.run(
