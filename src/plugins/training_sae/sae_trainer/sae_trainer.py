@@ -102,16 +102,19 @@ def train(
         train_user_embeddings, batch_size, device, shuffle=True
     )
 
-    # Pre-compute validation embeddings with sampling
+    # Pre-compute validation embeddings from FULL interactions through the frozen base
+    # model (NO sampling / augmentation): early stopping must see the full-interaction
+    # reconstruction.
     val_user_embeddings = np.vstack(
         [
-            base_model.encode(sampled_interactions(batch)).detach().cpu().numpy()
+            base_model.encode(batch).detach().cpu().numpy()
             for batch in tqdm(valid_interaction_dataloader, desc="Computing validation embeddings")
         ]
     )
     valid_embeddings_dataloader = DataLoader(val_user_embeddings, batch_size, device, shuffle=False)
 
-    # Pre-compute augmented validation embeddings for contrastive loss
+    # Pre-compute augmented validation embeddings for contrastive loss (only consumed
+    # when contrastive_coef > 0; otherwise the precomputed-embeddings path is taken).
     val_positive_user_embeddings = np.vstack(
         [
             base_model.encode(sampled_interactions(batch)).detach().cpu().numpy()
@@ -207,7 +210,9 @@ def train(
         # Periodic evaluation
         if epoch % evaluate_every == 0:
             model.eval()
-            # Compute validation losses
+            # Compute validation losses as a SAMPLE-WEIGHTED mean over batches
+            # (sum(loss*batch_rows)/n_val_users), so early stopping sees the true
+            # per-user mean regardless of an uneven final batch.
             valid_losses = {
                 "Loss": [],
                 "L2": [],
@@ -217,16 +222,24 @@ def train(
                 "Auxiliary": [],
                 "Contrastive": [],
             }
+            valid_batch_rows = []
             for embedding, positive_embedding in zip(
                 valid_embeddings_dataloader, val_positive_embeddings_dataloader
             ):
                 losses = model.compute_loss_dict(embedding, positive_embedding)
+                valid_batch_rows.append(embedding.shape[0])
                 for key, val in losses.items():
                     valid_losses[key].append(val.item())
 
+            valid_batch_rows = np.asarray(valid_batch_rows, dtype=np.float64)
+            n_val_users = valid_batch_rows.sum()
+
+            def _weighted_mean(values, batch_rows=valid_batch_rows, n=n_val_users):
+                return float(np.dot(values, batch_rows) / n)
+
             # Log validation losses
             for key, val in valid_losses.items():
-                mlflow.log_metric(f"loss/{key}/valid", float(np.mean(val)), step=epoch)
+                mlflow.log_metric(f"loss/{key}/valid", _weighted_mean(val), step=epoch)
 
             # Compute validation metrics (sparsity, reconstruction quality, recommendation performance)
             valid_metrics = evaluate_sparse_encoder(
@@ -241,7 +254,7 @@ def train(
             for key, val in valid_metrics.items():
                 mlflow.log_metric(f"{key}/valid", val, step=epoch)
 
-            valid_loss = float(np.mean(valid_losses["Loss"]))
+            valid_loss = _weighted_mean(valid_losses["Loss"])
             logger.info(
                 f"Epoch {epoch}/{epochs} - "
                 f"Loss: {valid_loss:.4f} - "
@@ -396,34 +409,34 @@ class Plugin(BasePlugin):
             int,
             "Maximum SAE training epochs (early stopping may end training "
             "sooner). Higher allows fuller convergence at the cost of "
-            "runtime.",
-        ] = 4000,
+            "runtime. Default 250.",
+        ] = 250,
         early_stop: Annotated[
             int,
             "Stop after this many consecutive evaluations without "
             "validation-loss improvement. 0 disables early stopping. "
-            "Counted in evaluation steps, not raw epochs.",
-        ] = 250,
+            "Counted in evaluation steps, not raw epochs. Default 50.",
+        ] = 50,
         batch_size: Annotated[
             int,
             "User embeddings per gradient update. Larger batches are faster "
             "per epoch and give more stable sparsity statistics but use "
-            "more memory.",
-        ] = 64,
+            "more memory. Default 1024.",
+        ] = 1024,
         embedding_dim: Annotated[
             int,
             "Width of the SAE's sparse hidden layer (the dictionary size). "
             "Larger yields more, finer-grained interpretable features but "
             "is slower; usually a multiple of the base model's factor count "
-            "(the expansion ratio).",
-        ] = 2048,
+            "(the expansion ratio). Default 8192 (= 8 x ELSA factors 1024).",
+        ] = 8192,
         top_k: Annotated[
             int,
             "Active features allowed per input for TopKSAE/BatchTopKSAE "
             "(the sparsity level). Lower is sparser and more interpretable "
             "but reconstructs worse; unused by BasicSAE, which relies on "
-            "l1_coef instead.",
-        ] = 128,
+            "l1_coef instead. Default 32.",
+        ] = 32,
         sample_users: Annotated[
             bool,
             "If true, randomly mask part of each user's interactions every "
@@ -467,20 +480,22 @@ class Plugin(BasePlugin):
             float,
             "Weight of the auxiliary loss that revives dead neurons by "
             "making them reconstruct the residual. Higher reduces dead "
-            "features but can disturb the main reconstruction.",
-        ] = 1 / 32,
+            "features but can disturb the main reconstruction. Disabled by "
+            "default (0.0).",
+        ] = 0.0,
         contrastive_coef: Annotated[
             float,
             "Weight of the contrastive loss pulling together augmented "
             "views of the same user. >0 enables it (and on-the-fly "
-            "encoding); higher favors view-invariant features.",
-        ] = 0.3,
+            "encoding); higher favors view-invariant features. Disabled by "
+            "default (0.0).",
+        ] = 0.0,
         lr: Annotated[
             float,
             "Adam step size for the SAE. SAEs are sensitive: too high "
-            "causes feature collapse, too low stalls learning. Typical "
-            "range ~1e-5 to 1e-4.",
-        ] = 1e-5,
+            "causes feature collapse, too low stalls learning. Default "
+            "3e-4.",
+        ] = 3e-4,
         beta1: Annotated[
             float,
             "Adam first-moment (momentum) decay. Standard value 0.9.",
@@ -555,7 +570,15 @@ class Plugin(BasePlugin):
         self.base_model.to(device)
 
         expansion_ratio = embedding_dim / self.base_factors
-        reconstruction_coef = 1 - (auxiliary_coef + contrastive_coef + l1_coef)
+        # Total loss = reconstruction_coef*recon + l1_coef*L1 (+ aux*Aux + con*Con).
+        # The L1 penalty is added on TOP of the reconstruction term, so it must not be
+        # subtracted here. With aux=0 and con=0 reconstruction_coef == 1.0.
+        if auxiliary_coef + contrastive_coef >= 1:
+            raise ValueError(
+                "auxiliary_coef + contrastive_coef must be < 1 "
+                f"(got {auxiliary_coef + contrastive_coef})"
+            )
+        reconstruction_coef = 1 - (auxiliary_coef + contrastive_coef)
 
         logger.info(
             f"Expansion ratio: {expansion_ratio:.1f}x ({self.base_factors} → {embedding_dim})"

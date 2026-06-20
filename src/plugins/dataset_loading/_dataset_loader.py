@@ -178,14 +178,18 @@ class DatasetLoader:
         )
 
     def split(self, val_ratio: float = 0.1, test_ratio: float = 0.1, seed: int = 42) -> None:
-        """Split the dataset into train, validation and test sets."""
+        """Split the dataset into train, validation and test sets.
+
+        Uses negative-index boundary rounding: ``train = p[:int(-(val+test)*N)]``,
+        ``val = p[int(-(val+test)*N):int(-test*N)]``, ``test = p[int(-test*N):]``.
+        """
         np.random.seed(seed)
-        p = np.random.permutation(len(self.users))
-        val_count, test_count = int(len(self.users) * val_ratio), int(len(self.users) * test_ratio)
+        n = len(self.users)
+        p = np.random.permutation(n)
         train_idx, val_idx, test_idx = (
-            p[val_count + test_count :],
-            p[:val_count],
-            p[val_count : val_count + test_count],
+            p[: int(-(val_ratio + test_ratio) * n)],
+            p[int(-(val_ratio + test_ratio) * n) : int(-test_ratio * n)],
+            p[int(-test_ratio * n) :],
         )
 
         self.train_users, self.train_idx, self.train_csr = (
