@@ -107,33 +107,49 @@ class Plugin(BasePlugin):
         self.tag_item_prob: sp.csr_matrix = self.tag_item_counts.copy()
         self.tag_item_prob.data /= self.tag_item_prob.data.sum()
 
+        item_acts_np = item_acts.numpy()
+
+        # DEAD neurons never activate on any item (all-zero column in
+        #   item_acts). They carry no signal, so they are masked out below
+        #   and left unlabelled rather than assigned a spurious tag.
+        dead_neuron_mask = item_acts_np.sum(axis=0) == 0
+
         # aggregate tag → neuron (kept in-memory only; not persisted)
-        tag_neuron = self.tag_item_prob @ item_acts.numpy()
+        tag_neuron = self.tag_item_prob @ item_acts_np
 
         tag_neuron_dense = (
             tag_neuron.toarray() if sp.issparse(tag_neuron) else np.asarray(tag_neuron)
         )
 
-        # top_tag_per_neuron: for each neuron, the tag with highest
-        #   tfidf score (term=neuron, document=tag)
+        # tfidf with rows=neurons (terms), columns=tags (documents);
+        #   shape: (num_neurons, num_tags)
         tfidf_nt = self._compute_tfidf(tag_neuron_dense.T)
+
+        # top_tag_per_neuron: for each neuron, the tag with highest tfidf
+        #   score; dead neurons get no label (None).
         self.top_tag_per_neuron = {
-            int(n): self.tag_ids[int(tfidf_nt[n].argmax())] for n in range(tfidf_nt.shape[0])
+            int(n): None if dead_neuron_mask[n] else self.tag_ids[int(tfidf_nt[n].argmax())]
+            for n in range(tfidf_nt.shape[0])
         }
 
         # neuron_labels is a copy of top_tag_per_neuron
         self.neuron_labels = dict(self.top_tag_per_neuron)
 
         # top_neuron_per_tag: for each tag, the neuron that best
-        #   characterises it (term=tag, document=neuron)
-        tfidf_tn = self._compute_tfidf(tag_neuron_dense)
+        #   characterises it. Uses the same (neuron x tag) tfidf as above
+        #   (term=neuron, document=tag), taking the argmax over the neuron
+        #   axis per tag. Dead neurons are masked to -inf so they are never
+        #   selected.
+        tfidf_nt_masked = tfidf_nt.copy()
+        tfidf_nt_masked[dead_neuron_mask, :] = -np.inf
         self.top_neuron_per_tag = {
-            self.tag_ids[int(t)]: int(tfidf_tn[t].argmax()) for t in range(tfidf_tn.shape[0])
+            self.tag_ids[int(t)]: int(tfidf_nt_masked[:, t].argmax())
+            for t in range(tfidf_nt_masked.shape[1])
         }
 
         # persist activations sparsely — TopK SAE outputs are ~94% zeros,
         # so CSR shrinks this artifact ~8x vs. a dense tensor
-        self.item_acts = sp.csr_matrix(item_acts.numpy())
+        self.item_acts = sp.csr_matrix(item_acts_np)
 
         # output params
         self.neuron_labeling = True

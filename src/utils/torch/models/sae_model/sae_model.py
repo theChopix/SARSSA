@@ -32,7 +32,9 @@ class SAE(nn.Module):
         self.decoder_b = nn.Parameter(torch.zeros(input_dim))
         self.inactive_neurons = torch.zeros(embedding_dim, device=self.device)
 
-        self.decoder_w.data = self.encoder_w.t().data
+        # Decoder is initialized INDEPENDENTLY (untied) from the encoder: keep the
+        # kaiming_uniform_ decoder_w above rather than overwriting it with the encoder
+        # transpose, then normalize.
         self.normalize_decoder()
 
     @abstractmethod

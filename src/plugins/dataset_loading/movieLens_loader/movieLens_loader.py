@@ -20,8 +20,10 @@ logger = get_logger(__name__)
 
 
 class MovieLensLoader(DatasetLoader):
-    MIN_USER_INTERACTIONS: int = 50
-    MIN_ITEM_INTERACTIONS: int = 20
+    # Interaction filtering: keep users with >= 5 interactions; no item-count
+    # filter (1 disables it).
+    MIN_USER_INTERACTIONS: int = 5
+    MIN_ITEM_INTERACTIONS: int = 1
 
     RATINGS_FILE: str = "ratings.csv"
     TAGS_FILE: str = "tags.csv"
@@ -138,7 +140,7 @@ class Plugin(BasePlugin):
     description = (
         "Loads the MovieLens movie-ratings dataset, counting each rating of 4 stars "
         "or higher as a positive interaction. Builds a binary user–item matrix (users "
-        "with ≥50, movies with ≥20 interactions), splits users into train/validation/"
+        "with ≥5 interactions; no movie-count filter), splits users into train/validation/"
         "test, and adds movie titles, posters, genres and tags for richer display."
     )
 
@@ -180,18 +182,18 @@ class Plugin(BasePlugin):
             int,
             "Random seed for the train/validation/test split. Fix for "
             "reproducible splits across runs; change to resample the "
-            "partition.",
+            "partition. Default 42.",
         ] = 42,
         val_ratio: Annotated[
             float,
-            "Fraction of each user's interactions held out for validation "
-            "(used for early stopping and tuning). E.g. 0.1 = 10% per user.",
+            "Fraction of users held out as the validation split (used for "
+            "early stopping and tuning). Default 0.1 (=> 80/10/10 "
+            "with test_ratio 0.1).",
         ] = 0.1,
         test_ratio: Annotated[
             float,
-            "Fraction of each user's interactions held out as the final "
-            "test set, never seen during training or tuning. E.g. 0.1 = "
-            "10% per user.",
+            "Fraction of users held out as the final test split, never seen "
+            "during training or tuning. Default 0.1.",
         ] = 0.1,
     ) -> None:
         """Load and prepare the MovieLens dataset.

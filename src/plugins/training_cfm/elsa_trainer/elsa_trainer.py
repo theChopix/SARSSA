@@ -53,7 +53,8 @@ def train(
     This function performs the complete training loop including:
     - Training on batches with progress tracking
     - Validation after each epoch
-    - Early stopping based on NDCG@20
+    - Early stopping based on the lowest validation reconstruction loss
+      (ELSA.normalized_mse_loss on the full val interactions, sample-weighted)
     - Test evaluation on the best model
     - Model checkpointing and MLflow artifact logging
 
@@ -114,7 +115,7 @@ def train(
     # Initialize early stopping variables
     best_epoch = 0
     epochs_without_improvement = 0
-    best_ndcg = 0
+    best_loss = float("inf")
     best_optimizer = None
     best_model = None
 
@@ -137,14 +138,21 @@ def train(
         # Log average training loss for this epoch
         mlflow.log_metric("loss/train", float(np.mean(train_losses)), step=epoch)
 
-        # Evaluate on validation set
+        # Evaluate on validation set. NDCG@20/R@20 are logged but do NOT drive
+        # model selection. The deterministic ranking pass uses a fixed seed (no
+        # per-epoch reseed) so the input/target split is identical every epoch.
         model.eval()
         valid_metrics = evaluate_dense_encoder(
-            model, valid_csr, target_ratio, batch_size, device, seed=seed + epoch
+            model, valid_csr, target_ratio, batch_size, device, seed=seed
         )
-        valid_metrics["loss"] = float(
-            np.mean([model.compute_loss_dict(batch)["Loss"].item() for batch in valid_dataloader])
-        )
+        # Validation reconstruction loss: ELSA.normalized_mse_loss on the FULL
+        # val interactions (val_csr is both input and reconstruction target),
+        # aggregated as a sample-weighted mean (sum(loss * batch_rows) / n_val_users).
+        val_loss_sum = 0.0
+        for batch in valid_dataloader:
+            batch_loss = model.compute_loss_dict(batch)["Loss"].item()
+            val_loss_sum += batch_loss * batch.shape[0] / valid_dataloader.dataset_size
+        valid_metrics["loss"] = float(val_loss_sum)
 
         # Log validation metrics to MLflow
         for key, val in valid_metrics.items():
@@ -160,10 +168,11 @@ def train(
                 f" — NDCG@20: {valid_metrics['NDCG20']:.4f}"
             )
 
-        # Early stopping logic
+        # Early stopping logic: select the model with the LOWEST validation
+        # reconstruction loss (not NDCG@20).
         if early_stop > 0:
-            if valid_metrics["NDCG20"] > best_ndcg:
-                best_ndcg = valid_metrics["NDCG20"]
+            if valid_metrics["loss"] < best_loss:
+                best_loss = valid_metrics["loss"]
                 best_optimizer = deepcopy(optimizer)
                 best_model = deepcopy(model)
                 best_epoch = epoch
@@ -217,7 +226,7 @@ class Plugin(BasePlugin):
     description = (
         "Trains the base collaborative-filtering recommender — an ELSA shallow "
         "autoencoder — on the interaction matrix. It learns normalized item embeddings "
-        "and dense user embeddings, optimizing ranking quality (NDCG@20) with early "
+        "and dense user embeddings, minimizing reconstruction loss with early "
         "stopping. This embedding space is what the sparse autoencoder later decomposes."
     )
 
@@ -248,41 +257,43 @@ class Plugin(BasePlugin):
             int,
             "Maximum passes over the training set (early stopping may end "
             "training sooner). Higher allows fuller convergence at the cost "
-            "of runtime.",
-        ] = 100,
+            "of runtime. Default 25.",
+        ] = 25,
         batch_size: Annotated[
             int,
             "Users per gradient update. Larger batches are faster per epoch "
             "with smoother gradients but use more memory and may need a "
-            "higher learning rate.",
-        ] = 64,
+            "higher learning rate. Default 1024.",
+        ] = 1024,
         factors: Annotated[
             int,
             "Dimensionality of the latent user/item embedding. Higher adds "
             "model capacity to fit more patterns but risks overfitting and "
-            "costs more memory/compute.",
-        ] = 256,
+            "costs more memory/compute. Default 1024.",
+        ] = 1024,
         lr: Annotated[
             float,
             "Adam optimizer step size. Too high diverges or oscillates; too "
-            "low trains slowly. Typical range 1e-4 to 1e-3.",
-        ] = 0.0001,
+            "low trains slowly. Typical range 1e-4 to 1e-3. Default 3e-4.",
+        ] = 0.0003,
         early_stop: Annotated[
             int,
-            "Stop after this many consecutive epochs without validation "
-            "NDCG@20 improvement. 0 disables early stopping (run all "
-            "epochs).",
+            "Stop after this many consecutive epochs without a lower "
+            "validation reconstruction loss. 0 disables early stopping (run "
+            "all epochs). Default 10.",
         ] = 10,
         seed: Annotated[
             int,
             "Random seed for weight initialization and training. Fix for "
-            "reproducible models across runs.",
-        ] = 43,
+            "reproducible models across runs. Default 42.",
+        ] = 42,
         target_ratio: Annotated[
             float,
             "Fraction of each user's interactions hidden as prediction "
-            "targets during validation/test scoring; the rest form the "
-            "input. E.g. 0.2 predicts 20% from the other 80%.",
+            "targets during validation/test ranking scoring; the rest form "
+            "the input. E.g. 0.2 predicts 20% from the other 80%. Does not "
+            "affect model selection (which uses reconstruction loss on the "
+            "full val interactions). Default 0.2.",
         ] = 0.2,
         beta1: Annotated[
             float,
