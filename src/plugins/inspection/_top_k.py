@@ -9,6 +9,7 @@ it to two independent contexts (current pipeline and past run).
 from typing import Any
 
 import numpy as np
+import scipy.sparse as sp
 import torch
 
 
@@ -16,7 +17,7 @@ def compute_top_k_for_neuron(
     neuron_id: str,
     neuron_labels: dict[str, str],
     items: np.ndarray,
-    item_acts: torch.Tensor,
+    item_acts: torch.Tensor | sp.csr_matrix,
     k: int,
 ) -> dict[str, Any]:
     """Compute the items most strongly activating a concept neuron.
@@ -52,8 +53,11 @@ def compute_top_k_for_neuron(
     int_id = int(neuron_id)
     label = neuron_labels[neuron_id]
 
-    neuron_activations = item_acts[:, int_id]
-    actual_k = min(k, len(neuron_activations))
+    column = item_acts[:, int_id]
+    if sp.issparse(column):
+        column = column.toarray().ravel()
+    neuron_activations = torch.as_tensor(np.asarray(column), dtype=torch.float32)
+    actual_k = min(k, neuron_activations.shape[0])
     topk_values, topk_indices = torch.topk(neuron_activations, actual_k)
 
     return {

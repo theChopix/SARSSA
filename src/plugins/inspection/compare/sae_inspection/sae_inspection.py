@@ -29,7 +29,7 @@ class Plugin(BaseComparePlugin):
 
     Loads the same input artifacts as the single variant for the
     current pipeline (``items.npy``, ``neuron_labels.json``,
-    ``item_acts.pt``) and pulls the past-run counterparts via
+    ``item_acts.npz``) and pulls the past-run counterparts via
     :meth:`BaseComparePlugin.load_past_artifact`.  Returns two rows
     of top-K items — one per side — for the frontend to render
     side-by-side.
@@ -61,7 +61,7 @@ class Plugin(BaseComparePlugin):
                 "neuron_labels",
                 "json",
             ),
-            ArtifactSpec("neuron_labeling", "item_acts.pt", "item_acts", "pt"),
+            ArtifactSpec("neuron_labeling", "item_acts.npz", "item_acts", "npz"),
         ],
         output_artifacts=[
             OutputArtifactSpec(
@@ -196,8 +196,8 @@ class Plugin(BaseComparePlugin):
         )
         past_item_acts = self.load_past_artifact(
             "neuron_labeling",
-            "item_acts.pt",
-            "pt",
+            "item_acts.npz",
+            "npz",
         )
         past = compute_top_k_for_neuron(
             neuron_id=past_neuron_id,
