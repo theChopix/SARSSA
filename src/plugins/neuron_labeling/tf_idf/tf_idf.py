@@ -49,7 +49,6 @@ class Plugin(BasePlugin):
         output_artifacts=[
             OutputArtifactSpec("item_acts", "item_acts.pt", "pt"),
             OutputArtifactSpec("tag_item_prob", "tag_item_prob.npz", "npz"),
-            OutputArtifactSpec("tag_neuron", "tag_neuron.npy", "npy"),
             OutputArtifactSpec("neuron_labels", "neuron_labels.json", "json"),
             OutputArtifactSpec(
                 "top_tag_per_neuron",
@@ -108,13 +107,11 @@ class Plugin(BasePlugin):
         self.tag_item_prob: sp.csr_matrix = self.tag_item_counts.copy()
         self.tag_item_prob.data /= self.tag_item_prob.data.sum()
 
-        # aggregate tag → neuron
-        self.tag_neuron = self.tag_item_prob @ self.item_acts.numpy()
+        # aggregate tag → neuron (kept in-memory only; not persisted)
+        tag_neuron = self.tag_item_prob @ self.item_acts.numpy()
 
         tag_neuron_dense = (
-            self.tag_neuron.toarray()
-            if sp.issparse(self.tag_neuron)
-            else np.asarray(self.tag_neuron)
+            tag_neuron.toarray() if sp.issparse(tag_neuron) else np.asarray(tag_neuron)
         )
 
         # top_tag_per_neuron: for each neuron, the tag with highest
