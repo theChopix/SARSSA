@@ -61,14 +61,16 @@ class MovieLensLoader(DatasetLoader):
             self.logger.info("Loading tags...")
             # Tag preprocessing: lowercase/strip, keep only tags applied at
             # least MIN_TAG_INTERACTIONS times (counted over all users, before
-            # the item filter), then keep only items with interactions. Rows
-            # are NOT de-duplicated, so the tag-item matrix holds raw
-            # co-occurrence counts (summed) rather than binary incidence.
+            # the item filter), then keep only items with interactions. userId
+            # is retained so the tag-item counts can later be restricted to the
+            # train users (see tag_item_matrix). Rows are NOT de-duplicated, so
+            # the matrix holds raw co-occurrence counts (summed) not binary
+            # incidence.
             self.df_tags = (
                 pl.scan_csv(self._resolve_path(self.TAGS_FILE), has_header=True)
-                .select(["movieId", "tag"])
+                .select(["userId", "movieId", "tag"])
                 .rename({"movieId": "itemId"})
-                .cast({"itemId": pl.String, "tag": pl.String})
+                .cast({"userId": pl.String, "itemId": pl.String, "tag": pl.String})
                 .with_columns(pl.col("tag").str.to_lowercase().str.strip_chars().alias("tag"))
                 .filter(pl.col("tag").count().over("tag") >= self.MIN_TAG_INTERACTIONS)
                 .filter(pl.col("itemId").is_in(self.items))
@@ -129,14 +131,22 @@ class MovieLensLoader(DatasetLoader):
     def tag_ids(self):
         return self.df_tags["tag"].unique().sort().to_list()
 
-    def tag_item_matrix(self):
+    def tag_item_matrix(self, user_subset: np.ndarray | None = None) -> sp.csr_matrix:
+        # The tag vocabulary spans all users; when user_subset is given the
+        # co-occurrence counts are restricted to those users (e.g. the train
+        # users), so tags applied only by out-of-subset users become all-zero
+        # rows. Shape stays (num_tags, num_items).
         tag_ids = self.tag_ids()
         tag_to_idx = {t: i for i, t in enumerate(tag_ids)}
         item_to_idx = {i: idx for idx, i in enumerate(self.items)}
 
+        df_tags = self.df_tags
+        if user_subset is not None:
+            df_tags = df_tags.filter(pl.col("userId").is_in([str(u) for u in user_subset]))
+
         rows, cols = [], []
 
-        for row in self.df_tags.iter_rows(named=True):
+        for row in df_tags.iter_rows(named=True):
             rows.append(tag_to_idx[row["tag"]])
             cols.append(item_to_idx[row["itemId"]])
 
@@ -265,7 +275,10 @@ class Plugin(BasePlugin):
         self._tag_item_matrix: sp.csr_matrix | None = None
         if dataset_loader.df_tags is not None:
             self._tag_ids = dataset_loader.tag_ids()
-            self._tag_item_matrix = dataset_loader.tag_item_matrix()
+            # Restrict tag co-occurrence counts to the train users.
+            self._tag_item_matrix = dataset_loader.tag_item_matrix(
+                user_subset=dataset_loader.train_users
+            )
 
         # Item metadata (conditional, handled in update_context)
         self._item_metadata = dataset_loader.get_item_metadata()
