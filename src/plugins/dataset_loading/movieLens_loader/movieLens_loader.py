@@ -185,6 +185,7 @@ class Plugin(BasePlugin):
             OutputParamSpec("test_ratio", "test_ratio"),
             OutputParamSpec("min_user_interactions", "min_user_interactions"),
             OutputParamSpec("min_item_interactions", "min_item_interactions"),
+            OutputParamSpec("min_tag_interactions", "min_tag_interactions"),
             OutputParamSpec("num_users", "num_users"),
             OutputParamSpec("num_items", "num_items"),
             OutputParamSpec("num_interactions", "num_interactions"),
@@ -214,6 +215,21 @@ class Plugin(BasePlugin):
             "Fraction of users held out as the final test split, never seen "
             "during training or tuning. Default 0.1.",
         ] = 0.1,
+        min_user_interactions: Annotated[
+            int,
+            "Minimum number of interactions a user must have to be kept; "
+            "users below this threshold are removed before the split.",
+        ] = MovieLensLoader.MIN_USER_INTERACTIONS,
+        min_item_interactions: Annotated[
+            int,
+            "Minimum number of interactions an item must have to be kept; "
+            "items below this threshold are removed (1 keeps all items).",
+        ] = MovieLensLoader.MIN_ITEM_INTERACTIONS,
+        min_tag_interactions: Annotated[
+            int,
+            "Minimum number of times a tag must be applied across all users "
+            "to enter the tag vocabulary; rarer tags are dropped.",
+        ] = MovieLensLoader.MIN_TAG_INTERACTIONS,
     ) -> None:
         """Load and prepare the MovieLens dataset.
 
@@ -225,12 +241,20 @@ class Plugin(BasePlugin):
             seed: Random seed for reproducibility.
             val_ratio: Validation set ratio.
             test_ratio: Test set ratio.
+            min_user_interactions: Minimum interactions per user to keep.
+            min_item_interactions: Minimum interactions per item to keep.
+            min_tag_interactions: Minimum applications per tag to keep.
         """
         logger.info("=" * 50)
         logger.info("Starting MovieLens dataset loading")
         logger.info("=" * 50)
 
         dataset_loader = MovieLensLoader()
+        # User-configurable filter thresholds (defaults come from the class
+        # constants); the loader reads these via self.MIN_* during prepare().
+        dataset_loader.MIN_USER_INTERACTIONS = min_user_interactions
+        dataset_loader.MIN_ITEM_INTERACTIONS = min_item_interactions
+        dataset_loader.MIN_TAG_INTERACTIONS = min_tag_interactions
 
         logger.info(
             f"Preparing dataset with seed={seed}, val_ratio={val_ratio}, test_ratio={test_ratio}"
@@ -246,8 +270,9 @@ class Plugin(BasePlugin):
         self.seed = seed
         self.val_ratio = val_ratio
         self.test_ratio = test_ratio
-        self.min_user_interactions = dataset_loader.MIN_USER_INTERACTIONS
-        self.min_item_interactions = dataset_loader.MIN_ITEM_INTERACTIONS
+        self.min_user_interactions = min_user_interactions
+        self.min_item_interactions = min_item_interactions
+        self.min_tag_interactions = min_tag_interactions
         self.num_users = len(dataset_loader.users)
         self.num_items = len(dataset_loader.items)
         self.num_interactions = dataset_loader.csr_interactions.nnz
