@@ -157,6 +157,9 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
+            # dataset_loading steps reopen the parent run once more to log
+            # the dataset input (populates the MLflow "Dataset" column).
+            _mock_start_run("parent_id"),
         ]
         _arm_execution_order(mock_mlflow)
 
@@ -185,6 +188,9 @@ class TestExecuteStep:
             _mock_start_run("parent_id"),
             _mock_start_run("parent_id"),
             _mock_start_run("step_id"),
+            # dataset_loading steps reopen the parent run once more to log
+            # the dataset input (populates the MLflow "Dataset" column).
+            _mock_start_run("parent_id"),
         ]
         # Three nested children already exist → this step is the 4th.
         _arm_execution_order(mock_mlflow, existing=3)
@@ -196,8 +202,11 @@ class TestExecuteStep:
         engine.start_run()
         engine.execute_step("dataset_loading.movieLens_loader.movieLens_loader", {}, {})
 
-        nested_call = mock_mlflow.start_run.call_args_list[-1]
-        assert nested_call.kwargs["nested"] is True
+        # The nested step run is the call carrying nested=True (no longer the
+        # last start_run call, since dataset-input logging reopens the parent).
+        nested_call = next(
+            c for c in mock_mlflow.start_run.call_args_list if c.kwargs.get("nested")
+        )
         assert nested_call.kwargs["run_name"] == "[4] Dataset Loading / MovieLens Loader"
 
     @patch("app.core.pipeline_engine.PluginManager")

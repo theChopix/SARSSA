@@ -4,11 +4,14 @@ import datetime
 from typing import Any
 
 import mlflow
+from mlflow.data.code_dataset_source import CodeDatasetSource
+from mlflow.data.meta_dataset import MetaDataset
 
 from app.config.config import EXPERIMENT_NAME, TIMEZONE
 from app.core.plugin_discovery.naming import (
     format_pipeline_run_name,
     format_step_run_name,
+    make_dataset_label,
     make_plugin_display_name,
 )
 from app.core.plugin_discovery.plugin_manager import PluginManager
@@ -36,6 +39,7 @@ class PipelineEngine:
     # ── Step-by-step mode ─────────────────────────────
 
     _TAG_PREFIX = "sarssa."
+    _DATASET_CATEGORY = "dataset_loading"
 
     def start_run(
         self,
@@ -167,7 +171,29 @@ class PipelineEngine:
             category = plugin_name.split(".")[0]
             context[category] = {"run_id": step_run.info.run_id}
 
+        if category == self._DATASET_CATEGORY:
+            self._log_dataset_input(plugin_name)
+
         return context
+
+    def _log_dataset_input(self, plugin_name: str) -> None:
+        """Record the loaded dataset on the parent run's inputs.
+
+        Populates the MLflow UI ``Dataset`` column for the pipeline run
+        by logging a name-only :class:`~mlflow.data.meta_dataset.MetaDataset`
+        — the actual interaction data is not duplicated into the tracking
+        store.  The label is the dataset loader's implementation name with
+        the ``_loader`` suffix stripped (e.g. ``movieLens``).
+
+        Args:
+            plugin_name: Dotted module path of the dataset-loading plugin.
+        """
+        dataset = MetaDataset(
+            source=CodeDatasetSource(tags={}),
+            name=make_dataset_label(plugin_name),
+        )
+        with mlflow.start_run(run_id=self._parent_run_id):
+            mlflow.log_input(dataset)
 
     def finalize_run(self, context: dict[str, Any]) -> None:
         """Log the final context and close the parent pipeline run.

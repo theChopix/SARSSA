@@ -30,6 +30,31 @@ def make_plugin_display_name(plugin_module_path: str) -> str:
     return impl_name.replace("_", " ").title()
 
 
+_DATASET_LOADER_SUFFIX = "_loader"
+
+
+def make_dataset_label(plugin_module_path: str) -> str:
+    """Derive a short dataset label from a dataset-loader module path.
+
+    Takes the implementation directory segment and strips a trailing
+    ``_loader`` suffix, preserving the original casing.  So
+    ``dataset_loading.movieLens_loader.movieLens_loader`` becomes
+    ``movieLens``.  Used to populate the MLflow UI ``Dataset`` column
+    for a pipeline run.
+
+    Args:
+        plugin_module_path: Dotted plugin module path
+            (e.g. ``dataset_loading.movieLens_loader.movieLens_loader``).
+
+    Returns:
+        str: Short dataset label (e.g. ``movieLens``).
+    """
+    impl_name = plugin_module_path.split(".")[-2]
+    if impl_name.endswith(_DATASET_LOADER_SUFFIX):
+        impl_name = impl_name[: -len(_DATASET_LOADER_SUFFIX)]
+    return impl_name
+
+
 def format_step_run_name(
     plugin_name: str,
     plugin_display_name: str,
