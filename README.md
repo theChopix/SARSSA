@@ -356,6 +356,28 @@ Then build and start the stack:
 docker compose up --build -d          # or: just docker-up
 ```
 
+**GPU acceleration (optional).** The backend trains models on a GPU when
+one is available. By default the stack runs **CPU-only** (`GPU_COUNT=0`),
+so it starts on any host. To use an NVIDIA GPU you need the **NVIDIA
+driver** and the **NVIDIA Container Toolkit** installed on the host, then
+start the stack with `GPU_COUNT` set:
+
+```bash
+GPU_COUNT=all docker compose up --build -d     # all GPUs (or e.g. GPU_COUNT=1)
+```
+
+Alternatively, add `GPU_COUNT=all` to your `.env` file (Compose reads it
+automatically).
+
+Verify the container sees it:
+
+```bash
+docker exec sarssa-backend-1 python -c "import torch; print(torch.cuda.is_available())"
+```
+
+Without a GPU (or with `GPU_COUNT=0`) training still runs — just much
+slower on CPU.
+
 Open the UI at **http://localhost:5173** — use this exact port: the
 backend's CORS allow-list and the frontend's hardcoded API URL expect
 frontend on `:5173`, backend on `:8000`.

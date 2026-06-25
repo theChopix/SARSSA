@@ -37,6 +37,15 @@ services:
       # artifacts directory reachable inside the container at the same absolute
       # path, so runs created locally still load in Docker.
       - ${PWD}/src/mlartifacts:${PWD}/src/mlartifacts
+    # Optional GPU: set GPU_COUNT=all on a host with NVIDIA GPU + toolkit.
+    # Defaults to 0 — reserves nothing, so it still runs CPU-only anywhere.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-0}
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
       interval: 30s
