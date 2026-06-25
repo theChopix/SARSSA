@@ -440,6 +440,36 @@ const SECTIONS: GuideSection[] = [
             appearing.
           </li>
           <li>
+            <strong>Running tasks menu.</strong> When a pipeline is
+            running, a <em>Running (N)</em> pill appears in the header
+            (top-left). Open it to see every in-flight run with its
+            current step; click one to load it into the cards and follow
+            its progress — handy when several runs are going, or to jump
+            back into a run from a fresh tab.
+          </li>
+          <li>
+            <strong>Running several pipelines at once.</strong> Each tab
+            tracks one active run, so to launch a second pipeline
+            alongside a running one, open SARSSAe in{" "}
+            <strong>another browser tab</strong> and start it there; the{" "}
+            <em>Running</em> menu lists them all. This only works if your
+            hardware can fit the combined load, though — concurrent runs
+            share CPU, RAM and <strong>GPU memory</strong>, and on a
+            constrained machine a parallel run can{" "}
+            <strong>fail outright</strong> (e.g. a{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+              CUDA out of memory
+            </code>{" "}
+            error), not just run slower. Run heavy training stages in
+            parallel only when you have the GPU headroom.
+          </li>
+          <li>
+            <strong>Refreshing is safe.</strong> If you reload the page
+            mid-run, the UI restores the running layout and reconnects to
+            it — the run keeps going on the backend regardless. It's
+            per-tab and session-scoped, so closing the tab clears it.
+          </li>
+          <li>
             <strong>Cancellation.</strong> The red <em>Cancel</em>{" "}
             button stops the pipeline at the next safe boundary —
             when the currently-running step finishes. It does{" "}
