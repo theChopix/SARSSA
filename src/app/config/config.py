@@ -1,5 +1,6 @@
 """Application configuration loaded from config.yaml."""
 
+import os
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -39,7 +40,9 @@ def _load_plugin_categories(
 _config = _load_config()
 
 EXPERIMENT_NAME: str = _config["mlflow"]["experiment_name"]
-TRACKING_URI: str = _config["mlflow"]["tracking_uri"]
+# Env override (Docker/cluster) routes logging through the MLflow server to
+# avoid SQLite lock contention; falls back to config.yaml locally.
+TRACKING_URI: str = os.environ.get("MLFLOW_TRACKING_URI") or _config["mlflow"]["tracking_uri"]
 ARTIFACT_ROOT: str = _config["mlflow"]["artifact_root"]
 MLFLOW_UI_BASE_URL: str = _config["mlflow"]["ui_base_url"]
 TIMEZONE: ZoneInfo = ZoneInfo(_config.get("timezone", "UTC"))

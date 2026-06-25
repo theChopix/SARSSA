@@ -24,6 +24,11 @@ services:
     working_dir: /app/src
     env_file:
       - .env
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      mlflow:
+        condition: service_healthy
     ports:
       - "8000:8000"
     volumes:
@@ -63,8 +68,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    depends_on:
-      - backend
     working_dir: /app/src
     command:
       - mlflow
@@ -77,6 +80,8 @@ services:
       - 0.0.0.0
       - --port
       - "5000"
+      - --allowed-hosts
+      - localhost:5000,127.0.0.1:5000,mlflow:5000
     ports:
       - "5000:5000"
     volumes:
@@ -99,7 +104,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:80"
     restart: unless-stopped
