@@ -241,6 +241,73 @@ class TestRunAsync:
         assert response.status_code == 422
 
 
+class TestListRunningTasks:
+    """Tests for GET /pipelines/tasks."""
+
+    def _start(self, client: TestClient, **body: Any) -> str:
+        """Start a run-async task and return its task_id."""
+        return client.post("/pipelines/run-async", json=body).json()["task_id"]
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_lists_only_running_tasks(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify completed tasks are excluded from the listing."""
+        from app.core.task_store import _tasks, get_task
+
+        _tasks.clear()
+        r1 = self._start(client, steps=[{"plugin": "cat_a.p.p", "params": {}}])
+        r2 = self._start(client, steps=[{"plugin": "cat_b.p.p", "params": {}}])
+        done = self._start(client, steps=[{"plugin": "cat_c.p.p", "params": {}}])
+        done_task = get_task(done)
+        assert done_task is not None
+        done_task.status = "completed"
+
+        response = client.get("/pipelines/tasks")
+
+        assert response.status_code == 200
+        ids = [t["task_id"] for t in response.json()]
+        assert r1 in ids
+        assert r2 in ids
+        assert done not in ids
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_summary_includes_steps_and_progress(
+        self, _mock_worker: MagicMock, client: TestClient
+    ) -> None:
+        """Verify the summary carries progress and the full steps_requested."""
+        from app.core.task_store import _tasks, get_task
+
+        _tasks.clear()
+        task_id = self._start(
+            client,
+            steps=[
+                {"plugin": "cat_a.p.p", "params": {"x": 1}},
+                {"plugin": "cat_b.p.p", "params": {}},
+            ],
+            pipeline_name="Baseline",
+        )
+        task = get_task(task_id)
+        assert task is not None
+        task.current_step = "cat_a"
+
+        entry = next(t for t in client.get("/pipelines/tasks").json() if t["task_id"] == task_id)
+
+        assert entry["pipeline_name"] == "Baseline"
+        assert entry["total_steps"] == 2
+        assert entry["current_step"] == "cat_a"
+        assert len(entry["steps_requested"]) == 2
+        assert entry["steps_requested"][0]["plugin"] == "cat_a.p.p"
+
+    def test_empty_when_none_running(self, client: TestClient) -> None:
+        """Verify an empty list when the store has no running tasks."""
+        from app.core.task_store import _tasks
+
+        _tasks.clear()
+        response = client.get("/pipelines/tasks")
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+
 class TestGetTaskStatus:
     """Tests for GET /pipelines/tasks/{task_id}."""
 

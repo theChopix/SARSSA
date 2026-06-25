@@ -97,3 +97,20 @@ class TaskStatusResponse(BaseModel):
     context: dict[str, Any] | None = None
     error: str | None = None
     messages: list[dict[str, Any]] = []
+
+
+class TaskSummary(BaseModel):
+    """Compact view of an active task, returned by ``GET /tasks``.
+
+    Carries enough to render a progress row and to rebuild the pipeline
+    layout when the task is loaded — hence ``steps_requested``.
+    """
+
+    task_id: str
+    run_id: str | None = None
+    pipeline_name: str = ""
+    status: str
+    current_step: str | None = None
+    current_step_index: int = 0
+    total_steps: int = 0
+    steps_requested: list[dict[str, Any]] = []

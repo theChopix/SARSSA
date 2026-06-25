@@ -9,7 +9,7 @@ endpoint reads it via :func:`task_to_response`.
 import uuid
 from typing import Any
 
-from app.models.pipeline import TaskState, TaskStatusResponse
+from app.models.pipeline import TaskState, TaskStatusResponse, TaskSummary
 
 _tasks: dict[str, TaskState] = {}
 
@@ -85,6 +85,38 @@ def cancel_task(task_id: str) -> TaskState | None:
         raise ValueError(f"Task '{task_id}' is '{task.status}', not cancellable.")
     task.cancel_event.set()
     return task
+
+
+def list_active_tasks() -> list[TaskState]:
+    """Return all tasks still in the ``"running"`` state, newest first.
+
+    Returns:
+        list[TaskState]: Running tasks, most recently created first.
+    """
+    running = [task for task in _tasks.values() if task.status == "running"]
+    running.reverse()
+    return running
+
+
+def task_to_summary(task: TaskState) -> TaskSummary:
+    """Convert a TaskState to a compact summary of an active task.
+
+    Args:
+        task: The task to serialise.
+
+    Returns:
+        TaskSummary: Pydantic model ready for JSON serialisation.
+    """
+    return TaskSummary(
+        task_id=task.task_id,
+        run_id=task.run_id,
+        pipeline_name=task.pipeline_name,
+        status=task.status,
+        current_step=task.current_step,
+        current_step_index=task.current_step_index,
+        total_steps=len(task.steps_requested),
+        steps_requested=task.steps_requested,
+    )
 
 
 def task_to_response(task: TaskState) -> TaskStatusResponse:
