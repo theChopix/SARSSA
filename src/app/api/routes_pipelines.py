@@ -14,8 +14,20 @@ from app.core.pipeline_runs import (
     get_run_context,
 )
 from app.core.pipeline_worker import run_pipeline_worker, run_step_worker
-from app.core.task_store import cancel_task, create_task, get_task, task_to_response
-from app.models.pipeline import PipelineRequest, StepDefinition, TaskStatusResponse
+from app.core.task_store import (
+    cancel_task,
+    create_task,
+    get_task,
+    list_active_tasks,
+    task_to_response,
+    task_to_summary,
+)
+from app.models.pipeline import (
+    PipelineRequest,
+    StepDefinition,
+    TaskStatusResponse,
+    TaskSummary,
+)
 
 router = APIRouter()
 
@@ -123,6 +135,19 @@ def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
     thread.start()
 
     return {"task_id": task.task_id}
+
+
+@router.get("/tasks")
+def list_running_tasks() -> list[TaskSummary]:
+    """Return all currently running pipeline tasks, newest first.
+
+    Only tasks still in the ``"running"`` state are returned;
+    completed, failed, and cancelled tasks are omitted.
+
+    Returns:
+        list[TaskSummary]: Compact summaries of the active tasks.
+    """
+    return [task_to_summary(task) for task in list_active_tasks()]
 
 
 @router.get("/tasks/{task_id}")

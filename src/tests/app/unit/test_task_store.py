@@ -4,7 +4,15 @@ import threading
 
 import pytest
 
-from app.core.task_store import _tasks, cancel_task, create_task, get_task, task_to_response
+from app.core.task_store import (
+    _tasks,
+    cancel_task,
+    create_task,
+    get_task,
+    list_active_tasks,
+    task_to_response,
+    task_to_summary,
+)
 from app.models.pipeline import TaskState
 
 
@@ -263,6 +271,65 @@ class TestTaskToResponse:
         task.messages.append({"timestamp": 2.0, "level": "info", "text": "late"})
 
         assert len(resp.messages) == 1
+
+
+class TestListActiveTasks:
+    """Tests for list_active_tasks."""
+
+    def test_returns_only_running_tasks(self) -> None:
+        """Verify completed/errored tasks are excluded."""
+        _clear_store()
+        running = create_task([])
+        done = create_task([])
+        done.status = "completed"
+
+        active = list_active_tasks()
+
+        assert running in active
+        assert done not in active
+
+    def test_empty_when_none_running(self) -> None:
+        """Verify an empty list when no task is running."""
+        _clear_store()
+        task = create_task([])
+        task.status = "error"
+
+        assert list_active_tasks() == []
+
+    def test_newest_first(self) -> None:
+        """Verify the most recently created task comes first."""
+        _clear_store()
+        first = create_task([])
+        second = create_task([])
+
+        assert list_active_tasks() == [second, first]
+
+
+class TestTaskToSummary:
+    """Tests for task_to_summary."""
+
+    def test_maps_fields_and_steps(self) -> None:
+        """Verify all summary fields, including steps_requested."""
+        _clear_store()
+        steps = [
+            {"plugin": "a.b.c", "params": {"x": 1}},
+            {"plugin": "d.e.f", "params": {}},
+        ]
+        task = create_task(steps, pipeline_name="Baseline")
+        task.run_id = "run1"
+        task.current_step = "a"
+        task.current_step_index = 1
+
+        summary = task_to_summary(task)
+
+        assert summary.task_id == task.task_id
+        assert summary.run_id == "run1"
+        assert summary.pipeline_name == "Baseline"
+        assert summary.status == "running"
+        assert summary.current_step == "a"
+        assert summary.current_step_index == 1
+        assert summary.total_steps == 2
+        assert summary.steps_requested == steps
 
 
 class TestTaskStateMessages:
