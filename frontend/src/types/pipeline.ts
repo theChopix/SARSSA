@@ -79,6 +79,26 @@ export interface TaskStatusResponse {
   messages: { timestamp: number; level: string; text: string }[];
 }
 
+// ── Running-task summary (from GET /pipelines/tasks) ────
+
+/**
+ * Compact summary of an active (running) pipeline task.
+ *
+ * Mirrors the backend `TaskSummary` model and powers the header
+ * "running tasks" menu. `steps_requested` lets the frontend rebuild a
+ * run's card layout when loading a task it did not start itself.
+ */
+export interface TaskSummary {
+  task_id: string;
+  run_id: string | null;
+  pipeline_name: string;
+  status: "running" | "completed" | "error" | "cancelled";
+  current_step: string | null;
+  current_step_index: number;
+  total_steps: number;
+  steps_requested: StepDefinition[];
+}
+
 // ── Execute-step response ───────────────────────────────
 
 /**

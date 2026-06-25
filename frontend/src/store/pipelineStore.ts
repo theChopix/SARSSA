@@ -37,10 +37,12 @@ import {
   getTaskStatus,
   executeStepAsync,
   cancelTask,
+  fetchRunningTasks,
 } from "../api/pipelines";
 import { ApiError } from "../api/errors";
 import {
   loadLatestRunSnapshot,
+  loadRunSnapshot,
   saveRunSnapshot,
   clearRunSnapshot,
 } from "./runPersistence";
@@ -50,6 +52,7 @@ import type {
   PipelineContext,
   PipelineRun,
   StepDefinition,
+  TaskSummary,
 } from "../types/pipeline";
 
 // ── MLflow URL helpers ───────────────────────────────────
@@ -176,6 +179,9 @@ interface PipelineStore {
    */
   pendingSteps: StepDefinition[] | null;
 
+  /** Active (running) tasks backing the header "running tasks" menu. */
+  runningTasks: TaskSummary[];
+
   // ── Actions ─────────────────────────────────────────
 
   /**
@@ -248,6 +254,16 @@ interface PipelineStore {
    */
   resumeRun: () => Promise<void>;
 
+  /** Refresh the list of running tasks backing the header menu. */
+  loadRunningTasks: () => Promise<void>;
+
+  /**
+   * Load a specific running task into the main view and resume polling
+   * it — restoring from the session snapshot when present, otherwise
+   * rebuilding the card layout from the task's requested steps.
+   */
+  loadRunningTask: (summary: TaskSummary) => Promise<void>;
+
   /** Clear the error message banner. */
   clearError: () => void;
 
@@ -289,6 +305,73 @@ type StoreSet = (partial: Partial<PipelineStore>) => void;
 type StoreGet = () => PipelineStore;
 
 /**
+ * Token for the single in-flight poll loop. When a new run starts or a
+ * different task is loaded, the previous loop's token is flipped so it
+ * stops on its next tick — preventing two pollers from writing the store.
+ */
+let activePoll: { cancelled: boolean } | null = null;
+
+/**
+ * Rebuild a card layout from a task's requested steps. Used when loading
+ * a running task with no session snapshot (e.g. one started in another
+ * tab): each step's plugin + params populate its category card; the live
+ * status is filled in by the first poll.
+ */
+function cardsFromSteps(
+  base: Record<string, CardState>,
+  steps: StepDefinition[]
+): Record<string, CardState> {
+  const cards = { ...base };
+  for (const step of steps) {
+    const category = step.plugin.split(".")[0];
+    if (cards[category]) {
+      cards[category] = {
+        ...cards[category],
+        selectedPlugin: step.plugin,
+        params: Object.fromEntries(
+          Object.entries(step.params ?? {}).map(([k, v]) => [k, String(v)])
+        ),
+        status: "idle",
+        stepRunId: null,
+      };
+    }
+  }
+  return cards;
+}
+
+/**
+ * Reset to a clean idle state after polling a tracked run failed — the
+ * task was evicted/404'd or the request errored. Shared by the
+ * refresh-resume and load-task flows.
+ */
+function handleTrackingFailure(
+  error: unknown,
+  taskId: string,
+  set: StoreSet,
+  get: StoreGet
+): void {
+  const gone = error instanceof ApiError && error.status === 404;
+  clearRunSnapshot(taskId);
+  const cards = { ...get().cards };
+  for (const key of Object.keys(cards)) {
+    if (cards[key].status === "running") {
+      cards[key] = { ...cards[key], status: "idle" };
+    }
+  }
+  set({
+    cards,
+    pipelineRunning: false,
+    currentTaskId: null,
+    cancellationPending: false,
+    errorMessage: gone
+      ? "The run is no longer available (it may have just finished, or the backend restarted)."
+      : error instanceof Error
+        ? error.message
+        : "Failed to track the run.",
+  });
+}
+
+/**
  * Poll a background pipeline task every 2s until it reaches a terminal
  * state, updating card statuses, progress, and toasts as responses arrive.
  *
@@ -306,10 +389,21 @@ function pollTaskUntilDone(
   get: StoreGet,
   { skipMessageBacklog = false }: { skipMessageBacklog?: boolean } = {}
 ): Promise<void> {
+  // Supersede any previous poller (e.g. switching tasks from the menu).
+  if (activePoll) activePoll.cancelled = true;
+  const abort = { cancelled: false };
+  activePoll = abort;
+
   return new Promise<void>((resolve, reject) => {
     let seenMessageCount = 0;
     let firstTick = true;
     const interval = setInterval(async () => {
+      // Stop quietly if a newer poller has taken over.
+      if (abort.cancelled) {
+        clearInterval(interval);
+        resolve();
+        return;
+      }
       try {
         const status = await getTaskStatus(taskId);
 
@@ -459,6 +553,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   currentTaskId: null,
   cancellationPending: false,
   pendingSteps: null,
+  runningTasks: [],
 
   // ── Actions ─────────────────────────────────────────
 
@@ -721,28 +816,48 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         skipMessageBacklog: true,
       });
     } catch (error) {
-      // The backend no longer knows this task (e.g. it was restarted, which
-      // also flips the MLflow run to FAILED via startup recovery), or polling
-      // failed outright. Fall back to a clean idle state.
-      const gone = error instanceof ApiError && error.status === 404;
-      clearRunSnapshot(snapshot.taskId);
-      const cards = { ...get().cards };
-      for (const key of Object.keys(cards)) {
-        if (cards[key].status === "running") {
-          cards[key] = { ...cards[key], status: "idle" };
-        }
-      }
-      set({
-        cards,
-        pipelineRunning: false,
-        currentTaskId: null,
-        cancellationPending: false,
-        errorMessage: gone
-          ? "The previously running pipeline is no longer available (the backend may have restarted)."
-          : error instanceof Error
-            ? error.message
-            : "Failed to resume the running pipeline.",
+      handleTrackingFailure(error, snapshot.taskId, set, get);
+    }
+  },
+
+  loadRunningTasks: async () => {
+    try {
+      const runningTasks = await fetchRunningTasks();
+      set({ runningTasks });
+    } catch (error) {
+      // Non-fatal: the menu just keeps its previous contents this tick.
+      console.error("Failed to load running tasks:", error);
+    }
+  },
+
+  loadRunningTask: async (summary: TaskSummary) => {
+    // Already the active run — nothing to switch to.
+    if (get().currentTaskId === summary.task_id && get().pipelineRunning) {
+      return;
+    }
+
+    // Prefer the exact session snapshot (full card fidelity); otherwise
+    // rebuild the layout from the task's requested steps.
+    const snapshot = loadRunSnapshot(summary.task_id);
+    set({
+      cards: snapshot
+        ? { ...get().cards, ...snapshot.cards }
+        : cardsFromSteps(get().cards, summary.steps_requested),
+      pipelineRunning: true,
+      currentTaskId: summary.task_id,
+      currentRunId: summary.run_id,
+      currentStepIndex: snapshot?.currentStepIndex ?? summary.current_step_index,
+      totalSteps: snapshot?.totalSteps ?? summary.total_steps,
+      context: null,
+      errorMessage: null,
+    });
+
+    try {
+      await pollTaskUntilDone(summary.task_id, set, get, {
+        skipMessageBacklog: true,
       });
+    } catch (error) {
+      handleTrackingFailure(error, summary.task_id, set, get);
     }
   },
 
