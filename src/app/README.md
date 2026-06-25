@@ -138,6 +138,7 @@ when the server is running.
 | `GET /pipelines/runs` | List parent pipeline runs, newest first. `?required_steps=a&required_steps=b` filters to runs whose context has all listed steps | → `[{run_id, run_name, status, start_time}]` | `list_runs` |
 | `GET /pipelines/runs/{run_id}/context` | Fetch a run's `context.json` artifact | → context dict | `get_context` |
 | `POST /pipelines/run-async` | Start a full pipeline in a background thread | `PipelineRequest` → `{task_id}` | `run_pipeline_async` |
+| `GET /pipelines/tasks` | List currently running tasks, newest first (backs the running-tasks menu) | → `[TaskSummary]` | `list_running_tasks` |
 | `GET /pipelines/tasks/{task_id}` | Poll status/progress of a background task | → `TaskStatusResponse` | `get_task_status` |
 | `POST /pipelines/tasks/{task_id}/cancel` | Cooperatively cancel a running task | → `{message}` (409 if not running) | `cancel_task_endpoint` |
 | `POST /pipelines/runs/{run_id}/execute-step` | Run **one** plugin step on an existing run (synchronous, scripting/testing) | `StepDefinition` → `{category, step_run_id}` | `execute_step` |
