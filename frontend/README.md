@@ -93,6 +93,7 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `api/pipelines.ts` | runs, context, run-async, task polling, cancel, execute-step(-async), mlflow-info |
 | `api/items.ts` | item enrichment + artifact proxy/raw-URL helpers |
 | `store/pipelineStore.ts` | **The heart** — the single Zustand store: all state + the run/poll orchestration |
+| `store/runPersistence.ts` | Persists an in-progress run to **sessionStorage** so a page refresh restores the running layout (see §6) |
 | `types/plugin.ts` · `pipeline.ts` · `items.ts` | TypeScript mirrors of the backend models/response shapes |
 | `pages/ResultsPage.tsx` | Standalone results view (opens in a new tab for multi-run results) |
 | `components/Layout.tsx` | Page shell (header + routed `<Outlet/>`) |
@@ -136,6 +137,14 @@ registry loaded ──▶ a PipelineCard per category
               ├─ stream the plugin's notifier messages as sonner toasts
               └─ on completed/cancelled/error → stop, refresh past runs
 ```
+
+**Surviving a refresh.** While a run polls, the store mirrors the
+`task_id` + card layout into `sessionStorage` (via
+`store/runPersistence.ts`) on every tick. On mount, `App.tsx` calls
+`store.resumeRun` *after* the registry loads: if a snapshot exists it
+restores the running layout and **re-attaches the same poll loop** — the
+background task never stopped, the UI had just lost its handle to it. The
+snapshot is cleared on any terminal state.
 
 `multi_run` plugins (inspection, steering, labeling-evaluation) use
 the same shape via `store.runSingleStep` → `execute-step-async` → poll,
@@ -186,6 +195,15 @@ display kind), or for pure UI/UX work.
 - **Progress is polling, not websockets** — a fixed 2 s interval in
   the store. Plugin messages surface as toasts only as fast as the
   next poll.
+- **Refresh-recovery is sessionStorage-scoped and `one_time`-only.**
+  An in-progress *pipeline* run survives a page refresh
+  (`store/runPersistence.ts` → `resumeRun`), but mind the edges: it's
+  **sessionStorage** (a refresh survives; *closing the tab* does not),
+  only the full `runPipeline` flow is persisted (**`runSingleStep` /
+  `multi_run` steps are not** recovered across a refresh), and if the
+  backend restarted in the meantime the `task_id` 404s → the UI resets to
+  idle with a notice. Snapshots are keyed by `task_id` (deliberate
+  groundwork for a future "running tasks" list).
 
 ---
 

@@ -67,6 +67,7 @@ function HomePage() {
   const cards = usePipelineStore((s) => s.cards);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
   const loadRegistry = usePipelineStore((s) => s.loadRegistry);
+  const resumeRun = usePipelineStore((s) => s.resumeRun);
   const resetCards = usePipelineStore((s) => s.resetCards);
   const setPendingSteps = usePipelineStore((s) => s.setPendingSteps);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
@@ -85,8 +86,10 @@ function HomePage() {
   // This runs ONCE when the page loads. It calls the backend
   // to fetch all available plugins and categories.
   useEffect(() => {
-    loadRegistry();
-  }, [loadRegistry]);
+    // Load the registry first (builds the card skeleton), then restore any
+    // run that was in progress before a refresh and resume polling it.
+    loadRegistry().then(() => resumeRun());
+  }, [loadRegistry, resumeRun]);
 
   // ── Split categories into two rows ──────────────────
   // `useMemo` caches this computation so it only re-runs

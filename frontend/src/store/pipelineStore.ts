@@ -39,6 +39,11 @@ import {
   cancelTask,
 } from "../api/pipelines";
 import { ApiError } from "../api/errors";
+import {
+  loadLatestRunSnapshot,
+  saveRunSnapshot,
+  clearRunSnapshot,
+} from "./runPersistence";
 import type { PluginRegistry } from "../types/plugin";
 import type {
   MlflowInfo,
@@ -237,6 +242,12 @@ interface PipelineStore {
     pipelineName?: string
   ) => Promise<void>;
 
+  /**
+   * Restore an in-progress run after a page refresh from the persisted
+   * session snapshot and resume polling. No-op if nothing was running.
+   */
+  resumeRun: () => Promise<void>;
+
   /** Clear the error message banner. */
   clearError: () => void;
 
@@ -271,6 +282,155 @@ const defaultCard = (): CardState => ({
   stepRunId: null,
   mode: "setup",
 });
+
+// ── Polling helper ──────────────────────────────────────
+
+type StoreSet = (partial: Partial<PipelineStore>) => void;
+type StoreGet = () => PipelineStore;
+
+/**
+ * Poll a background pipeline task every 2s until it reaches a terminal
+ * state, updating card statuses, progress, and toasts as responses arrive.
+ *
+ * Shared by `runPipeline` (fresh launch) and `resumeRun` (restore after a
+ * refresh). On every tick the live state is mirrored into sessionStorage via
+ * {@link saveRunSnapshot} so a refresh can restore the running layout; the
+ * snapshot is cleared on any terminal state or polling error.
+ *
+ * @param skipMessageBacklog - When resuming, suppress toasts for messages
+ *   already emitted before the refresh so only genuinely new ones fire.
+ */
+function pollTaskUntilDone(
+  taskId: string,
+  set: StoreSet,
+  get: StoreGet,
+  { skipMessageBacklog = false }: { skipMessageBacklog?: boolean } = {}
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let seenMessageCount = 0;
+    let firstTick = true;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getTaskStatus(taskId);
+
+        // Update run ID as soon as it's available.
+        if (status.run_id && !get().currentRunId) {
+          set({ currentRunId: status.run_id });
+          get().loadPastRuns();
+        } else if (status.run_id) {
+          set({ currentRunId: status.run_id });
+        }
+
+        // Update progress counters.
+        set({
+          currentStepIndex: status.current_step_index,
+          totalSteps: status.total_steps,
+        });
+
+        // Mark completed steps as "done".
+        const c = { ...get().cards };
+        for (const completed of status.completed_steps) {
+          if (c[completed.category]) {
+            c[completed.category] = {
+              ...c[completed.category],
+              status: "done",
+              stepRunId: completed.run_id,
+            };
+          }
+        }
+
+        // Mark the currently executing step as "running".
+        if (status.current_step && c[status.current_step]) {
+          c[status.current_step] = {
+            ...c[status.current_step],
+            status: "running",
+          };
+        }
+        set({ cards: c });
+
+        // On a resume the message backlog was already shown before the
+        // refresh — adopt the current count once so only new ones toast.
+        if (firstTick && skipMessageBacklog) {
+          seenMessageCount = status.messages.length;
+        }
+        firstTick = false;
+
+        // Fire toasts for any new plugin notifications.
+        const newMessages = status.messages.slice(seenMessageCount);
+        for (const msg of newMessages) {
+          if (msg.level === "success") toast.success(msg.text);
+          else if (msg.level === "warning") toast.warning(msg.text);
+          else if (msg.level === "error") toast.error(msg.text);
+          else toast.info(msg.text);
+        }
+        seenMessageCount += newMessages.length;
+
+        // Mirror live state so a refresh can restore the running layout.
+        saveRunSnapshot({
+          taskId,
+          cards: get().cards,
+          currentRunId: get().currentRunId,
+          currentStepIndex: status.current_step_index,
+          totalSteps: status.total_steps,
+          savedAt: Date.now(),
+        });
+
+        // Check terminal states.
+        if (status.status === "completed") {
+          clearInterval(interval);
+          clearRunSnapshot(taskId);
+          set({
+            pipelineRunning: false,
+            context: status.context as PipelineContext | null,
+            currentRunId: status.run_id,
+          });
+          // Refresh past runs so the new run name is available.
+          get().loadPastRuns();
+          resolve();
+        } else if (status.status === "cancelled") {
+          clearInterval(interval);
+          clearRunSnapshot(taskId);
+          // Mark any currently-running cards as idle.
+          const cc = { ...get().cards };
+          for (const key of Object.keys(cc)) {
+            if (cc[key].status === "running") {
+              cc[key] = { ...cc[key], status: "idle" };
+            }
+          }
+          set({
+            cards: cc,
+            pipelineRunning: false,
+            cancellationPending: false,
+            currentTaskId: null,
+            errorMessage: status.error ?? "Pipeline cancelled by user.",
+          });
+          resolve();
+        } else if (status.status === "error") {
+          clearInterval(interval);
+          clearRunSnapshot(taskId);
+          // Mark any currently-running cards as error.
+          const ec = { ...get().cards };
+          for (const key of Object.keys(ec)) {
+            if (ec[key].status === "running") {
+              ec[key] = { ...ec[key], status: "error" };
+            }
+          }
+          set({
+            cards: ec,
+            pipelineRunning: false,
+            currentTaskId: null,
+            errorMessage: status.error ?? "Pipeline failed",
+          });
+          resolve();
+        }
+      } catch (pollError) {
+        clearInterval(interval);
+        clearRunSnapshot(taskId);
+        reject(pollError);
+      }
+    }, 2000);
+  });
+}
 
 // ── Store implementation ────────────────────────────────
 
@@ -514,115 +674,74 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       );
       set({ currentTaskId: task_id });
 
-      // Poll every 2 seconds until the task finishes.
-      await new Promise<void>((resolve, reject) => {
-        let seenMessageCount = 0;
-        const interval = setInterval(async () => {
-          try {
-            const status = await getTaskStatus(task_id);
-
-            // Update run ID as soon as it's available.
-            if (status.run_id && !get().currentRunId) {
-              set({ currentRunId: status.run_id });
-              get().loadPastRuns();
-            } else if (status.run_id) {
-              set({ currentRunId: status.run_id });
-            }
-
-            // Update progress counters.
-            set({
-              currentStepIndex: status.current_step_index,
-              totalSteps: status.total_steps,
-            });
-
-            // Mark completed steps as "done".
-            const c = { ...get().cards };
-            for (const completed of status.completed_steps) {
-              if (c[completed.category]) {
-                c[completed.category] = {
-                  ...c[completed.category],
-                  status: "done",
-                  stepRunId: completed.run_id,
-                };
-              }
-            }
-
-            // Mark the currently executing step as "running".
-            if (status.current_step && c[status.current_step]) {
-              c[status.current_step] = {
-                ...c[status.current_step],
-                status: "running",
-              };
-            }
-            set({ cards: c });
-
-            // Fire toasts for any new plugin notifications.
-            const newMessages = status.messages.slice(seenMessageCount);
-            for (const msg of newMessages) {
-              if (msg.level === "success") toast.success(msg.text);
-              else if (msg.level === "warning") toast.warning(msg.text);
-              else if (msg.level === "error") toast.error(msg.text);
-              else toast.info(msg.text);
-            }
-            seenMessageCount += newMessages.length;
-
-            // Check terminal states.
-            if (status.status === "completed") {
-              clearInterval(interval);
-              set({
-                pipelineRunning: false,
-                context: status.context as PipelineContext | null,
-                currentRunId: status.run_id,
-              });
-              // Refresh past runs so the new run name is available.
-              get().loadPastRuns();
-              resolve();
-            } else if (status.status === "cancelled") {
-              clearInterval(interval);
-              // Mark any currently-running cards as idle.
-              const cc = { ...get().cards };
-              for (const key of Object.keys(cc)) {
-                if (cc[key].status === "running") {
-                  cc[key] = { ...cc[key], status: "idle" };
-                }
-              }
-              set({
-                cards: cc,
-                pipelineRunning: false,
-                cancellationPending: false,
-                currentTaskId: null,
-                errorMessage: status.error ?? "Pipeline cancelled by user.",
-              });
-              resolve();
-            } else if (status.status === "error") {
-              clearInterval(interval);
-              // Mark any currently-running cards as error.
-              const ec = { ...get().cards };
-              for (const key of Object.keys(ec)) {
-                if (ec[key].status === "running") {
-                  ec[key] = { ...ec[key], status: "error" };
-                }
-              }
-              set({
-                cards: ec,
-                pipelineRunning: false,
-                currentTaskId: null,
-                errorMessage: status.error ?? "Pipeline failed",
-              });
-              resolve();
-            }
-          } catch (pollError) {
-            clearInterval(interval);
-            reject(pollError);
-          }
-        }, 2000);
+      // Persist immediately so even a refresh within the first poll
+      // interval restores the running layout.
+      saveRunSnapshot({
+        taskId: task_id,
+        cards: get().cards,
+        currentRunId: get().currentRunId,
+        currentStepIndex: 0,
+        totalSteps: steps.length,
+        savedAt: Date.now(),
       });
+
+      // Poll every 2 seconds until the task finishes.
+      await pollTaskUntilDone(task_id, set, get);
     } catch (error) {
       console.error("Pipeline error:", error);
+      clearRunSnapshot(get().currentTaskId ?? "");
       set({
         pipelineRunning: false,
         errorMessage:
           error instanceof Error ? error.message : "Pipeline failed",
+      });
+    }
+  },
+
+  resumeRun: async () => {
+    // Already tracking a run in this session — don't start a second poller.
+    if (get().pipelineRunning) return;
+
+    const snapshot = loadLatestRunSnapshot();
+    if (!snapshot) return;
+
+    // Restore the running layout over the registry-initialised card skeleton.
+    set({
+      cards: { ...get().cards, ...snapshot.cards },
+      pipelineRunning: true,
+      currentTaskId: snapshot.taskId,
+      currentRunId: snapshot.currentRunId,
+      currentStepIndex: snapshot.currentStepIndex,
+      totalSteps: snapshot.totalSteps,
+      errorMessage: null,
+    });
+
+    try {
+      await pollTaskUntilDone(snapshot.taskId, set, get, {
+        skipMessageBacklog: true,
+      });
+    } catch (error) {
+      // The backend no longer knows this task (e.g. it was restarted, which
+      // also flips the MLflow run to FAILED via startup recovery), or polling
+      // failed outright. Fall back to a clean idle state.
+      const gone = error instanceof ApiError && error.status === 404;
+      clearRunSnapshot(snapshot.taskId);
+      const cards = { ...get().cards };
+      for (const key of Object.keys(cards)) {
+        if (cards[key].status === "running") {
+          cards[key] = { ...cards[key], status: "idle" };
+        }
+      }
+      set({
+        cards,
+        pipelineRunning: false,
+        currentTaskId: null,
+        cancellationPending: false,
+        errorMessage: gone
+          ? "The previously running pipeline is no longer available (the backend may have restarted)."
+          : error instanceof Error
+            ? error.message
+            : "Failed to resume the running pipeline.",
       });
     }
   },
