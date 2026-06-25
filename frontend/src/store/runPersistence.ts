@@ -69,6 +69,11 @@ export function loadLatestRunSnapshot(): RunSnapshot | null {
   return loadRunSnapshots()[0] ?? null;
 }
 
+/** The snapshot for a specific task, or `null` if absent. */
+export function loadRunSnapshot(taskId: string): RunSnapshot | null {
+  return readMap()[taskId] ?? null;
+}
+
 /** Drop the snapshot for one task (no-op if absent). */
 export function clearRunSnapshot(taskId: string): void {
   const map = readMap();

@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { Info } from "lucide-react";
 
 import { usePipelineStore, mlflowExperimentUrl } from "../store/pipelineStore";
+import { RunningTasksMenu } from "./RunningTasksMenu";
 
 const REPO_URL = "https://github.com/theChopix/SARSSA";
 
@@ -22,14 +23,17 @@ export function Header() {
 
   return (
     <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
-      <h1>
-        <Link
-          to="/"
-          className="text-lg font-bold tracking-wide text-gray-900 hover:text-gray-700"
-        >
-          SARSSAe
-        </Link>
-      </h1>
+      <div className="flex items-center gap-4">
+        <h1>
+          <Link
+            to="/"
+            className="text-lg font-bold tracking-wide text-gray-900 hover:text-gray-700"
+          >
+            SARSSAe
+          </Link>
+        </h1>
+        <RunningTasksMenu />
+      </div>
       <nav className="flex items-center gap-6">
         <Link
           to="/guide"

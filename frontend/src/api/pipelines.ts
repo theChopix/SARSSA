@@ -34,6 +34,7 @@ import type {
   PipelineRun,
   StepDefinition,
   TaskStatusResponse,
+  TaskSummary,
 } from "../types/pipeline";
 
 // ── GET /pipelines/runs ─────────────────────────────────
@@ -260,6 +261,26 @@ export async function startPipelineTask(
   }
 
   return (await response.json()) as { task_id: string };
+}
+
+// ── GET /pipelines/tasks ────────────────────────────────
+
+/**
+ * Fetch all currently running pipeline tasks.
+ *
+ * Powers the header "running tasks" menu. Returns only tasks still in
+ * the `"running"` state, newest first.
+ *
+ * @returns Array of running-task summaries.
+ */
+export async function fetchRunningTasks(): Promise<TaskSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/pipelines/tasks`);
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(response, "Failed to fetch running tasks");
+  }
+
+  return (await response.json()) as TaskSummary[];
 }
 
 // ── GET /pipelines/tasks/{task_id} ──────────────────────

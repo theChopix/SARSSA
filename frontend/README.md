@@ -98,6 +98,7 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `pages/ResultsPage.tsx` | Standalone results view (opens in a new tab for multi-run results) |
 | `components/Layout.tsx` | Page shell (header + routed `<Outlet/>`) |
 | `components/Header.tsx` | Top bar + MLflow deep link |
+| `components/RunningTasksMenu.tsx` | Header pill listing in-flight runs (polls `GET /pipelines/tasks`); click loads a run |
 | `components/PipelineCard.tsx` | **The main workhorse** — one data-driven card per category |
 | `components/LaunchModal.tsx` | Pre-run dialog: tags + description → MLflow run tags |
 | `components/ArtifactPanel.tsx` | Renders image/HTML artifacts (`<img>`/`<iframe>`) |
@@ -145,6 +146,14 @@ registry loaded ──▶ a PipelineCard per category
 restores the running layout and **re-attaches the same poll loop** — the
 background task never stopped, the UI had just lost its handle to it. The
 snapshot is cleared on any terminal state.
+
+**Running-tasks menu.** A second, coarser poll (`RunningTasksMenu`,
+every 6 s) hits `GET /pipelines/tasks` for *all* in-flight runs and shows
+them as a header pill. Selecting one calls `store.loadRunningTask`, which
+makes it the active run — restoring cards from the session snapshot when
+present, else rebuilding them from the task's `steps_requested` (so a run
+started in another tab still loads). Only one detailed poller runs at a
+time: starting/loading a run supersedes the previous loop.
 
 `multi_run` plugins (inspection, steering, labeling-evaluation) use
 the same shape via `store.runSingleStep` → `execute-step-async` → poll,
