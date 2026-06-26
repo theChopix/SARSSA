@@ -13,6 +13,7 @@ from plugins.plugin_interface import (
     ParamSpec,
     PluginIOSpec,
 )
+from utils.cancellation import CancellationToken
 from utils.data_loading.data_loader import DataLoader
 from utils.plugin_logger import get_logger
 from utils.plugin_notifier import PluginNotifier
@@ -47,6 +48,7 @@ def train(
     num_users: int,
     num_items: int,
     notifier: PluginNotifier | None = None,
+    cancellation: CancellationToken | None = None,
 ):
     """Train an ELSA model with early stopping and MLflow tracking.
 
@@ -132,6 +134,8 @@ def train(
         # Train on all batches with progress bar
         pbar = tqdm(train_dataloader, desc=f"Epoch {epoch}/{epochs}")
         for batch in pbar:
+            if cancellation is not None:
+                cancellation.raise_if_cancelled()
             losses = model.train_step(optimizer, batch)
             train_losses.append(losses["Loss"].item())
             pbar.set_postfix({"train_loss": losses["Loss"].cpu().item()})
@@ -359,4 +363,5 @@ class Plugin(BasePlugin):
             num_users=self.num_users,
             num_items=self.num_items,
             notifier=self.notifier,
+            cancellation=self.cancellation,
         )
