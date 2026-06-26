@@ -13,6 +13,7 @@ from plugins.plugin_interface import (
     ParamSpec,
     PluginIOSpec,
 )
+from utils.cancellation import CancellationToken
 from utils.data_loading.data_loader import DataLoader
 from utils.plugin_logger import get_logger
 from utils.plugin_notifier import PluginNotifier
@@ -42,6 +43,7 @@ def train(
     target_ratio: float,
     seed: int,
     notifier: PluginNotifier | None = None,
+    cancellation: CancellationToken | None = None,
 ):
     """Train a Sparse Autoencoder (SAE) model with early stopping and MLflow tracking.
 
@@ -144,6 +146,8 @@ def train(
 
         pbar = tqdm(train_interaction_dataloader, desc=f"Epoch {epoch}/{epochs}")
         for batched_interactions in pbar:
+            if cancellation is not None:
+                cancellation.raise_if_cancelled()
             # Generate positive samples for contrastive learning
             if contrastive_coef > 0:
                 positive_batch = sampled_interactions(batched_interactions, ratio=0.5)
@@ -178,6 +182,8 @@ def train(
         model.train()
         pbar = tqdm(train_embeddings_dataloader, desc=f"Epoch {epoch}/{epochs}")
         for batched_embeddings in pbar:
+            if cancellation is not None:
+                cancellation.raise_if_cancelled()
             losses = model.train_step(optimizer, batched_embeddings, None)
             pbar.set_postfix({"train_loss": losses["Loss"].cpu().item()})
             for key, val in train_losses.items():
@@ -666,4 +672,5 @@ class Plugin(BasePlugin):
             target_ratio=target_ratio,
             seed=seed,
             notifier=self.notifier,
+            cancellation=self.cancellation,
         )
