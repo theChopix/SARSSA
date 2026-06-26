@@ -140,7 +140,7 @@ when the server is running.
 | `POST /pipelines/run-async` | Start a full pipeline in a background thread | `PipelineRequest` → `{task_id}` | `run_pipeline_async` |
 | `GET /pipelines/tasks` | List currently running tasks, newest first (backs the running-tasks menu) | → `[TaskSummary]` | `list_running_tasks` |
 | `GET /pipelines/tasks/{task_id}` | Poll status/progress of a background task | → `TaskStatusResponse` | `get_task_status` |
-| `POST /pipelines/tasks/{task_id}/cancel` | Cooperatively cancel a running task | → `{message}` (409 if not running) | `cancel_task_endpoint` |
+| `POST /pipelines/tasks/{task_id}/cancel` | Cancel a running task. `?mode=graceful` (default) stops before the next step; `?mode=now` also aborts the current step in a cooperating plugin | → `{message}` (409 if not running) | `cancel_task_endpoint` |
 | `POST /pipelines/runs/{run_id}/execute-step` | Run **one** plugin step on an existing run (synchronous, scripting/testing) | `StepDefinition` → `{category, step_run_id}` | `execute_step` |
 | `POST /pipelines/runs/{run_id}/execute-step-async` | Run one plugin step on an existing run in a background thread (used by the UI for multi‑run steps) | `StepDefinition` → `{task_id}` | `execute_step_async` |
 | `POST /pipelines/run` | Execute all steps **synchronously** (legacy; blocks the request) | `PipelineRequest` → `{message, result}` | `run_pipeline` |

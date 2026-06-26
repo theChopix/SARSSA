@@ -470,10 +470,17 @@ const SECTIONS: GuideSection[] = [
             per-tab and session-scoped, so closing the tab clears it.
           </li>
           <li>
-            <strong>Cancellation.</strong> The red <em>Cancel</em>{" "}
-            button stops the pipeline at the next safe boundary —
-            when the currently-running step finishes. It does{" "}
-            <strong>not</strong> force-kill an in-flight step.
+            <strong>Cancellation.</strong> A running pipeline shows two
+            buttons. <em>Cancel after this step</em> lets the step that's
+            currently running finish, then stops the pipeline — no later
+            steps run. <em>Cancel now</em> also tries to stop the running
+            step right away. Long training steps react almost
+            immediately, because they keep checking for a stop request as
+            they go. A step that can't be stopped partway simply finishes
+            first — so for those, <em>Cancel now</em> ends up behaving the
+            same as <em>Cancel after this step</em>. Tip: if you already
+            clicked <em>Cancel after this step</em> and changed your mind,
+            you can still click <em>Cancel now</em>.
           </li>
           <li>
             <strong>Reset.</strong> <em>Reset pipeline settings</em>{" "}

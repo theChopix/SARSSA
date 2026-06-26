@@ -322,12 +322,13 @@ export async function getTaskStatus(
 /**
  * Request cancellation of a running pipeline task.
  *
- * The backend sets a cooperative cancellation flag. The currently
- * executing step will finish, but no further steps will start.
- * The task status will transition to `"cancelled"` once the
- * worker acknowledges the flag.
+ * `"graceful"` (default) lets the current step finish, then stops before
+ * the next one. `"now"` additionally signals a cooperating plugin to
+ * abort the current step at its next checkpoint. Either way the task
+ * transitions to `"cancelled"` once the worker acknowledges it.
  *
  * @param taskId - The task ID returned by {@link startPipelineTask}.
+ * @param mode - `"graceful"` (default) or `"now"`.
  * @returns Confirmation message from the backend.
  *
  * @throws {Error} 404 if the task is not found.
@@ -335,14 +336,16 @@ export async function getTaskStatus(
  *
  * @example
  * ```ts
- * await cancelTask("abc123");
+ * await cancelTask("abc123");           // graceful
+ * await cancelTask("abc123", "now");    // abort current step
  * ```
  */
 export async function cancelTask(
-  taskId: string
+  taskId: string,
+  mode: "graceful" | "now" = "graceful"
 ): Promise<{ message: string }> {
   const response = await fetch(
-    `${API_BASE_URL}/pipelines/tasks/${taskId}/cancel`,
+    `${API_BASE_URL}/pipelines/tasks/${taskId}/cancel?mode=${mode}`,
     { method: "POST" }
   );
 

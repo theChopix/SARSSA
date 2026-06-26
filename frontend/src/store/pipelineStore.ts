@@ -173,6 +173,9 @@ interface PipelineStore {
   /** Whether a cancellation request has been sent but not yet acknowledged. */
   cancellationPending: boolean;
 
+  /** Whether a hard ("Cancel now") abort has been requested. */
+  abortPending: boolean;
+
   /**
    * Steps waiting for modal confirmation before launching.
    * When non-null the LaunchModal is visible.
@@ -283,6 +286,13 @@ interface PipelineStore {
    */
   cancelPipeline: () => Promise<void>;
 
+  /**
+   * Hard-cancel ("Cancel now"): in addition to the graceful stop, signal
+   * a cooperating plugin to abort the currently executing step. Can be
+   * called to escalate after {@link cancelPipeline}.
+   */
+  abortPipeline: () => Promise<void>;
+
   /** Reset all card statuses back to "idle". */
   resetCards: () => void;
 }
@@ -363,6 +373,7 @@ function handleTrackingFailure(
     pipelineRunning: false,
     currentTaskId: null,
     cancellationPending: false,
+    abortPending: false,
     errorMessage: gone
       ? "The run is no longer available (it may have just finished, or the backend restarted)."
       : error instanceof Error
@@ -495,6 +506,7 @@ function pollTaskUntilDone(
             cards: cc,
             pipelineRunning: false,
             cancellationPending: false,
+            abortPending: false,
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline cancelled by user.",
           });
@@ -552,6 +564,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   totalSteps: 0,
   currentTaskId: null,
   cancellationPending: false,
+  abortPending: false,
   pendingSteps: null,
   runningTasks: [],
 
@@ -965,6 +978,21 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     }
   },
 
+  abortPipeline: async () => {
+    const taskId = get().currentTaskId;
+    if (!taskId) return;
+
+    // Implies graceful too — no further steps start.
+    set({ cancellationPending: true, abortPending: true });
+
+    try {
+      await cancelTask(taskId, "now");
+    } catch (error) {
+      console.error("Abort pipeline error:", error);
+      set({ abortPending: false });
+    }
+  },
+
   resetCards: () => {
     const cards = { ...get().cards };
     for (const key of Object.keys(cards)) {
@@ -981,6 +1009,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       totalSteps: 0,
       currentTaskId: null,
       cancellationPending: false,
+      abortPending: false,
       pendingSteps: null,
     });
   },
