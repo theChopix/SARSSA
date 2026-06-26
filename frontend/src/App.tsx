@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Loader2, X, Ban } from "lucide-react";
+import { Loader2, X, Ban, OctagonX } from "lucide-react";
 
 import PipelineCard from "./components/PipelineCard";
 import { Layout } from "./components/Layout";
@@ -77,7 +77,9 @@ function HomePage() {
   const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
   const totalSteps = usePipelineStore((s) => s.totalSteps);
   const cancellationPending = usePipelineStore((s) => s.cancellationPending);
+  const abortPending = usePipelineStore((s) => s.abortPending);
   const cancelPipeline = usePipelineStore((s) => s.cancelPipeline);
+  const abortPipeline = usePipelineStore((s) => s.abortPipeline);
   const anyStepRunning = usePipelineStore((s) =>
     Object.values(s.cards).some((c) => c.status === "running")
   );
@@ -272,23 +274,42 @@ function HomePage() {
                             bg-blue-500 opacity-70 text-center">
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {cancellationPending
-                  ? "Cancelling... waiting for current step to finish"
-                  : `Running pipeline... Step ${currentStepIndex + 1} / ${totalSteps}`}
+                {abortPending
+                  ? "Stopping current step now..."
+                  : cancellationPending
+                    ? "Cancelling... waiting for current step to finish"
+                    : `Running pipeline... Step ${currentStepIndex + 1} / ${totalSteps}`}
               </span>
             </div>
             <button
               onClick={cancelPipeline}
               disabled={cancellationPending}
+              title="Stop after the current step finishes; no further steps run."
               className="px-5 py-3 rounded-lg text-sm font-medium
-                         bg-red-500 text-white
-                         hover:bg-red-600 disabled:opacity-50
-                         disabled:cursor-not-allowed
+                         border border-red-300 text-red-600 bg-white
+                         hover:bg-red-50 disabled:opacity-50
+                         disabled:cursor-not-allowed disabled:hover:bg-white
                          transition-colors cursor-pointer
                          flex items-center gap-2"
             >
               <Ban className="h-4 w-4" />
-              {cancellationPending ? "Cancelling..." : "Cancel"}
+              {cancellationPending && !abortPending
+                ? "Cancelling..."
+                : "Cancel after this step"}
+            </button>
+            <button
+              onClick={abortPipeline}
+              disabled={abortPending}
+              title="Interrupt the current step at its next checkpoint (e.g. mid-training)."
+              className="px-5 py-3 rounded-lg text-sm font-medium
+                         border border-red-400 text-red-700 bg-red-50
+                         hover:bg-red-100 disabled:opacity-50
+                         disabled:cursor-not-allowed disabled:hover:bg-red-50
+                         transition-colors cursor-pointer
+                         flex items-center gap-2"
+            >
+              <OctagonX className="h-4 w-4" />
+              {abortPending ? "Stopping..." : "Cancel now"}
             </button>
           </div>
         ) : anyStepRunning ? (
