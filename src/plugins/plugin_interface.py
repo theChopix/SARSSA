@@ -9,6 +9,7 @@ import mlflow
 import numpy as np
 import scipy.sparse as sp
 
+from utils.cancellation import CancellationToken, NullCancellationToken
 from utils.mlflow_manager import MLflowRunLoader
 from utils.plugin_notifier import NullNotifier, PluginNotifier
 
@@ -327,12 +328,19 @@ class BasePlugin(ABC):
             (silent no-op).  The pipeline engine replaces this with a
             real :class:`~utils.plugin_notifier.PluginNotifier` before
             calling ``run()``.
+        cancellation: Cooperative cancellation token.  Defaults to
+            :class:`~utils.cancellation.NullCancellationToken` (never
+            cancelled).  The pipeline engine injects a real token before
+            ``run()``; plugins with long loops may call
+            ``self.cancellation.raise_if_cancelled()`` at a safe boundary
+            to support immediate ("Cancel now") cancellation.
     """
 
     name: str | None = None
     description: str | None = None
     io_spec: PluginIOSpec = PluginIOSpec()
     notifier: PluginNotifier = NullNotifier()
+    cancellation: CancellationToken = NullCancellationToken()
 
     def load_context(self, context: dict[str, Any]) -> None:
         """Validate required steps and hydrate inputs from MLflow.

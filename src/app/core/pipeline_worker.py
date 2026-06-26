@@ -12,6 +12,7 @@ from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import get_run_context
 from app.models.pipeline import TaskState
 from app.utils.logger import logger
+from utils.cancellation import CancellationToken, StepAborted
 from utils.plugin_notifier import PluginNotifier
 
 
@@ -33,7 +34,9 @@ def run_pipeline_worker(task: TaskState) -> None:
     """
     engine = PipelineEngine()
     notifier = PluginNotifier()
+    cancellation = CancellationToken(task.abort_event)
     task.messages = notifier.messages
+    context: dict[str, Any] = dict(task.initial_context)
     try:
         run_id = engine.start_run(
             tags=task.tags,
@@ -42,8 +45,6 @@ def run_pipeline_worker(task: TaskState) -> None:
         )
         task.run_id = run_id
         logger.info("[WORKER] Pipeline run started: %s", run_id)
-
-        context: dict[str, Any] = dict(task.initial_context)
 
         for i, step in enumerate(task.steps_requested):
             # ── Cancellation check ────────────────────
@@ -63,7 +64,9 @@ def run_pipeline_worker(task: TaskState) -> None:
             task.current_step_index = i
             logger.info("[WORKER] Step %d/%d: %s", i + 1, len(task.steps_requested), plugin)
 
-            engine.execute_step(plugin, params, context, notifier=notifier)
+            engine.execute_step(
+                plugin, params, context, notifier=notifier, cancellation=cancellation
+            )
 
             task.completed_steps.append(
                 {"category": category, "run_id": context[category]["run_id"]}
@@ -76,6 +79,11 @@ def run_pipeline_worker(task: TaskState) -> None:
         task.status = "completed"
         logger.info("[WORKER] Pipeline completed: %s", run_id)
 
+    except StepAborted:
+        logger.info("[WORKER] Pipeline aborted by user (Cancel now)")
+        task.status = "cancelled"
+        task.error = "Pipeline aborted by user."
+        engine.fail_run(context)
     except Exception as exc:
         logger.exception("[WORKER] Pipeline failed: %s", exc)
         task.status = "error"

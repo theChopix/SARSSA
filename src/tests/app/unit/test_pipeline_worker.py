@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from app.core.pipeline_worker import run_pipeline_worker, run_step_worker
 from app.models.pipeline import TaskState
+from utils.cancellation import StepAborted
 
 
 def _make_task(steps: list[dict[str, Any]] | None = None) -> TaskState:
@@ -371,6 +372,61 @@ class TestWorkerCancellation:
         assert task.status == "completed"
         mock_engine.fail_run.assert_not_called()
         mock_engine.finalize_run.assert_called_once()
+
+
+class TestWorkerAbort:
+    """Tests for hard cancellation (StepAborted raised mid-step)."""
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_status_cancelled(self, mock_engine_cls: MagicMock) -> None:
+        """Verify an aborted step ends as 'cancelled', not 'error'."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+        mock_engine.execute_step.side_effect = StepAborted()
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        assert task.status == "cancelled"
+        assert task.error == "Pipeline aborted by user."
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_calls_fail_run(self, mock_engine_cls: MagicMock) -> None:
+        """Verify fail_run is called so the parent run is marked FAILED."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+        mock_engine.execute_step.side_effect = StepAborted()
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        mock_engine.fail_run.assert_called_once()
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_passes_token_wrapping_abort_event(self, mock_engine_cls: MagicMock) -> None:
+        """Verify execute_step gets a token observing the task's abort_event."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "parent_id"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        _, kwargs = mock_engine.execute_step.call_args
+        token = kwargs["cancellation"]
+        assert token.cancelled() is False
+        task.abort_event.set()
+        assert token.cancelled() is True
 
 
 class TestWorkerFailure:

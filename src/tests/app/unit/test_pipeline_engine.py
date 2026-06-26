@@ -362,6 +362,34 @@ class TestExecuteStep:
 
     @patch("app.core.pipeline_engine.PluginManager")
     @patch("app.core.pipeline_engine.mlflow")
+    def test_injects_cancellation_when_provided(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify plugin.cancellation is set to the provided token."""
+        import threading
+
+        from utils.cancellation import CancellationToken
+
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        _arm_execution_order(mock_mlflow)
+        mock_plugin = MagicMock()
+        mock_pm.load.return_value = mock_plugin
+        token = CancellationToken(threading.Event())
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("cat.impl.impl", {}, {}, cancellation=token)
+
+        assert mock_plugin.cancellation is token
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
     def test_does_not_set_notifier_when_none(
         self,
         mock_mlflow: MagicMock,
