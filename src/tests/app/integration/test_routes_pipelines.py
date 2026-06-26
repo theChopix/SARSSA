@@ -409,6 +409,50 @@ class TestCancelTask:
         assert response.status_code == 404
 
     @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_graceful_mode_leaves_abort_unset(
+        self, _mock_worker: MagicMock, client: TestClient
+    ) -> None:
+        """Verify the default mode sets only cancel_event, not abort_event."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        client.post(f"/pipelines/tasks/{task_id}/cancel")
+
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.cancel_event.is_set()
+        assert not task.abort_event.is_set()
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
+    def test_now_mode_sets_abort_event(self, _mock_worker: MagicMock, client: TestClient) -> None:
+        """Verify mode=now sets both cancel_event and abort_event."""
+        create_resp = client.post(
+            "/pipelines/run-async",
+            json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
+        )
+        task_id = create_resp.json()["task_id"]
+
+        response = client.post(f"/pipelines/tasks/{task_id}/cancel?mode=now")
+
+        assert response.status_code == 200
+        from app.core.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert task.cancel_event.is_set()
+        assert task.abort_event.is_set()
+
+    def test_invalid_mode_rejected(self, client: TestClient) -> None:
+        """Verify an unknown mode is rejected with 422 (query validation)."""
+        response = client.post("/pipelines/tasks/whatever/cancel?mode=bogus")
+        assert response.status_code == 422
+
+    @patch("app.api.routes_pipelines.run_pipeline_worker")
     def test_returns_409_for_completed_task(
         self, _mock_worker: MagicMock, client: TestClient
     ) -> None:

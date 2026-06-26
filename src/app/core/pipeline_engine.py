@@ -15,6 +15,7 @@ from app.core.plugin_discovery.naming import (
     make_plugin_display_name,
 )
 from app.core.plugin_discovery.plugin_manager import PluginManager
+from utils.cancellation import CancellationToken
 from utils.plugin_notifier import PluginNotifier
 
 
@@ -126,6 +127,7 @@ class PipelineEngine:
         params: dict[str, Any],
         context: dict[str, Any],
         notifier: PluginNotifier | None = None,
+        cancellation: CancellationToken | None = None,
     ) -> dict[str, Any]:
         """Execute a single plugin step as a nested MLflow run.
 
@@ -140,6 +142,10 @@ class PipelineEngine:
                 ``self.notifier.info(...)`` calls accumulate into the
                 shared message list.  When ``None``, the plugin's default
                 :class:`~utils.plugin_notifier.NullNotifier` is used.
+            cancellation: Optional cancellation token injected into the
+                plugin before ``run()``.  Lets a cooperating plugin abort
+                mid-step.  When ``None``, the plugin's default
+                :class:`~utils.cancellation.NullCancellationToken` is used.
 
         Returns:
             dict[str, Any]: The updated context with the new step's
@@ -155,6 +161,9 @@ class PipelineEngine:
 
         if notifier is not None:
             plugin.notifier = notifier
+
+        if cancellation is not None:
+            plugin.cancellation = cancellation
 
         order = self._next_execution_order()
         display_name = plugin.name or make_plugin_display_name(plugin_name)

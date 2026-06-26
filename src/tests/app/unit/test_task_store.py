@@ -162,6 +162,22 @@ class TestCancelTask:
         assert result is task
         assert task.cancel_event.is_set()
 
+    def test_graceful_does_not_set_abort_event(self) -> None:
+        """Verify the default (graceful) cancel leaves abort_event unset."""
+        _clear_store()
+        task = create_task([])
+        cancel_task(task.task_id)
+        assert task.cancel_event.is_set()
+        assert not task.abort_event.is_set()
+
+    def test_hard_sets_both_events(self) -> None:
+        """Verify hard cancel ('Cancel now') sets both events."""
+        _clear_store()
+        task = create_task([])
+        cancel_task(task.task_id, hard=True)
+        assert task.cancel_event.is_set()
+        assert task.abort_event.is_set()
+
     def test_raises_for_completed_task(self) -> None:
         """Verify ValueError when the task is already completed."""
         _clear_store()

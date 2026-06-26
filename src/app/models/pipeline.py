@@ -52,7 +52,11 @@ class TaskState:
         completed_steps: Steps that have finished so far.
         context: Final pipeline context (set on completion).
         error: Error message (set on failure).
-        cancel_event: Thread-safe flag for cooperative cancellation.
+        cancel_event: Thread-safe flag for graceful cancellation
+            (stop before the next step).
+        abort_event: Thread-safe flag for immediate ("Cancel now")
+            cancellation — observed by a cooperating plugin to stop the
+            currently executing step.
         messages: Ordered list of notification dicts pushed by the
             executing plugin via ``PluginNotifier``.  Shared with the
             notifier's own list (same object) so new entries are
@@ -62,6 +66,7 @@ class TaskState:
     task_id: str
     status: str = "running"
     cancel_event: threading.Event = field(default_factory=threading.Event)
+    abort_event: threading.Event = field(default_factory=threading.Event)
     run_id: str | None = None
     steps_requested: list[dict[str, Any]] = field(default_factory=list)
     initial_context: dict[str, Any] = field(default_factory=dict)

@@ -65,11 +65,15 @@ def get_task(task_id: str) -> TaskState | None:
     return _tasks.get(task_id)
 
 
-def cancel_task(task_id: str) -> TaskState | None:
-    """Request cancellation of a task by setting its cancel event.
+def cancel_task(task_id: str, hard: bool = False) -> TaskState | None:
+    """Request cancellation of a task by setting its cancel event(s).
 
     Args:
         task_id: Unique task identifier.
+        hard: When ``True`` ("Cancel now"), also set ``abort_event`` so a
+            cooperating plugin stops the currently executing step; the
+            graceful ``cancel_event`` is set either way, so no further
+            steps start.
 
     Returns:
         TaskState | None: The task if found and cancellation was
@@ -84,6 +88,8 @@ def cancel_task(task_id: str) -> TaskState | None:
     if task.status != "running":
         raise ValueError(f"Task '{task_id}' is '{task.status}', not cancellable.")
     task.cancel_event.set()
+    if hard:
+        task.abort_event.set()
     return task
 
 

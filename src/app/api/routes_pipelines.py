@@ -1,7 +1,7 @@
 """API routes for pipeline execution and run management."""
 
 import threading
-from typing import Any
+from typing import Any, Literal
 
 import mlflow
 from fastapi import APIRouter, HTTPException, Query
@@ -170,18 +170,26 @@ def get_task_status(task_id: str) -> TaskStatusResponse:
 
 
 @router.post("/tasks/{task_id}/cancel")
-def cancel_task_endpoint(task_id: str) -> dict[str, str]:
+def cancel_task_endpoint(
+    task_id: str,
+    mode: Literal["graceful", "now"] = "graceful",
+) -> dict[str, str]:
     """Request cancellation of a running pipeline task.
 
-    Sets the cancellation flag on the task. The worker thread
-    will stop after the currently executing step finishes.
+    Two modes:
 
-    Cancellation is not immediate — the current step runs to
-    completion. The task status will transition to ``"cancelled"``
-    once the worker acknowledges the flag.
+    - ``graceful`` (default) — the currently executing step runs to
+      completion, then the pipeline stops before the next step.
+    - ``now`` — additionally signals a cooperating plugin to abort the
+      currently executing step at its next safe checkpoint. A plugin
+      that does not observe the signal falls back to graceful behaviour.
+
+    Either way the task status transitions to ``"cancelled"`` once the
+    worker acknowledges the request.
 
     Args:
         task_id: Unique task identifier.
+        mode: ``"graceful"`` or ``"now"`` (see above).
 
     Returns:
         dict[str, str]: Confirmation message.
@@ -191,7 +199,7 @@ def cancel_task_endpoint(task_id: str) -> dict[str, str]:
         HTTPException: 409 if the task is not in a cancellable state.
     """
     try:
-        task = cancel_task(task_id)
+        task = cancel_task(task_id, hard=(mode == "now"))
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -201,11 +209,12 @@ def cancel_task_endpoint(task_id: str) -> dict[str, str]:
             detail=f"Task '{task_id}' not found.",
         )
 
-    return {
-        "message": (
-            "Cancellation requested. The current step will finish before the pipeline stops."
-        )
-    }
+    message = (
+        "Abort requested. The current step will stop at its next safe checkpoint."
+        if mode == "now"
+        else "Cancellation requested. The current step will finish before the pipeline stops."
+    )
+    return {"message": message}
 
 
 @router.post("/runs/{run_id}/execute-step")
