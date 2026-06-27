@@ -10,10 +10,13 @@ from plugins.plugin_interface import (
     ArtifactFileSpec,
     ArtifactSpec,
     BasePlugin,
+    DependentDropdownHint,
     OutputArtifactSpec,
     OutputParamSpec,
     PluginIOSpec,
+    StaticDropdownHint,
 )
+from utils.embedder.registry import known_providers
 from utils.plugin_logger import get_logger
 
 logger = get_logger(__name__)
@@ -57,6 +60,14 @@ class Plugin(BasePlugin):
                 ),
             ],
         ),
+        param_ui_hints=[
+            StaticDropdownHint("embedding_provider", choices=known_providers()),
+            DependentDropdownHint(
+                "embedding_model",
+                depends_on_param="embedding_provider",
+                resolver="embedder_models",
+            ),
+        ],
     )
 
     def load_context(self, context: dict) -> None:
