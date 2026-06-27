@@ -168,6 +168,8 @@ function ParamRow({
           allParams={allParams}
           disabled={disabled}
         />
+      ) : param.widget === "toggle" ? (
+        <ToggleSwitch value={value} onChange={onChange} disabled={disabled} />
       ) : param.widget === "slider" && param.widget_config ? (
         <div className="flex-1 flex items-center gap-2">
           <input
@@ -302,6 +304,52 @@ function PastRunsDropdownSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+// ── Toggle switch (boolean) ─────────────────────────────
+
+/**
+ * An on/off switch for a boolean param.  The value travels as the
+ * string `"true"` / `"false"` so the existing param-coercion path
+ * (`coerceParamValue`) maps it back to a real boolean.  The shown
+ * state comes straight from `value`, which carries the param's
+ * default until the user flips it.
+ */
+function ToggleSwitch({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const checked = value.toLowerCase() === "true";
+
+  return (
+    <div className="flex-1 flex items-center">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(checked ? "false" : "true")}
+        disabled={disabled}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full
+                    transition-colors cursor-pointer
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${checked ? "bg-blue-500" : "bg-gray-300"}`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white
+                      shadow transition-transform
+                      ${checked ? "translate-x-4" : "translate-x-0.5"}`}
+        />
+      </button>
+      <span className="ml-2 text-sm text-gray-600">
+        {checked ? "true" : "false"}
+      </span>
+    </div>
   );
 }
 
