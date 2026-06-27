@@ -463,10 +463,6 @@ class Plugin(BasePlugin):
             "hard active-feature budget (top_k); 'BasicSAE' uses a soft L1 "
             "penalty (l1_coef) instead.",
         ] = "TopKSAE",
-        note: Annotated[
-            str,
-            "Free-text note logged to MLflow for your own bookkeeping. Has no effect on training.",
-        ] = "",
         target_ratio: Annotated[
             float,
             "Fraction of each user's interactions hidden as targets when "
@@ -553,7 +549,6 @@ class Plugin(BasePlugin):
             top_k: Number of active features (for TopKSAE/BatchTopKSAE).
             sample_users: Whether to randomly sample user interactions.
             model: SAE variant ('BasicSAE', 'TopKSAE', or 'BatchTopKSAE').
-            note: Optional note for the experiment.
             target_ratio: Fraction of interactions to use as targets for evaluation.
             normalize: Whether to L2-normalize sparse embeddings.
             seed: Random seed for reproducibility.
@@ -633,7 +628,6 @@ class Plugin(BasePlugin):
                 "l1_coef": l1_coef,
                 "min_user_interactions": self.min_user_interactions,
                 "epochs": epochs,
-                "note": note,
                 "reconstruction_loss": reconstruction_loss,
                 "val_ratio": self.val_ratio,
                 "dataset": self.dataset,
