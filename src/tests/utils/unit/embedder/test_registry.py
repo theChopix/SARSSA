@@ -68,3 +68,33 @@ class TestKnownProviders:
         providers = known_providers()
 
         assert providers == sorted(providers)
+
+
+class TestKnownModels:
+    """Tests for the ``known_models`` helper."""
+
+    def test_openai_returns_curated_models(self) -> None:
+        """Verify the OpenAI provider exposes a non-empty curated model list."""
+        from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
+        from utils.embedder.registry import known_models
+
+        models = known_models("openai")
+
+        assert models == OpenAIEmbeddingLLM.KNOWN_MODELS
+        assert models
+
+    def test_returns_a_copy(self) -> None:
+        """Verify mutating the result does not corrupt the provider's class list."""
+        from utils.embedder.openai_embedder import OpenAIEmbeddingLLM
+        from utils.embedder.registry import known_models
+
+        known_models("openai").append("tampered")
+
+        assert "tampered" not in OpenAIEmbeddingLLM.KNOWN_MODELS
+
+    def test_unknown_provider_raises_value_error(self) -> None:
+        """Verify an unknown provider raises ``ValueError`` listing the known ones."""
+        from utils.embedder.registry import known_models
+
+        with pytest.raises(ValueError, match="Unknown embedding provider 'nope'"):
+            known_models("nope")

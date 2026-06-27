@@ -9,6 +9,12 @@ load_dotenv()
 
 
 class OpenAIEmbeddingLLM(EmbeddingLLM):
+    KNOWN_MODELS: list[str] = [
+        "text-embedding-3-small",
+        "text-embedding-3-large",
+        "text-embedding-ada-002",
+    ]
+
     def __init__(self, model: str):
         self.model = model
         api_key = os.getenv("OPENAI_API_KEY") or ""

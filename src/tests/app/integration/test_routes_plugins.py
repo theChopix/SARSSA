@@ -12,7 +12,11 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.config.config import PLUGIN_CATEGORIES
-from plugins.plugin_interface import DynamicDropdownHint, PluginIOSpec
+from plugins.plugin_interface import (
+    DependentDropdownHint,
+    DynamicDropdownHint,
+    PluginIOSpec,
+)
 
 
 class TestGetPluginRegistry:
@@ -249,6 +253,103 @@ class TestGetParamChoicesEndpoint:
 
         assert response.status_code == 404
         assert "Formatter" in response.json()["detail"]
+
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_dependent_hint_resolves_choices_from_value(
+        self,
+        mock_pm: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify a dependent dropdown returns choices for the controlling value."""
+        hint = DependentDropdownHint(
+            param_name="embedding_model",
+            depends_on_param="embedding_provider",
+            resolver="embedder_models",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        mock_pm.load.return_value = plugin
+
+        response = client.get(
+            "/plugins/param-choices/labeling_evaluation/x.x/embedding_model",
+            params={"value": "openai"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data
+        assert {"label": "text-embedding-3-small", "value": "text-embedding-3-small"} in data
+
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_dependent_hint_empty_value_returns_empty(
+        self,
+        mock_pm: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify a dependent dropdown with no controlling value returns no options."""
+        hint = DependentDropdownHint(
+            param_name="embedding_model",
+            depends_on_param="embedding_provider",
+            resolver="embedder_models",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        mock_pm.load.return_value = plugin
+
+        response = client.get(
+            "/plugins/param-choices/labeling_evaluation/x.x/embedding_model",
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_dependent_hint_unknown_value_returns_empty(
+        self,
+        mock_pm: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify an unrecognised controlling value yields no options (not an error)."""
+        hint = DependentDropdownHint(
+            param_name="embedding_model",
+            depends_on_param="embedding_provider",
+            resolver="embedder_models",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        mock_pm.load.return_value = plugin
+
+        response = client.get(
+            "/plugins/param-choices/labeling_evaluation/x.x/embedding_model",
+            params={"value": "no_such_provider"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_dependent_hint_unknown_resolver_returns_404(
+        self,
+        mock_pm: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify a hint naming an unregistered resolver surfaces as 404."""
+        hint = DependentDropdownHint(
+            param_name="embedding_model",
+            depends_on_param="embedding_provider",
+            resolver="no_such_resolver",
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        mock_pm.load.return_value = plugin
+
+        response = client.get(
+            "/plugins/param-choices/labeling_evaluation/x.x/embedding_model",
+            params={"value": "openai"},
+        )
+
+        assert response.status_code == 404
+        assert "no_such_resolver" in response.json()["detail"]
 
     @patch("app.api.routes_plugins.get_run_context")
     @patch("app.api.routes_plugins.MLflowRunLoader")

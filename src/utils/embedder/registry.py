@@ -47,3 +47,24 @@ def known_providers() -> list[str]:
             dropdown without leaking the internal registry dict.
     """
     return sorted(_PROVIDERS)
+
+
+def known_models(provider: str) -> list[str]:
+    """Return the curated model identifiers offered by *provider*.
+
+    Args:
+        provider: Provider name, e.g. ``"openai"``. Must be a key
+            in the internal provider registry.
+
+    Returns:
+        list[str]: The provider class's ``KNOWN_MODELS``.
+
+    Raises:
+        ValueError: If *provider* is not a known registry key. The
+            error message lists the known providers so callers can
+            recover.
+    """
+    if provider not in _PROVIDERS:
+        known = ", ".join(sorted(_PROVIDERS))
+        raise ValueError(f"Unknown embedding provider {provider!r}; known providers: {known}")
+    return list(_PROVIDERS[provider].KNOWN_MODELS)
