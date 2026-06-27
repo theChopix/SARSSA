@@ -109,6 +109,7 @@ def _resolve_widget(
         PastRunsDropdownHint,
         SliderHint,
         StaticDropdownHint,
+        ToggleHint,
     )
 
     if isinstance(hint, StaticDropdownHint):
@@ -142,6 +143,9 @@ def _resolve_widget(
             slider_max=hint.max_value,
             slider_step=hint.step,
         )
+
+    if isinstance(hint, ToggleHint):
+        return "toggle", None
 
     return "text", None
 
