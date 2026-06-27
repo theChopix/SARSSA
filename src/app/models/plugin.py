@@ -43,6 +43,10 @@ class WidgetConfig(BaseModel):
     populated; every other field stays ``None`` (or ``None`` /
     empty list for collections).  The valid combinations are:
 
+    - ``widget="dropdown"`` (static): ``choices`` only.  The
+      options are baked into the registry response; the frontend
+      renders them directly with no fetch.
+
     - ``widget="dropdown"`` (regular dynamic dropdown):
       ``choices_endpoint`` + ``run_id_source``.  The frontend
       resolves the upstream step's run id from the current
@@ -56,6 +60,11 @@ class WidgetConfig(BaseModel):
       run id) instead of resolving via ``run_id_source``, and
       refetches whenever the watched param changes.
 
+    - ``widget="dropdown"`` (dependent variant): ``choices_endpoint``
+      + ``source_param`` pointing to another parameter on the same
+      plugin.  The frontend passes that param's current *value* to
+      the endpoint and refetches whenever it changes.
+
     - ``widget="past_runs_dropdown"``: ``required_steps`` only.
       The frontend hits ``/pipelines/runs?required_steps=...``
       directly to list eligible past runs; no
@@ -68,11 +77,17 @@ class WidgetConfig(BaseModel):
       entirely (``ParameterInfo.widget_config`` is ``None``).
 
     Attributes:
+        choices: Baked-in options as ``{"label", "value"}`` dicts for
+            a static dropdown.  ``None`` for every other widget.
         choices_endpoint: URL path for fetching dynamic dropdown
             options (used when ``widget="dropdown"``).
         run_id_source: Pipeline context key whose ``run_id`` the
             frontend should pass as query param when fetching
             choices (e.g. ``"neuron_labeling"``).
+        source_param: Name of another parameter on the same plugin
+            whose current *value* drives this dropdown's options.
+            When set, the frontend passes that value to
+            ``choices_endpoint`` and refetches whenever it changes.
         source_run_param: Name of another parameter on the same
             plugin whose value is a parent pipeline run id.  When
             set, the frontend should pass that param's current
@@ -88,8 +103,10 @@ class WidgetConfig(BaseModel):
             ``widget="past_runs_dropdown"``).
     """
 
+    choices: list[dict[str, str]] | None = None
     choices_endpoint: str | None = None
     run_id_source: str | None = None
+    source_param: str | None = None
     source_run_param: str | None = None
     slider_min: float | None = None
     slider_max: float | None = None

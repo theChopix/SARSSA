@@ -34,6 +34,7 @@ from app.models.plugin import (
 from plugins.plugin_interface import (
     ArtifactDisplaySpec,
     ArtifactFileSpec,
+    DependentDropdownHint,
     DisplayRowSpec,
     DynamicDropdownHint,
     ItemRowsDisplaySpec,
@@ -41,6 +42,7 @@ from plugins.plugin_interface import (
     PastRunsDropdownHint,
     PluginIOSpec,
     SliderHint,
+    StaticDropdownHint,
 )
 
 # ── Helpers for building mock plugin directory trees ──────────────
@@ -818,6 +820,34 @@ class TestResolveWidget:
         _, config = _resolve_widget(hint, "inspection", "inspection.single.x.x")
         assert config is not None
         assert config.source_run_param is None
+
+    def test_static_dropdown_hint_bakes_choices(self) -> None:
+        """Verify StaticDropdownHint produces a dropdown with baked-in choices."""
+        hint = StaticDropdownHint(param_name="embedding_provider", choices=["openai", "cohere"])
+        widget, config = _resolve_widget(hint, "labeling_evaluation", "x.x")
+        assert widget == "dropdown"
+        assert config is not None
+        assert config.choices == [
+            {"label": "openai", "value": "openai"},
+            {"label": "cohere", "value": "cohere"},
+        ]
+        assert config.choices_endpoint is None
+
+    def test_dependent_dropdown_hint_uses_source_param_and_endpoint(self) -> None:
+        """Verify DependentDropdownHint produces an endpoint dropdown keyed on a value."""
+        hint = DependentDropdownHint(
+            param_name="embedding_model",
+            depends_on_param="embedding_provider",
+            resolver="embedder_models",
+        )
+        widget, config = _resolve_widget(hint, "labeling_evaluation", "single.embedding_map.x")
+        assert widget == "dropdown"
+        assert config is not None
+        assert config.source_param == "embedding_provider"
+        assert config.choices_endpoint == (
+            "/plugins/param-choices/labeling_evaluation/single.embedding_map.x/embedding_model"
+        )
+        assert config.choices is None
 
     def test_past_runs_dropdown_hint_returns_widget(self) -> None:
         """Verify PastRunsDropdownHint produces past_runs_dropdown widget."""

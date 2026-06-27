@@ -4,10 +4,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.core.param_choices import resolve_dependent_choices
 from app.core.pipeline_runs import get_run_context
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.core.plugin_discovery.plugin_registry import get_plugin_registry
-from plugins.plugin_interface import DynamicDropdownHint
+from plugins.plugin_interface import DependentDropdownHint, DynamicDropdownHint
 from utils.mlflow_manager import MLflowRunLoader
 
 router = APIRouter()
@@ -32,31 +33,39 @@ def get_param_choices(
     category: str,  # noqa: ARG001
     plugin_name: str,
     param_name: str,
-    run_id: str = Query(
-        ...,
+    run_id: str | None = Query(
+        None,
         description="MLflow run ID of the step that produced the source artifact.",
     ),
+    value: str | None = Query(
+        None,
+        description="Current value of the controlling param (dependent dropdowns).",
+    ),
 ) -> list[dict[str, str]]:
-    """Return dynamic dropdown options for a plugin parameter.
+    """Return dropdown options for a plugin parameter.
 
-    Loads the artifact declared in the plugin's
-    ``DynamicDropdownHint``, passes it through the plugin's
-    formatter method, and returns the result.
+    For a ``DependentDropdownHint`` the options are computed from the
+    controlling param's *value*. Otherwise the parameter's
+    ``DynamicDropdownHint`` artifact is loaded from *run_id* and passed
+    through the plugin's formatter method.
 
     Args:
         category: Plugin category key (e.g. ``"steering"``).
         plugin_name: Dotted plugin module path.
         param_name: Name of the ``run()`` parameter.
         run_id: MLflow run ID for the upstream step that
-            produced the source artifact.
+            produced the source artifact (dynamic dropdowns).
+        value: Current value of the controlling param
+            (dependent dropdowns).
 
     Returns:
         list[dict[str, str]]: Each dict has ``"label"`` and
             ``"value"`` keys.
 
     Raises:
-        HTTPException: 404 if the plugin, parameter hint, or
-            artifact cannot be found.
+        HTTPException: 404 if the plugin, parameter hint, resolver, or
+            artifact cannot be found; 422 if ``run_id`` is missing for
+            a dynamic dropdown.
     """
     try:
         plugin_instance = PluginManager.load(plugin_name)
@@ -66,6 +75,19 @@ def get_param_choices(
             detail=f"Plugin '{plugin_name}' not found: {exc}",
         ) from exc
 
+    dependent_hint = _find_dependent_hint(plugin_instance, param_name)
+    if dependent_hint is not None:
+        try:
+            return resolve_dependent_choices(dependent_hint.resolver, value)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No resolver '{dependent_hint.resolver}' for parameter "
+                    f"'{param_name}' on plugin '{plugin_name}'."
+                ),
+            ) from exc
+
     hint = _find_dropdown_hint(plugin_instance, param_name)
     if hint is None:
         raise HTTPException(
@@ -73,6 +95,12 @@ def get_param_choices(
             detail=(
                 f"No DynamicDropdownHint for parameter '{param_name}' on plugin '{plugin_name}'."
             ),
+        )
+
+    if run_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Query param 'run_id' is required for parameter '{param_name}'.",
         )
 
     resolved_run_id = _resolve_artifact_run_id(hint, run_id)
@@ -103,6 +131,26 @@ def _find_dropdown_hint(
     """
     for hint in plugin_instance.io_spec.param_ui_hints:
         if isinstance(hint, DynamicDropdownHint) and hint.param_name == param_name:
+            return hint
+    return None
+
+
+def _find_dependent_hint(
+    plugin_instance: Any,
+    param_name: str,
+) -> DependentDropdownHint | None:
+    """Find a DependentDropdownHint for a parameter on a plugin.
+
+    Args:
+        plugin_instance: An instantiated plugin object.
+        param_name: Name of the ``run()`` parameter.
+
+    Returns:
+        DependentDropdownHint | None: The matching hint, or
+            ``None`` if no dependent dropdown hint exists for this param.
+    """
+    for hint in plugin_instance.io_spec.param_ui_hints:
+        if isinstance(hint, DependentDropdownHint) and hint.param_name == param_name:
             return hint
     return None
 

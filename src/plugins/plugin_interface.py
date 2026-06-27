@@ -229,6 +229,43 @@ class DynamicDropdownHint(ParamUIHint):
 
 
 @dataclass
+class StaticDropdownHint(ParamUIHint):
+    """Turn an enum-like param into a menu instead of a free-text box.
+
+    Use when a parameter only accepts one of a small, fixed set of
+    values known at build time (e.g. an SAE variant, an embedding
+    provider). The values are baked into the registry response; no
+    runtime fetch. Supply them from the authoritative source (a
+    registry, a shared constant, or a literal list).
+
+    Attributes:
+        choices: Allowed values (label == value).
+    """
+
+    choices: list[str] = field(default_factory=list)
+
+
+@dataclass
+class DependentDropdownHint(ParamUIHint):
+    """A menu whose valid options narrow based on another param's choice.
+
+    Use when one parameter's options depend on what the user picked
+    for another (e.g. the model list depends on the chosen provider).
+    The frontend refetches choices whenever the controlling param
+    changes; the backend resolver maps that value to the options.
+    Value-based sibling of :class:`DynamicDropdownHint`'s
+    ``source_run_param`` (run-id) cascade.
+
+    Attributes:
+        depends_on_param: The controlling ``run()`` parameter.
+        resolver: Key into the backend ``CHOICE_RESOLVERS`` registry.
+    """
+
+    depends_on_param: str = ""
+    resolver: str = ""
+
+
+@dataclass
 class PastRunsDropdownHint(ParamUIHint):
     """Render a parameter as a dropdown of past pipeline runs.
 

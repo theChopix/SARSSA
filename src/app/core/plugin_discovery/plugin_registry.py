@@ -104,10 +104,24 @@ def _resolve_widget(
             and optional widget configuration.
     """
     from plugins.plugin_interface import (
+        DependentDropdownHint,
         DynamicDropdownHint,
         PastRunsDropdownHint,
         SliderHint,
+        StaticDropdownHint,
     )
+
+    if isinstance(hint, StaticDropdownHint):
+        return "dropdown", WidgetConfig(
+            choices=[{"label": v, "value": v} for v in hint.choices],
+        )
+
+    if isinstance(hint, DependentDropdownHint):
+        endpoint = f"/plugins/param-choices/{category_name}/{plugin_name}/{hint.param_name}"
+        return "dropdown", WidgetConfig(
+            choices_endpoint=endpoint,
+            source_param=hint.depends_on_param,
+        )
 
     if isinstance(hint, DynamicDropdownHint):
         endpoint = f"/plugins/param-choices/{category_name}/{plugin_name}/{hint.param_name}"
