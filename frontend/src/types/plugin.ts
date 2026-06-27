@@ -46,11 +46,19 @@ export interface CategoryInfo {
  * Only the fields relevant to the chosen `widget` type are
  * populated; the rest are `null`.
  *
+ * - `choices`          – Baked-in `{ label, value }` options for a
+ *                         static dropdown; rendered directly with no
+ *                         fetch.
  * - `choices_endpoint` – URL path for fetching dynamic dropdown
  *                         options (used when `widget = "dropdown"`).
  * - `run_id_source`    – Pipeline context key whose `run_id` should
  *                         be passed as a query param when fetching
  *                         choices (e.g. `"neuron_labeling"`).
+ * - `source_param`     – Name of another parameter on the same plugin
+ *                         whose current *value* drives this dropdown's
+ *                         options.  When set, the dropdown passes that
+ *                         value to `choices_endpoint` and refetches
+ *                         whenever it changes.
  * - `source_run_param` – Name of another parameter on the same
  *                         plugin whose value is a parent pipeline
  *                         run id.  When set, the dropdown sources
@@ -65,8 +73,10 @@ export interface CategoryInfo {
  *                         `widget = "past_runs_dropdown"`).
  */
 export interface WidgetConfig {
+  choices: { label: string; value: string }[] | null;
   choices_endpoint: string | null;
   run_id_source: string | null;
+  source_param: string | null;
   source_run_param: string | null;
   slider_min: number | null;
   slider_max: number | null;

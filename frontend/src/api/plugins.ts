@@ -88,3 +88,32 @@ export async function fetchParamChoices(
 
   return (await response.json()) as ParamChoice[];
 }
+
+/**
+ * Fetch dropdown options that depend on another param's value.
+ *
+ * @param choicesEndpoint - URL path from `widget_config.choices_endpoint`.
+ * @param value           - Current value of the controlling param
+ *                          (named by `widget_config.source_param`).
+ * @returns Array of `{ label, value }` options for the dropdown.
+ *
+ * @throws {Error} If the HTTP request fails (non-2xx status).
+ */
+export async function fetchDependentParamChoices(
+  choicesEndpoint: string,
+  value: string
+): Promise<ParamChoice[]> {
+  const params = new URLSearchParams({ value });
+  const response = await fetch(
+    `${API_BASE_URL}${choicesEndpoint}?${params}`
+  );
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to fetch param choices"
+    );
+  }
+
+  return (await response.json()) as ParamChoice[];
+}
