@@ -45,7 +45,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
-import { fetchParamChoices } from "../api/plugins";
+import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
 import { fetchEligiblePipelineRuns } from "../api/pipelines";
 import type { ParamChoice } from "../api/plugins";
 import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
@@ -144,6 +144,14 @@ function ParamRow({
       {/* Widget: dropdown, slider, or text input */}
       {param.widget === "past_runs_dropdown" && param.widget_config ? (
         <PastRunsDropdownSelect
+          param={param}
+          value={value}
+          onChange={onChange}
+          onLabelChange={onLabelChange}
+          disabled={disabled}
+        />
+      ) : param.widget === "dropdown" && param.widget_config?.choices ? (
+        <StaticDropdownSelect
           param={param}
           value={value}
           onChange={onChange}
@@ -297,6 +305,54 @@ function PastRunsDropdownSelect({
   );
 }
 
+// ── Static dropdown select ──────────────────────────────
+
+/**
+ * A plain `<select>` over a fixed set of options baked into the
+ * registry response (`widget_config.choices`).  No fetch — used for
+ * enum-like params such as the embedding provider.
+ */
+function StaticDropdownSelect({
+  param,
+  value,
+  onChange,
+  onLabelChange,
+  disabled = false,
+}: {
+  param: ParameterInfo;
+  value: string;
+  onChange: (value: string) => void;
+  onLabelChange?: (label: string) => void;
+  disabled?: boolean;
+}) {
+  const choices = param.widget_config!.choices ?? [];
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        const next = e.target.value;
+        onChange(next);
+        const picked = choices.find((c) => c.value === next);
+        if (picked) onLabelChange?.(picked.label);
+      }}
+      disabled={disabled}
+      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded
+                 focus:outline-none focus:ring-2 focus:ring-blue-400
+                 text-gray-800 bg-white cursor-pointer
+                 disabled:opacity-50 disabled:cursor-not-allowed
+                 disabled:bg-gray-100"
+    >
+      <option value="">— select —</option>
+      {choices.map((choice) => (
+        <option key={choice.value} value={choice.value}>
+          {choice.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 // ── Dropdown select for dynamic choices ─────────────────
 
 /**
@@ -340,8 +396,9 @@ function DropdownSelect({
   const endpoint = param.widget_config!.choices_endpoint!;
   const sourceStep = param.widget_config!.run_id_source;
   const sourceRunParam = param.widget_config!.source_run_param;
+  const sourceParam = param.widget_config!.source_param;
 
-  // Cascading source wins when set; otherwise fall back to the
+  // Cascading run-id source wins when set; otherwise fall back to the
   // current pipeline's upstream-step run id.
   const cascadeValue = sourceRunParam ? allParams[sourceRunParam] : undefined;
   const runId = sourceRunParam
@@ -352,21 +409,35 @@ function DropdownSelect({
     ? context?.[sourceStep]?.run_id ?? null
     : null;
 
-  // Fetch options when the run_id becomes available.
+  // For a value cascade (`source_param`), options depend on another
+  // param's current value rather than a run id.
+  const controllingValue = sourceParam ? allParams[sourceParam] : undefined;
+
+  // The token that both gates "ready" and drives refetching: the
+  // controlling value for a value cascade, otherwise the run id.
+  const fetchKey = sourceParam
+    ? controllingValue && controllingValue.length > 0
+      ? controllingValue
+      : null
+    : runId;
+
+  // Fetch options when the fetch key becomes available.
   const loadOptions = useCallback(async () => {
-    if (!runId) return;
+    if (!fetchKey) return;
 
     setLoading(true);
     setError(null);
     try {
-      const choices = await fetchParamChoices(endpoint, runId);
+      const choices = sourceParam
+        ? await fetchDependentParamChoices(endpoint, fetchKey)
+        : await fetchParamChoices(endpoint, fetchKey);
       setOptions(choices);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load options");
     } finally {
       setLoading(false);
     }
-  }, [endpoint, runId]);
+  }, [endpoint, fetchKey, sourceParam]);
 
   useEffect(() => {
     loadOptions();
@@ -376,15 +447,16 @@ function DropdownSelect({
   // longer matches an option from the new source.  Skipped while
   // options are still loading so a transient empty list does not
   // wipe a valid selection.
+  const isCascade = Boolean(sourceRunParam || sourceParam);
   useEffect(() => {
-    if (!sourceRunParam || !runId || loading) return;
+    if (!isCascade || !fetchKey || loading) return;
     if (!value) return;
     if (options.length === 0) return;
     const stillValid = options.some((o) => o.value === value);
     if (!stillValid) {
       onChange("");
     }
-  }, [options, value, sourceRunParam, runId, loading, onChange]);
+  }, [options, value, isCascade, fetchKey, loading, onChange]);
 
   // Close dropdown when clicking outside.
   useEffect(() => {
@@ -414,10 +486,12 @@ function DropdownSelect({
 
   // ── Render states ───────────────────────────────────
 
-  if (!runId) {
+  if (!fetchKey) {
     return (
       <span className="flex-1 text-sm text-gray-400 italic">
-        {sourceRunParam
+        {sourceParam
+          ? `Pick a value for ${sourceParam} first`
+          : sourceRunParam
           ? `Pick a value for ${sourceRunParam} first`
           : `Run the ${sourceStep ?? "upstream"} step first`}
       </span>
@@ -731,6 +805,17 @@ export default function PipelineCard({
     (impl) => impl.plugin_name === card.selectedPlugin
   );
 
+  // Params with defaults filled in for keys the user hasn't set yet,
+  // mirroring each row's displayed value.  Dependent dropdowns read
+  // their controlling value from here, so a default-valued controller
+  // (e.g. embedding_provider="openai") drives its child on first show.
+  const effectiveParams: Record<string, string> = { ...card.params };
+  for (const p of selectedImpl?.params ?? []) {
+    if (!(p.name in card.params) && p.default != null) {
+      effectiveParams[p.name] = String(p.default);
+    }
+  }
+
   // Is this a multi_run card?
   const isMultiRun = category_info.type === "multi_run";
 
@@ -921,7 +1006,7 @@ export default function PipelineCard({
                   : undefined
               }
               context={context}
-              allParams={card.params}
+              allParams={effectiveParams}
               disabled={card.status === "running"}
             />
           ))}
