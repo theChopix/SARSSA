@@ -103,6 +103,10 @@ class Plugin(BaseComparePlugin):
                 depends_on_param="embedding_provider",
                 resolver="embedder_models",
             ),
+            StaticDropdownHint(
+                "umap_metric",
+                choices=["cosine", "euclidean", "manhattan", "correlation", "chebyshev"],
+            ),
         ],
     )
 

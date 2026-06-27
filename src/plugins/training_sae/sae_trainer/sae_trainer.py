@@ -12,6 +12,7 @@ from plugins.plugin_interface import (
     OutputArtifactSpec,
     ParamSpec,
     PluginIOSpec,
+    StaticDropdownHint,
 )
 from utils.cancellation import CancellationToken
 from utils.data_loading.data_loader import DataLoader
@@ -382,6 +383,10 @@ class Plugin(BasePlugin):
         ],
         output_artifacts=[
             OutputArtifactSpec("trained_model", "", "model"),
+        ],
+        param_ui_hints=[
+            StaticDropdownHint("model", choices=["TopKSAE", "BatchTopKSAE", "BasicSAE"]),
+            StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
         ],
     )
 

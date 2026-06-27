@@ -66,6 +66,18 @@ class Plugin(BasePlugin):
                 depends_on_param="embedding_provider",
                 resolver="embedder_models",
             ),
+            StaticDropdownHint(
+                "linkage_method",
+                choices=[
+                    "single",
+                    "complete",
+                    "average",
+                    "weighted",
+                    "centroid",
+                    "median",
+                    "ward",
+                ],
+            ),
         ],
     )
 
