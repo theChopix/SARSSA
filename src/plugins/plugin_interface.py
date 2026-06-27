@@ -305,6 +305,16 @@ class SliderHint(ParamUIHint):
 
 
 @dataclass
+class ToggleHint(ParamUIHint):
+    """Render a boolean parameter as an on/off switch.
+
+    Use for a ``bool`` param so the user picks a definite on/off
+    state directly. Carries no extra config; the param name is
+    enough.
+    """
+
+
+@dataclass
 class PluginIOSpec:
     """Full I/O contract for a plugin.
 

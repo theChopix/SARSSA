@@ -43,6 +43,7 @@ from plugins.plugin_interface import (
     PluginIOSpec,
     SliderHint,
     StaticDropdownHint,
+    ToggleHint,
 )
 
 # ── Helpers for building mock plugin directory trees ──────────────
@@ -885,6 +886,13 @@ class TestResolveWidget:
         assert config.slider_min == 0.0
         assert config.slider_max == 1.0
         assert config.slider_step == 0.01
+
+    def test_toggle_hint_returns_toggle(self) -> None:
+        """Verify ToggleHint produces a toggle widget with no config."""
+        hint = ToggleHint(param_name="normalize")
+        widget, config = _resolve_widget(hint, "training_sae", "sae.sae")
+        assert widget == "toggle"
+        assert config is None
 
     def test_base_hint_returns_text(self) -> None:
         """Verify base ParamUIHint falls back to text widget."""
