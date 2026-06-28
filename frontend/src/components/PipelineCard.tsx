@@ -109,11 +109,11 @@ function ParamSection({
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="border-b border-gray-300 last:border-b-0 py-1">
+    <div className="mb-2 last:mb-0 rounded-md border border-gray-200 bg-white/60 px-3 py-2 shadow-sm">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full flex items-center gap-1 py-1 text-left
+        className="w-full flex items-center gap-1 text-left
                    text-xs font-bold uppercase tracking-wide
                    text-gray-700 hover:text-gray-900 cursor-pointer"
       >
@@ -122,7 +122,7 @@ function ParamSection({
         />
         {title}
       </button>
-      {open && <div className="pl-3">{children}</div>}
+      {open && <div className="pl-3 pt-1">{children}</div>}
     </div>
   );
 }
@@ -158,24 +158,26 @@ function ParamRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      {/* Parameter name + optional description tooltip */}
-      <span className="flex items-center gap-1 min-w-[100px]">
-        <span className="text-sm text-gray-700">{param.name}</span>
+    <div className="flex flex-col gap-1 @xs:flex-row @xs:items-center @xs:gap-3 py-1.5">
+      {/* Name + tooltip + type — a fixed-width column once the card is
+          wide enough (@xs) so inputs align and long names wrap; stacks
+          above the input on narrow cards. */}
+      <span className="flex items-center gap-1.5 @xs:w-52 @xs:shrink-0">
+        <span className="text-sm text-gray-700 break-words min-w-0">
+          {param.name}
+        </span>
         {param.description && (
           <InfoTooltip
             text={param.description}
             ariaLabel="Parameter description"
           />
         )}
+        <span className="text-xs text-gray-400 shrink-0">({param.type})</span>
       </span>
 
-      {/* Type badge */}
-      <span className="text-xs text-gray-400 min-w-[40px]">
-        ({param.type})
-      </span>
-
-      {/* Widget: dropdown, slider, or text input */}
+      {/* Widget — full width when stacked; flex-1 (and able to shrink
+          via min-w-0) once side-by-side so it never overflows. */}
+      <div className="w-full @xs:w-auto @xs:flex-1 min-w-0 flex [&>*]:min-w-0">
       {param.widget === "past_runs_dropdown" && param.widget_config ? (
         <PastRunsDropdownSelect
           param={param}
@@ -235,6 +237,7 @@ function ParamRow({
                      disabled:bg-gray-100"
         />
       )}
+      </div>
     </div>
   );
 }
@@ -920,7 +923,7 @@ export default function PipelineCard({
       }
       context={context}
       allParams={effectiveParams}
-      disabled={card.status === "running"}
+      disabled={busy}
     />
   );
 
@@ -1098,7 +1101,7 @@ export default function PipelineCard({
       {/* ── Parameter form (expandable) ──────────────── */}
       {(isMultiRun || (cardMode === "setup" && card.status !== "done")) &&
         card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
-        <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
+        <div className="@container border border-gray-200 rounded-md p-3 bg-gray-50">
           {selectedImpl.param_groups.length > 0
             ? selectedImpl.param_groups.map((group) => (
                 <ParamSection key={group.title} title={group.title}>

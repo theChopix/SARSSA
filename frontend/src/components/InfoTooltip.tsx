@@ -30,7 +30,7 @@ export default function InfoTooltip({
   const tooltipId = useId();
 
   return (
-    <span className="relative inline-flex group">
+    <span className="relative inline-flex shrink-0 group">
       <button
         type="button"
         aria-label={ariaLabel}
