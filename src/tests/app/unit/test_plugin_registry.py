@@ -13,6 +13,7 @@ import pytest
 
 from app.core.plugin_discovery.naming import make_plugin_display_name
 from app.core.plugin_discovery.plugin_registry import (
+    _build_param_groups,
     _build_ui_hint_map,
     _convert_display_spec,
     _derive_kind,
@@ -38,6 +39,7 @@ from plugins.plugin_interface import (
     DisplayRowSpec,
     DynamicDropdownHint,
     ItemRowsDisplaySpec,
+    ParamGroup,
     ParamUIHint,
     PastRunsDropdownHint,
     PluginIOSpec,
@@ -101,6 +103,7 @@ def _make_mock_plugin(
     plugin_name: str | None = None,
     display: ItemRowsDisplaySpec | ArtifactDisplaySpec | None = None,
     param_ui_hints: list[ParamUIHint] | None = None,
+    param_groups: list[ParamGroup] | None = None,
     description: str | None = None,
 ) -> MagicMock:
     """Create a mock plugin whose run() has the given signature params.
@@ -149,6 +152,7 @@ def _make_mock_plugin(
     mock_plugin.io_spec = PluginIOSpec(
         display=display,
         param_ui_hints=param_ui_hints or [],
+        param_groups=param_groups or [],
     )
     return mock_plugin
 
@@ -1027,3 +1031,52 @@ class TestExtractParametersWithUIHints:
         assert params[0].widget_config is not None
         assert params[0].type == "float"
         assert params[0].description == "Steering strength in [0, 1]"
+
+
+class TestBuildParamGroups:
+    """Tests for _build_param_groups."""
+
+    def _params(self, plugin: MagicMock) -> list[ParameterInfo]:
+        """Extract ParameterInfo for *plugin* via the real extractor."""
+        return _extract_parameters_from_instance(plugin, "cat", "cat.x.x")
+
+    def test_no_declared_groups_returns_empty(self) -> None:
+        """Verify a plugin without param_groups yields a flat (empty) result."""
+        plugin = _make_mock_plugin({"a": (int, 1), "b": (int, 2)})
+        assert _build_param_groups(plugin, self._params(plugin)) == []
+
+    def test_returns_declared_groups_in_order(self) -> None:
+        """Verify declared groups are returned in declaration order."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1), "b": (int, 2), "c": (int, 3)},
+            param_groups=[
+                ParamGroup("Second", ["c"]),
+                ParamGroup("First", ["a", "b"]),
+            ],
+        )
+        groups = _build_param_groups(plugin, self._params(plugin))
+        assert [(g.title, g.params) for g in groups] == [
+            ("Second", ["c"]),
+            ("First", ["a", "b"]),
+        ]
+
+    def test_ungrouped_params_fall_into_other(self) -> None:
+        """Verify params left out of every group land in a trailing 'Other'."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1), "b": (int, 2), "c": (int, 3)},
+            param_groups=[ParamGroup("Main", ["a"])],
+        )
+        groups = _build_param_groups(plugin, self._params(plugin))
+        assert [(g.title, g.params) for g in groups] == [
+            ("Main", ["a"]),
+            ("Other", ["b", "c"]),
+        ]
+
+    def test_unknown_param_name_raises(self) -> None:
+        """Verify a group naming a non-existent param raises ValueError."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1)},
+            param_groups=[ParamGroup("Main", ["a", "ghost"])],
+        )
+        with pytest.raises(ValueError, match="ghost"):
+            _build_param_groups(plugin, self._params(plugin))

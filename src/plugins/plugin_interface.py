@@ -315,6 +315,24 @@ class ToggleHint(ParamUIHint):
 
 
 @dataclass
+class ParamGroup:
+    """Group a plugin's ``run()`` parameters into a labelled section.
+
+    Lets a plugin lay out its parameter form as titled sections
+    instead of one flat list. Parameters not named in any group
+    fall into a default "Other" section.
+
+    Attributes:
+        title: Section heading shown in the UI.
+        params: Names of the ``run()`` parameters in this section,
+            in display order.
+    """
+
+    title: str
+    params: list[str] = field(default_factory=list)
+
+
+@dataclass
 class PluginIOSpec:
     """Full I/O contract for a plugin.
 
@@ -332,6 +350,9 @@ class PluginIOSpec:
         param_ui_hints: Optional list of UI rendering hints for
             ``run()`` parameters.  Each hint declares how a
             parameter should be presented in the frontend.
+        param_groups: Optional labelled sections for the parameter
+            form.  Empty means a flat list; otherwise the frontend
+            renders collapsible sections in this order.
     """
 
     required_steps: list[str] = field(default_factory=list)
@@ -347,6 +368,9 @@ class PluginIOSpec:
     )
     display: DisplaySpec | None = None
     param_ui_hints: list[ParamUIHint] = field(
+        default_factory=list,
+    )
+    param_groups: list[ParamGroup] = field(
         default_factory=list,
     )
 
