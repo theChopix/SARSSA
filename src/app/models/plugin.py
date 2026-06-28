@@ -140,6 +140,20 @@ class ParameterInfo(BaseModel):
     description: str | None = None
 
 
+class ParamGroup(BaseModel):
+    """A labelled section of a plugin's parameter form.
+
+    Attributes:
+        title: Section heading shown in the UI.
+        params: Names of the parameters in this section, in display
+            order. Every name matches an entry in
+            ``ImplementationInfo.params``.
+    """
+
+    title: str
+    params: list[str]
+
+
 class DisplayRowSpec(BaseModel):
     """One row of visual items to render in the frontend.
 
@@ -217,6 +231,9 @@ class ImplementationInfo(BaseModel):
             ``single/`` subfolder of its category, ``"compare"`` if
             under ``compare/``.  ``None`` when the category does not
             opt into the single/compare distinction.
+        param_groups: Labelled sections for the parameter form, in
+            display order.  Empty when the plugin declares no groups;
+            the frontend then renders ``params`` as a flat list.
     """
 
     plugin_name: str
@@ -225,6 +242,7 @@ class ImplementationInfo(BaseModel):
     params: list[ParameterInfo]
     display: ItemRowsDisplayModel | ArtifactDisplayModel | None = None
     kind: Literal["single", "compare"] | None = None
+    param_groups: list[ParamGroup] = []
 
 
 class CategoryRegistryEntry(BaseModel):

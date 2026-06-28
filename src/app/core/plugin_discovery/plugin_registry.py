@@ -19,6 +19,7 @@ from app.models.plugin import (
     ImplementationInfo,
     ItemRowsDisplayModel,
     ParameterInfo,
+    ParamGroup,
     WidgetConfig,
 )
 from app.models.plugin import (
@@ -332,6 +333,52 @@ def _convert_display_spec(
     return None
 
 
+def _build_param_groups(
+    plugin_instance: "BasePlugin",
+    params: list[ParameterInfo],
+) -> list[ParamGroup]:
+    """Build the parameter-form sections for a plugin.
+
+    Returns the plugin's declared ``param_groups`` in order, with any
+    parameters left out of every group appended as a trailing "Other"
+    section.  Empty when the plugin declares no groups (the frontend
+    then renders a flat list).
+
+    Args:
+        plugin_instance: An instantiated plugin object.
+        params: The plugin's extracted parameters, in signature order.
+
+    Returns:
+        list[ParamGroup]: Ordered sections covering every parameter.
+
+    Raises:
+        ValueError: If a group names a parameter the plugin's
+            ``run()`` does not declare.
+    """
+    declared = plugin_instance.io_spec.param_groups
+    if not declared:
+        return []
+
+    param_names = [p.name for p in params]
+    grouped: set[str] = set()
+    groups: list[ParamGroup] = []
+    for group in declared:
+        for name in group.params:
+            if name not in param_names:
+                raise ValueError(
+                    f"Param group '{group.title}' names unknown parameter "
+                    f"'{name}'; declared run() params: {param_names}"
+                )
+            grouped.add(name)
+        groups.append(ParamGroup(title=group.title, params=list(group.params)))
+
+    leftovers = [name for name in param_names if name not in grouped]
+    if leftovers:
+        groups.append(ParamGroup(title="Other", params=leftovers))
+
+    return groups
+
+
 def _discover_implementations(
     category_name: str,
 ) -> list[ImplementationInfo]:
@@ -363,6 +410,7 @@ def _discover_implementations(
         description = getattr(plugin_instance, "description", None)
         display = _convert_display_spec(plugin_instance.io_spec.display)
         kind = _derive_kind(module_path, category_name)
+        param_groups = _build_param_groups(plugin_instance, params)
         implementations.append(
             ImplementationInfo(
                 plugin_name=module_path,
@@ -371,6 +419,7 @@ def _discover_implementations(
                 params=params,
                 display=display,
                 kind=kind,
+                param_groups=param_groups,
             )
         )
 
