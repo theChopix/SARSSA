@@ -172,6 +172,21 @@ export interface ArtifactDisplaySpec {
  */
 export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
 
+// ── Parameter group (form section) ──────────────────────
+
+/**
+ * A labelled section of a plugin's parameter form.
+ *
+ * - `title`  – Section heading shown in the UI.
+ * - `params` – Names of the parameters in this section, in display
+ *              order. Each matches a `ParameterInfo.name` in the
+ *              implementation's `params`.
+ */
+export interface ParamGroup {
+  title: string;
+  params: string[];
+}
+
 // ── Single plugin implementation ────────────────────────
 
 /**
@@ -192,6 +207,9 @@ export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
  * - `kind`         – Plugin variant ("single" / "compare") derived from
  *                    the folder layout, or `null` when the category does
  *                    not opt into the single/compare distinction.
+ * - `param_groups` – Labelled sections for the parameter form, in order.
+ *                    Empty when the plugin declares no groups; render
+ *                    `params` as a flat list then.
  */
 export interface ImplementationInfo {
   plugin_name: string;
@@ -200,6 +218,7 @@ export interface ImplementationInfo {
   params: ParameterInfo[];
   display: DisplaySpec | null;
   kind: "single" | "compare" | null;
+  param_groups: ParamGroup[];
 }
 
 // ── Full category entry in the registry ─────────────────
