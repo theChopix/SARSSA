@@ -42,7 +42,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Settings, CheckCircle2, Loader2, AlertCircle, Eye } from "lucide-react";
+import { Settings, CheckCircle2, Loader2, AlertCircle, Eye, ChevronDown } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
@@ -91,6 +91,40 @@ function StatusIcon({ status }: { status: CardStatus }) {
     default:
       return null;
   }
+}
+
+// ── Parameter form section (collapsible group) ──────────
+
+/**
+ * A labelled, collapsible section wrapping a group of parameter
+ * rows.  Expanded by default; the header toggles it.
+ */
+function ParamSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="border-b border-gray-300 last:border-b-0 py-1">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full flex items-center gap-1 py-1 text-left
+                   text-xs font-bold uppercase tracking-wide
+                   text-gray-700 hover:text-gray-900 cursor-pointer"
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
+        />
+        {title}
+      </button>
+      {open && <div className="pl-3">{children}</div>}
+    </div>
+  );
 }
 
 // ── Parameter form row ──────────────────────────────────
@@ -864,6 +898,32 @@ export default function PipelineCard({
     }
   }
 
+  // Lookup so a group can resolve its param names to ParameterInfo.
+  const paramByName: Record<string, ParameterInfo> = {};
+  for (const p of selectedImpl?.params ?? []) paramByName[p.name] = p;
+
+  // Render one parameter row.  Shared by the flat list and the
+  // grouped (collapsible-section) layouts.
+  const renderRow = (param: ParameterInfo) => (
+    <ParamRow
+      key={param.name}
+      param={param}
+      value={
+        card.params[param.name] ??
+        (param.default != null ? String(param.default) : "")
+      }
+      onChange={(val) => setParam(categoryKey, param.name, val)}
+      onLabelChange={
+        param.widget === "dropdown"
+          ? (label) => setParam(categoryKey, `${param.name}_label`, label)
+          : undefined
+      }
+      context={context}
+      allParams={effectiveParams}
+      disabled={card.status === "running"}
+    />
+  );
+
   // Is this a multi_run card?
   const isMultiRun = category_info.type === "multi_run";
 
@@ -1039,25 +1099,16 @@ export default function PipelineCard({
       {(isMultiRun || (cardMode === "setup" && card.status !== "done")) &&
         card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
         <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
-          {selectedImpl.params.map((param) => (
-            <ParamRow
-              key={param.name}
-              param={param}
-              value={
-                card.params[param.name] ??
-                (param.default != null ? String(param.default) : "")
-              }
-              onChange={(val) => setParam(categoryKey, param.name, val)}
-              onLabelChange={
-                param.widget === "dropdown"
-                  ? (label) => setParam(categoryKey, `${param.name}_label`, label)
-                  : undefined
-              }
-              context={context}
-              allParams={effectiveParams}
-              disabled={card.status === "running"}
-            />
-          ))}
+          {selectedImpl.param_groups.length > 0
+            ? selectedImpl.param_groups.map((group) => (
+                <ParamSection key={group.title} title={group.title}>
+                  {group.params
+                    .map((name) => paramByName[name])
+                    .filter(Boolean)
+                    .map((param) => renderRow(param))}
+                </ParamSection>
+              ))
+            : selectedImpl.params.map((param) => renderRow(param))}
         </div>
       )}
 
