@@ -456,7 +456,7 @@ class Plugin(BasePlugin):
             "User embeddings per gradient update. Larger batches are faster "
             "per epoch and give more stable sparsity statistics but use "
             "more memory. Default 1024.",
-        ] = 1024,
+        ] = 512,
         embedding_dim: Annotated[
             int,
             "Width of the SAE's sparse hidden layer (the dictionary size). "

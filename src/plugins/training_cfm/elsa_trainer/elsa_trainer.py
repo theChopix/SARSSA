@@ -274,7 +274,7 @@ class Plugin(BasePlugin):
             "Users per gradient update. Larger batches are faster per epoch "
             "with smoother gradients but use more memory and may need a "
             "higher learning rate. Default 1024.",
-        ] = 1024,
+        ] = 512,
         factors: Annotated[
             int,
             "Dimensionality of the latent user/item embedding. Higher adds "
