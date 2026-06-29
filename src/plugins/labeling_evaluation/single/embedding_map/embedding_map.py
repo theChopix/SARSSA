@@ -13,6 +13,7 @@ from plugins.plugin_interface import (
     DependentDropdownHint,
     OutputArtifactSpec,
     OutputParamSpec,
+    ParamGroup,
     PluginIOSpec,
     StaticDropdownHint,
 )
@@ -71,6 +72,14 @@ class Plugin(BasePlugin):
                 "umap_metric",
                 choices=["cosine", "euclidean", "manhattan", "correlation", "chebyshev"],
             ),
+        ],
+        param_groups=[
+            ParamGroup("Embedding", ["embedding_provider", "embedding_model"]),
+            ParamGroup(
+                "UMAP",
+                ["umap_n_neighbors", "umap_min_dist", "umap_metric", "umap_random_state"],
+            ),
+            ParamGroup("Visualization", ["point_size"]),
         ],
     )
 

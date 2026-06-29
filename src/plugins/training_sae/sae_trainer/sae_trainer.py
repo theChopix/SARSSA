@@ -10,6 +10,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     OutputArtifactSpec,
+    ParamGroup,
     ParamSpec,
     PluginIOSpec,
     StaticDropdownHint,
@@ -390,6 +391,25 @@ class Plugin(BasePlugin):
             StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
             ToggleHint("sample_users"),
             ToggleHint("normalize"),
+        ],
+        param_groups=[
+            ParamGroup("SAE architecture", ["model", "embedding_dim", "top_k", "normalize"]),
+            ParamGroup(
+                "Training loop",
+                ["epochs", "early_stop", "batch_size", "sample_users", "seed"],
+            ),
+            ParamGroup("Sparsity", ["l1_coef", "target_ratio", "topk_aux"]),
+            ParamGroup("Optimizer", ["lr", "beta1", "beta2"]),
+            ParamGroup(
+                "Reconstruction & evaluation",
+                [
+                    "reconstruction_loss",
+                    "auxiliary_coef",
+                    "contrastive_coef",
+                    "evaluate_every",
+                    "n_batches_to_dead",
+                ],
+            ),
         ],
     )
 

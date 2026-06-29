@@ -10,6 +10,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     OutputArtifactSpec,
+    ParamGroup,
     ParamSpec,
     PluginIOSpec,
 )
@@ -252,6 +253,11 @@ class Plugin(BasePlugin):
         ],
         output_artifacts=[
             OutputArtifactSpec("trained_model", "", "model"),
+        ],
+        param_groups=[
+            ParamGroup("Training loop", ["epochs", "batch_size", "early_stop", "factors", "seed"]),
+            ParamGroup("Optimizer", ["lr", "beta1", "beta2"]),
+            ParamGroup("Evaluation", ["target_ratio"]),
         ],
     )
 

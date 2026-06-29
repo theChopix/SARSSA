@@ -29,6 +29,7 @@ from plugins.plugin_interface import (
     DependentDropdownHint,
     OutputArtifactSpec,
     OutputParamSpec,
+    ParamGroup,
     PluginIOSpec,
     StaticDropdownHint,
 )
@@ -101,6 +102,10 @@ class Plugin(BaseComparePlugin):
                 depends_on_param="embedding_provider",
                 resolver="embedder_models",
             ),
+        ],
+        param_groups=[
+            ParamGroup("Comparison", ["past_run_id"]),
+            ParamGroup("Embedding", ["embedding_provider", "embedding_model"]),
         ],
     )
 

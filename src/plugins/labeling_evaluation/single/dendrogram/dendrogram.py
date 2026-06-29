@@ -15,6 +15,7 @@ from plugins.plugin_interface import (
     DependentDropdownHint,
     OutputArtifactSpec,
     OutputParamSpec,
+    ParamGroup,
     PluginIOSpec,
     StaticDropdownHint,
 )
@@ -77,6 +78,14 @@ class Plugin(BasePlugin):
                     "median",
                     "ward",
                 ],
+            ),
+        ],
+        param_groups=[
+            ParamGroup("Embedding", ["embedding_provider", "embedding_model"]),
+            ParamGroup("Clustering", ["linkage_method"]),
+            ParamGroup(
+                "Visualization",
+                ["figure_width", "base_height", "label_font_size"],
             ),
         ],
     )

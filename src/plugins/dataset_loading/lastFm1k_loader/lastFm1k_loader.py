@@ -7,6 +7,7 @@ from plugins.plugin_interface import (
     BasePlugin,
     OutputArtifactSpec,
     OutputParamSpec,
+    ParamGroup,
     PluginIOSpec,
 )
 from utils.plugin_logger import get_logger
@@ -98,6 +99,9 @@ class Plugin(BasePlugin):
             OutputParamSpec("num_valid_users", "num_valid_users"),
             OutputParamSpec("num_test_users", "num_test_users"),
             OutputParamSpec("has_tags", "has_tags"),
+        ],
+        param_groups=[
+            ParamGroup("Data split", ["val_ratio", "test_ratio", "seed"]),
         ],
     )
 
