@@ -41,7 +41,7 @@
  *   └─────────────────────────────────────┘
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle, Eye, ChevronDown } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
@@ -181,7 +181,7 @@ function ParamRow({
           wide enough (@xs) so inputs align and long names wrap; stacks
           above the input on narrow cards. Kept compact so nested
           sections still leave room for the input. */}
-      <span className="flex items-center gap-1.5 @xs:w-44 @xs:shrink-0">
+      <span className="flex items-center gap-1.5 @xs:w-48 @xs:shrink-0">
         <span className="text-sm text-gray-700 break-words min-w-0">
           {param.name}
         </span>
@@ -1108,34 +1108,39 @@ export default function PipelineCard({
       )}
 
       {/* ── Plugin list ("Set up new" mode or multi_run) ── */}
+      {/* The parameter form renders inline, directly under the selected
+          plugin's row, instead of after the whole list. */}
       {(isMultiRun || (cardMode === "setup" && card.status !== "done")) && (
         <div className="flex flex-col gap-0.5">
           {visibleImplementations.map((impl) => (
-            <PluginRow
-              key={impl.plugin_name}
-              impl={impl}
-              isSelected={card.selectedPlugin === impl.plugin_name}
-              onSelect={() => selectPlugin(categoryKey, impl.plugin_name)}
-              onToggleConfig={() => {
-                // Select the plugin first if not already selected.
-                if (card.selectedPlugin !== impl.plugin_name) {
-                  selectPlugin(categoryKey, impl.plugin_name);
-                }
-                toggleConfig(categoryKey);
-              }}
-              disabled={busy}
-            />
+            <Fragment key={impl.plugin_name}>
+              <PluginRow
+                impl={impl}
+                isSelected={card.selectedPlugin === impl.plugin_name}
+                onSelect={() => selectPlugin(categoryKey, impl.plugin_name)}
+                onToggleConfig={() => {
+                  // Select the plugin first if not already selected.
+                  if (card.selectedPlugin !== impl.plugin_name) {
+                    selectPlugin(categoryKey, impl.plugin_name);
+                  }
+                  toggleConfig(categoryKey);
+                }}
+                disabled={busy}
+              />
+              {card.configOpen &&
+                card.selectedPlugin === impl.plugin_name &&
+                selectedImpl &&
+                selectedImpl.params.length > 0 && (
+                  <div className="@container border border-gray-200 rounded-md p-3 my-1 bg-gray-50">
+                    {selectedImpl.param_groups.length > 0
+                      ? selectedImpl.param_groups.map((group) =>
+                          renderGroup(group, 0),
+                        )
+                      : selectedImpl.params.map((param) => renderRow(param))}
+                  </div>
+                )}
+            </Fragment>
           ))}
-        </div>
-      )}
-
-      {/* ── Parameter form (expandable) ──────────────── */}
-      {(isMultiRun || (cardMode === "setup" && card.status !== "done")) &&
-        card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
-        <div className="@container border border-gray-200 rounded-md p-3 bg-gray-50">
-          {selectedImpl.param_groups.length > 0
-            ? selectedImpl.param_groups.map((group) => renderGroup(group, 0))
-            : selectedImpl.params.map((param) => renderRow(param))}
         </div>
       )}
 
