@@ -1080,3 +1080,63 @@ class TestBuildParamGroups:
         )
         with pytest.raises(ValueError, match="ghost"):
             _build_param_groups(plugin, self._params(plugin))
+
+    def test_nested_subgroups_preserved(self) -> None:
+        """Verify subgroups are converted recursively, nesting intact."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1), "b": (int, 2), "c": (int, 3)},
+            param_groups=[
+                ParamGroup(
+                    "Loss",
+                    ["a"],
+                    subgroups=[
+                        ParamGroup("Dead", ["b"]),
+                        ParamGroup("Contrastive", ["c"]),
+                    ],
+                ),
+            ],
+        )
+        groups = _build_param_groups(plugin, self._params(plugin))
+        assert len(groups) == 1
+        loss = groups[0]
+        assert (loss.title, loss.params) == ("Loss", ["a"])
+        assert [(s.title, s.params) for s in loss.subgroups] == [
+            ("Dead", ["b"]),
+            ("Contrastive", ["c"]),
+        ]
+
+    def test_subgroup_params_count_toward_other(self) -> None:
+        """Verify params claimed only in subgroups don't leak into 'Other'."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1), "b": (int, 2), "c": (int, 3)},
+            param_groups=[
+                ParamGroup("Loss", [], subgroups=[ParamGroup("Dead", ["b"])]),
+            ],
+        )
+        groups = _build_param_groups(plugin, self._params(plugin))
+        assert [(g.title, g.params) for g in groups] == [
+            ("Loss", []),
+            ("Other", ["a", "c"]),
+        ]
+
+    def test_unknown_param_name_in_subgroup_raises(self) -> None:
+        """Verify an unknown param named in a subgroup raises ValueError."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1)},
+            param_groups=[
+                ParamGroup("Main", ["a"], subgroups=[ParamGroup("Sub", ["ghost"])]),
+            ],
+        )
+        with pytest.raises(ValueError, match="ghost"):
+            _build_param_groups(plugin, self._params(plugin))
+
+    def test_param_reused_across_subgroup_raises(self) -> None:
+        """Verify a param claimed by two (sub)groups raises ValueError."""
+        plugin = _make_mock_plugin(
+            {"a": (int, 1)},
+            param_groups=[
+                ParamGroup("Main", ["a"], subgroups=[ParamGroup("Sub", ["a"])]),
+            ],
+        )
+        with pytest.raises(ValueError, match="re-uses parameter 'a'"):
+            _build_param_groups(plugin, self._params(plugin))

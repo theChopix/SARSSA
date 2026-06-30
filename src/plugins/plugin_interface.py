@@ -320,16 +320,23 @@ class ParamGroup:
 
     Lets a plugin lay out its parameter form as titled sections
     instead of one flat list. Parameters not named in any group
-    fall into a default "Other" section.
+    (at any nesting level) fall into a default "Other" section.
+
+    Groups nest: a group may carry both its own ``params`` and
+    ``subgroups``, which the frontend renders as sections within
+    the section.
 
     Attributes:
         title: Section heading shown in the UI.
         params: Names of the ``run()`` parameters in this section,
-            in display order.
+            in display order. Rendered before any subgroups.
+        subgroups: Nested sections rendered after this section's
+            own ``params``. Each is a full ``ParamGroup``.
     """
 
     title: str
     params: list[str] = field(default_factory=list)
+    subgroups: list["ParamGroup"] = field(default_factory=list)
 
 
 @dataclass

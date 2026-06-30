@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         DisplaySpec,
         ParamUIHint,
     )
+    from plugins.plugin_interface import ParamGroup as AuthoringParamGroup
 
 PLUGINS_DIR = Path(__file__).resolve().parents[2].parent / "plugins"
 
@@ -333,16 +334,61 @@ def _convert_display_spec(
     return None
 
 
+def _convert_param_group(
+    group: "AuthoringParamGroup",
+    param_names: list[str],
+    grouped: set[str],
+) -> ParamGroup:
+    """Validate and convert one authoring ``ParamGroup`` to its API model.
+
+    Recurses into ``subgroups``.  Records every claimed parameter in
+    ``grouped`` so the caller can detect leftovers, and enforces that a
+    parameter is claimed by at most one (sub)group across the whole tree.
+
+    Args:
+        group: A plugin's declared ``ParamGroup`` (authoring dataclass).
+        param_names: All parameter names the plugin's ``run()`` declares.
+        grouped: Mutable set of parameter names already claimed; updated
+            in place as this group and its subgroups are walked.
+
+    Returns:
+        ParamGroup: The API-model section, with nested subgroups.
+
+    Raises:
+        ValueError: If the group names an unknown parameter, or re-uses
+            a parameter already claimed by another (sub)group.
+    """
+    for name in group.params:
+        if name not in param_names:
+            raise ValueError(
+                f"Param group '{group.title}' names unknown parameter "
+                f"'{name}'; declared run() params: {param_names}"
+            )
+        if name in grouped:
+            raise ValueError(
+                f"Param group '{group.title}' re-uses parameter '{name}'; "
+                "each parameter may belong to only one group."
+            )
+        grouped.add(name)
+
+    return ParamGroup(
+        title=group.title,
+        params=list(group.params),
+        subgroups=[_convert_param_group(sub, param_names, grouped) for sub in group.subgroups],
+    )
+
+
 def _build_param_groups(
     plugin_instance: "BasePlugin",
     params: list[ParameterInfo],
 ) -> list[ParamGroup]:
     """Build the parameter-form sections for a plugin.
 
-    Returns the plugin's declared ``param_groups`` in order, with any
-    parameters left out of every group appended as a trailing "Other"
-    section.  Empty when the plugin declares no groups (the frontend
-    then renders a flat list).
+    Returns the plugin's declared ``param_groups`` in order — nesting
+    preserved — with any parameters left out of every group (at any
+    level) appended as a trailing top-level "Other" section.  Empty
+    when the plugin declares no groups (the frontend then renders a
+    flat list).
 
     Args:
         plugin_instance: An instantiated plugin object.
@@ -352,8 +398,8 @@ def _build_param_groups(
         list[ParamGroup]: Ordered sections covering every parameter.
 
     Raises:
-        ValueError: If a group names a parameter the plugin's
-            ``run()`` does not declare.
+        ValueError: If a group names a parameter the plugin's ``run()``
+            does not declare, or re-uses one across (sub)groups.
     """
     declared = plugin_instance.io_spec.param_groups
     if not declared:
@@ -361,16 +407,7 @@ def _build_param_groups(
 
     param_names = [p.name for p in params]
     grouped: set[str] = set()
-    groups: list[ParamGroup] = []
-    for group in declared:
-        for name in group.params:
-            if name not in param_names:
-                raise ValueError(
-                    f"Param group '{group.title}' names unknown parameter "
-                    f"'{name}'; declared run() params: {param_names}"
-                )
-            grouped.add(name)
-        groups.append(ParamGroup(title=group.title, params=list(group.params)))
+    groups = [_convert_param_group(g, param_names, grouped) for g in declared]
 
     leftovers = [name for name in param_names if name not in grouped]
     if leftovers:
