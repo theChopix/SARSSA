@@ -393,23 +393,26 @@ class Plugin(BasePlugin):
             ToggleHint("normalize"),
         ],
         param_groups=[
-            ParamGroup("SAE architecture", ["model", "embedding_dim", "top_k", "normalize"]),
+            ParamGroup("Architecture", ["model", "embedding_dim", "top_k", "normalize"]),
             ParamGroup(
-                "Training loop",
-                ["epochs", "early_stop", "batch_size", "sample_users", "seed"],
-            ),
-            ParamGroup("Sparsity", ["l1_coef", "target_ratio", "topk_aux"]),
-            ParamGroup("Optimizer", ["lr", "beta1", "beta2"]),
-            ParamGroup(
-                "Reconstruction & evaluation",
-                [
-                    "reconstruction_loss",
-                    "auxiliary_coef",
-                    "contrastive_coef",
-                    "evaluate_every",
-                    "n_batches_to_dead",
+                "Training Loop",
+                ["epochs", "batch_size", "early_stop", "sample_users", "seed"],
+                subgroups=[
+                    ParamGroup(
+                        "Loss",
+                        ["reconstruction_loss", "l1_coef"],
+                        subgroups=[
+                            ParamGroup(
+                                "Dead Neurons Auxiliary",
+                                ["auxiliary_coef", "topk_aux", "n_batches_to_dead"],
+                            ),
+                            ParamGroup("Contrastive", ["contrastive_coef"]),
+                        ],
+                    ),
                 ],
             ),
+            ParamGroup("Optimizer", ["lr", "beta1", "beta2"]),
+            ParamGroup("Evaluation", ["evaluate_every", "target_ratio"]),
         ],
     )
 
