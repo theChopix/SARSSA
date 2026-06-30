@@ -177,14 +177,17 @@ export type DisplaySpec = ItemRowsDisplaySpec | ArtifactDisplaySpec;
 /**
  * A labelled section of a plugin's parameter form.
  *
- * - `title`  – Section heading shown in the UI.
- * - `params` – Names of the parameters in this section, in display
- *              order. Each matches a `ParameterInfo.name` in the
- *              implementation's `params`.
+ * - `title`     – Section heading shown in the UI.
+ * - `params`    – Names of the parameters in this section, in display
+ *                 order. Each matches a `ParameterInfo.name` in the
+ *                 implementation's `params`. Rendered before subgroups.
+ * - `subgroups` – Nested sections rendered within this one, after its
+ *                 own `params`. Empty when the section has no children.
  */
 export interface ParamGroup {
   title: string;
   params: string[];
+  subgroups: ParamGroup[];
 }
 
 // ── Single plugin implementation ────────────────────────

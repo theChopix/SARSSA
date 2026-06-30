@@ -48,7 +48,11 @@ import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
 import { fetchEligiblePipelineRuns } from "../api/pipelines";
 import type { ParamChoice } from "../api/plugins";
-import type { ImplementationInfo, ParameterInfo } from "../types/plugin";
+import type {
+  ImplementationInfo,
+  ParameterInfo,
+  ParamGroup,
+} from "../types/plugin";
 import type { MlflowInfo, PipelineContext, PipelineRun } from "../types/pipeline";
 import type { CardStatus, CardMode } from "../store/pipelineStore";
 import InfoTooltip from "./InfoTooltip";
@@ -101,21 +105,35 @@ function StatusIcon({ status }: { status: CardStatus }) {
  */
 function ParamSection({
   title,
+  depth = 0,
   children,
 }: {
   title: string;
+  depth?: number;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const nested = depth > 0;
+  // Top-level sections start expanded; nested subgroups start collapsed
+  // so a deeply grouped form opens compact.
+  const [open, setOpen] = useState(!nested);
+  // Alternate the section background with depth so each nesting level
+  // contrasts with its parent: even levels match the form-card tint,
+  // odd levels match the outer container.
+  const bg = depth % 2 === 0 ? "bg-white/60" : "bg-gray-50";
 
   return (
-    <div className="mb-2 last:mb-0 rounded-md border border-gray-200 bg-white/60 px-3 py-2 shadow-sm">
+    <div
+      className={`mb-2 last:mb-0 rounded-md border border-gray-200 px-3 py-2 ${bg} ${
+        nested ? "" : "shadow-sm"
+      }`}
+    >
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full flex items-center gap-1 text-left
-                   text-xs font-bold uppercase tracking-wide
-                   text-gray-700 hover:text-gray-900 cursor-pointer"
+        className={`w-full flex items-center gap-1 text-left uppercase
+                    tracking-wide text-gray-700 hover:text-gray-900 cursor-pointer ${
+                      nested ? "text-[11px] font-semibold" : "text-xs font-bold"
+                    }`}
       >
         <ChevronDown
           className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
@@ -158,11 +176,12 @@ function ParamRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1 @xs:flex-row @xs:items-center @xs:gap-3 py-1.5">
+    <div className="flex flex-col gap-1 @xs:flex-row @xs:items-center @xs:gap-2 py-1.5">
       {/* Name + tooltip + type — a fixed-width column once the card is
           wide enough (@xs) so inputs align and long names wrap; stacks
-          above the input on narrow cards. */}
-      <span className="flex items-center gap-1.5 @xs:w-52 @xs:shrink-0">
+          above the input on narrow cards. Kept compact so nested
+          sections still leave room for the input. */}
+      <span className="flex items-center gap-1.5 @xs:w-44 @xs:shrink-0">
         <span className="text-sm text-gray-700 break-words min-w-0">
           {param.name}
         </span>
@@ -927,6 +946,18 @@ export default function PipelineCard({
     />
   );
 
+  // Render one section and its nested subgroups recursively: the
+  // section's own param rows first, then each subgroup one level deeper.
+  const renderGroup = (group: ParamGroup, depth: number) => (
+    <ParamSection key={group.title} title={group.title} depth={depth}>
+      {group.params
+        .map((name) => paramByName[name])
+        .filter(Boolean)
+        .map((param) => renderRow(param))}
+      {group.subgroups.map((sub) => renderGroup(sub, depth + 1))}
+    </ParamSection>
+  );
+
   // Is this a multi_run card?
   const isMultiRun = category_info.type === "multi_run";
 
@@ -1103,14 +1134,7 @@ export default function PipelineCard({
         card.configOpen && selectedImpl && selectedImpl.params.length > 0 && (
         <div className="@container border border-gray-200 rounded-md p-3 bg-gray-50">
           {selectedImpl.param_groups.length > 0
-            ? selectedImpl.param_groups.map((group) => (
-                <ParamSection key={group.title} title={group.title}>
-                  {group.params
-                    .map((name) => paramByName[name])
-                    .filter(Boolean)
-                    .map((param) => renderRow(param))}
-                </ParamSection>
-              ))
+            ? selectedImpl.param_groups.map((group) => renderGroup(group, 0))
             : selectedImpl.params.map((param) => renderRow(param))}
         </div>
       )}
