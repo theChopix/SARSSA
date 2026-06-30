@@ -143,15 +143,21 @@ class ParameterInfo(BaseModel):
 class ParamGroup(BaseModel):
     """A labelled section of a plugin's parameter form.
 
+    Sections nest: a group may carry both its own ``params`` and
+    ``subgroups`` rendered within it.
+
     Attributes:
         title: Section heading shown in the UI.
         params: Names of the parameters in this section, in display
             order. Every name matches an entry in
-            ``ImplementationInfo.params``.
+            ``ImplementationInfo.params``. Rendered before subgroups.
+        subgroups: Nested sections rendered after this section's own
+            ``params``.
     """
 
     title: str
     params: list[str]
+    subgroups: list["ParamGroup"] = []
 
 
 class DisplayRowSpec(BaseModel):
