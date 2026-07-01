@@ -350,6 +350,33 @@ function cardsFromSteps(
 }
 
 /**
+ * Overlay pre-loaded upstream steps onto a rebuilt card layout. Each
+ * category present in a task's initial context (steps that were "loaded
+ * from a previous run" and so are absent from steps_requested) is marked
+ * as a completed "load"-mode card carrying its step run id — mirroring
+ * {@link loadFromPreviousRun}. Used when adopting a running task started
+ * on top of such a selection, so its upstream cards show up as done too.
+ */
+function markLoadedContext(
+  base: Record<string, CardState>,
+  initialContext: PipelineContext | undefined
+): Record<string, CardState> {
+  if (!initialContext) return base;
+  const cards = { ...base };
+  for (const [category, data] of Object.entries(initialContext)) {
+    if (cards[category]) {
+      cards[category] = {
+        ...cards[category],
+        status: "done",
+        stepRunId: data.run_id,
+        mode: "load",
+      };
+    }
+  }
+  return cards;
+}
+
+/**
  * Reset to a clean idle state after polling a tracked run failed — the
  * task was evicted/404'd or the request errored. Shared by the
  * refresh-resume and load-task flows.
@@ -851,18 +878,23 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     }
 
     // Prefer the exact session snapshot (full card fidelity); otherwise
-    // rebuild the layout from the task's requested steps.
+    // rebuild the layout from the task's requested steps plus any upstream
+    // steps it was loaded on top of, so cards that came from a previous run
+    // are restored as done too (steps_requested holds only the new steps).
     const snapshot = loadRunSnapshot(summary.task_id);
     set({
       cards: snapshot
         ? { ...get().cards, ...snapshot.cards }
-        : cardsFromSteps(get().cards, summary.steps_requested),
+        : markLoadedContext(
+            cardsFromSteps(get().cards, summary.steps_requested),
+            summary.initial_context
+          ),
       pipelineRunning: true,
       currentTaskId: summary.task_id,
       currentRunId: summary.run_id,
       currentStepIndex: snapshot?.currentStepIndex ?? summary.current_step_index,
       totalSteps: snapshot?.totalSteps ?? summary.total_steps,
-      context: null,
+      context: snapshot ? null : summary.initial_context,
       errorMessage: null,
     });
 

@@ -108,7 +108,9 @@ class TaskSummary(BaseModel):
     """Compact view of an active task, returned by ``GET /tasks``.
 
     Carries enough to render a progress row and to rebuild the pipeline
-    layout when the task is loaded — hence ``steps_requested``.
+    layout when the task is loaded — hence ``steps_requested`` (the
+    newly-run steps) plus ``initial_context`` (the upstream steps that
+    were loaded from a previous run and are not in ``steps_requested``).
     """
 
     task_id: str
@@ -119,3 +121,4 @@ class TaskSummary(BaseModel):
     current_step_index: int = 0
     total_steps: int = 0
     steps_requested: list[dict[str, Any]] = []
+    initial_context: dict[str, Any] = {}

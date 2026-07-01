@@ -122,6 +122,7 @@ def task_to_summary(task: TaskState) -> TaskSummary:
         current_step_index=task.current_step_index,
         total_steps=len(task.steps_requested),
         steps_requested=task.steps_requested,
+        initial_context=task.initial_context,
     )
 
 

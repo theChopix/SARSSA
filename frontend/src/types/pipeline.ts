@@ -86,7 +86,10 @@ export interface TaskStatusResponse {
  *
  * Mirrors the backend `TaskSummary` model and powers the header
  * "running tasks" menu. `steps_requested` lets the frontend rebuild a
- * run's card layout when loading a task it did not start itself.
+ * run's card layout when loading a task it did not start itself;
+ * `initial_context` carries the upstream steps that were loaded from a
+ * previous run (and so are absent from `steps_requested`), letting a new
+ * tab restore those cards as completed too.
  */
 export interface TaskSummary {
   task_id: string;
@@ -97,6 +100,7 @@ export interface TaskSummary {
   current_step_index: number;
   total_steps: number;
   steps_requested: StepDefinition[];
+  initial_context: PipelineContext;
 }
 
 // ── Execute-step response ───────────────────────────────

@@ -331,7 +331,8 @@ class TestTaskToSummary:
             {"plugin": "a.b.c", "params": {"x": 1}},
             {"plugin": "d.e.f", "params": {}},
         ]
-        task = create_task(steps, pipeline_name="Baseline")
+        initial_context = {"dataset_loading": {"run_id": "upstream1"}}
+        task = create_task(steps, initial_context=initial_context, pipeline_name="Baseline")
         task.run_id = "run1"
         task.current_step = "a"
         task.current_step_index = 1
@@ -346,6 +347,7 @@ class TestTaskToSummary:
         assert summary.current_step_index == 1
         assert summary.total_steps == 2
         assert summary.steps_requested == steps
+        assert summary.initial_context == initial_context
 
 
 class TestTaskStateMessages:
