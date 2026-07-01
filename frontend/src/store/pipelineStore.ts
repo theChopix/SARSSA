@@ -418,12 +418,13 @@ function pollTaskUntilDone(
       try {
         const status = await getTaskStatus(taskId);
 
-        // Update run ID as soon as it's available.
-        if (status.run_id && !get().currentRunId) {
+        // Track the run id and load past runs until this run is in the list,
+        // so completed-step cards show its friendly name, not the raw id.
+        if (status.run_id) {
           set({ currentRunId: status.run_id });
-          get().loadPastRuns();
-        } else if (status.run_id) {
-          set({ currentRunId: status.run_id });
+          if (!get().pastRuns.some((r) => r.run_id === status.run_id)) {
+            get().loadPastRuns();
+          }
         }
 
         // Update progress counters.
