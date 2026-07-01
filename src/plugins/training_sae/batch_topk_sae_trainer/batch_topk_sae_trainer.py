@@ -22,8 +22,8 @@ from utils.plugin_logger import get_logger
 from utils.plugin_notifier import PluginNotifier
 from utils.torch.evaluation import evaluate_sparse_encoder
 from utils.torch.models.base_model import BaseModel
-from utils.torch.models.model_registry import get_sae_model_class
 from utils.torch.models.sae_model import SAE
+from utils.torch.models.sae_model.batch_topk_sae import BatchTopKSAE
 from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
@@ -50,10 +50,10 @@ def train(
 ):
     """Train a Sparse Autoencoder (SAE) model with early stopping and MLflow tracking.
 
-    The training process learns sparse representations of dense base model embeddings while
-    maintaining recommendation quality. Supports multiple training modes (from interactions
-    or pre-computed embeddings) and advanced techniques like contrastive learning and
-    auxiliary loss for dead neuron reactivation.
+    The training process learns sparse representations of dense base model embeddings
+    while maintaining recommendation quality. Supports multiple training modes (from
+    interactions or pre-computed embeddings) and advanced techniques like contrastive
+    learning and auxiliary loss for dead neuron reactivation.
 
     Args:
         model: SAE model to train (BasicSAE, TopKSAE, or BatchTopKSAE).
@@ -63,136 +63,187 @@ def train(
         valid_csr: Validation data as sparse CSR matrix.
         test_csr: Test data as sparse CSR matrix.
         device: Device to train on (cuda/mps/cpu).
-        dataset: Dataset name for logging.
         epochs: Maximum number of training epochs.
         batch_size: Batch size for training.
-        early_stop: Number of epochs without improvement before stopping (0 to disable).
+        early_stop: Number of evaluations without improvement before stopping (0 disables).
         evaluate_every: Evaluate every N epochs.
-        model_name: Name of SAE variant (BasicSAE/TopKSAE/BatchTopKSAE).
-        embedding_dim: Dimension of sparse embeddings.
-        top_k: Number of active features (for TopKSAE/BatchTopKSAE).
         contrastive_coef: Coefficient for contrastive loss.
         sample_users: Whether to randomly sample user interactions during training.
         target_ratio: Fraction of interactions to use as targets for evaluation.
         seed: Random seed for reproducibility.
+
+    Returns:
+        The trained (best, if early stopping is enabled) SAE model.
     """
 
-    def sampled_interactions(batch, ratio=0.8):
-        """Randomly sample a fraction of interactions from a batch.
+    def prepare():
+        """Build interaction loaders and precompute the base embeddings.
 
-        Used for data augmentation during training.
+        Only precomputes what the current config consumes, storing each loader
+        into a dict as it is built. Keys for skipped precomputes are simply
+        absent (their consumers are guarded by the same condition):
 
-        Args:
-            batch: Batch of interactions.
-            ratio: Fraction of interactions to keep (default: 0.8).
-
-        Returns:
-            Batch with randomly masked interactions.
+        - ``train_interaction_dataloader`` — always;
+        - ``train_embeddings_dataloader`` — only on the no-augmentation fast path;
+        - ``valid_embeddings_dataloader`` — always;
+        - ``val_positive_embeddings_dataloader`` — only when contrastive is enabled.
         """
-        mask = torch.rand_like(batch) < ratio
-        return batch.clone() * mask
+        loaders = {}
 
-    # Create data loaders
-    train_interaction_dataloader = DataLoader(train_csr, batch_size, device, shuffle=False)
-    valid_interaction_dataloader = DataLoader(valid_csr, batch_size, device, shuffle=False)
+        train_interaction_dataloader = DataLoader(train_csr, batch_size, device, shuffle=False)
+        loaders["train_interaction_dataloader"] = train_interaction_dataloader
 
-    # Pre-compute embeddings for faster training (when not using augmentation)
-    train_user_embeddings = np.vstack(
-        [
-            base_model.encode(batch).detach().cpu().numpy()
-            for batch in tqdm(train_interaction_dataloader, desc="Computing training embeddings")
-        ]
-    )
-    train_embeddings_dataloader = DataLoader(
-        train_user_embeddings, batch_size, device, shuffle=True
-    )
-
-    # Pre-compute validation embeddings from FULL interactions through the frozen base
-    # model (NO sampling / augmentation): early stopping must see the full-interaction
-    # reconstruction.
-    val_user_embeddings = np.vstack(
-        [
-            base_model.encode(batch).detach().cpu().numpy()
-            for batch in tqdm(valid_interaction_dataloader, desc="Computing validation embeddings")
-        ]
-    )
-    valid_embeddings_dataloader = DataLoader(val_user_embeddings, batch_size, device, shuffle=False)
-
-    # Pre-compute augmented validation embeddings for contrastive loss (only consumed
-    # when contrastive_coef > 0; otherwise the precomputed-embeddings path is taken).
-    val_positive_user_embeddings = np.vstack(
-        [
-            base_model.encode(sampled_interactions(batch)).detach().cpu().numpy()
-            for batch in tqdm(
-                valid_interaction_dataloader,
-                desc="Computing augmented validation embeddings",
+        # Train embeddings feed ONLY the no-augmentation fast path, so skip this
+        # expensive full-train encode when augmentation/contrastive is enabled.
+        if not (sample_users or contrastive_coef > 0):
+            train_user_embeddings = np.vstack(
+                [
+                    base_model.encode(batch).detach().cpu().numpy()
+                    for batch in tqdm(
+                        train_interaction_dataloader, desc="Computing training embeddings"
+                    )
+                ]
             )
-        ]
-    )
-    val_positive_embeddings_dataloader = DataLoader(
-        val_positive_user_embeddings, batch_size, device, shuffle=False
-    )
+            loaders["train_embeddings_dataloader"] = DataLoader(
+                train_user_embeddings, batch_size, device, shuffle=True
+            )
 
-    val_user_embeddings = torch.tensor(val_user_embeddings, device=device)
+        valid_interaction_dataloader = DataLoader(valid_csr, batch_size, device, shuffle=False)
+        val_user_embeddings = np.vstack(
+            [
+                base_model.encode(batch).detach().cpu().numpy()
+                for batch in tqdm(
+                    valid_interaction_dataloader, desc="Computing validation embeddings"
+                )
+            ]
+        )
+        loaders["valid_embeddings_dataloader"] = DataLoader(
+            val_user_embeddings, batch_size, device, shuffle=False
+        )
 
-    def train_epoch_from_interactions():
-        """Train one epoch using on-the-fly interaction encoding.
+        # Augmented validation view feeds ONLY the contrastive term, so skip it
+        # (keep ~80% of interactions, then encode) unless contrastive is enabled.
+        if contrastive_coef > 0:
+            val_positive_user_embeddings = np.vstack(
+                [
+                    base_model.encode(batch * (torch.rand_like(batch) < 0.8)).detach().cpu().numpy()
+                    for batch in tqdm(
+                        valid_interaction_dataloader,
+                        desc="Computing augmented validation embeddings",
+                    )
+                ]
+            )
+            loaders["val_positive_embeddings_dataloader"] = DataLoader(
+                val_positive_user_embeddings, batch_size, device, shuffle=False
+            )
 
-        This mode supports data augmentation and contrastive learning but is slower
-        as it encodes interactions through base model every epoch.
+        return loaders
 
-        Returns:
-            dict: Training losses for this epoch.
+    def train_epoch(epoch, d):
+        """Run one training epoch; return the per-batch training losses (lists).
+
+        Two strategies share one per-batch step:
+
+        - augmentation/contrastive off → iterate the precomputed embeddings;
+        - otherwise → iterate interactions, building the (optional) contrastive
+          positive and the (optionally augmented) anchor on the fly.
         """
-        train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
         model.train()
+        train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
+        are_interactions_needed = sample_users or contrastive_coef > 0
 
-        pbar = tqdm(train_interaction_dataloader, desc=f"Epoch {epoch}/{epochs}")
-        for batched_interactions in pbar:
-            if cancellation is not None:
-                cancellation.raise_if_cancelled()
-            # Generate positive samples for contrastive learning
-            if contrastive_coef > 0:
-                positive_batch = sampled_interactions(batched_interactions, ratio=0.5)
-                positive_batch += (torch.rand_like(positive_batch) < 0.1).float()  # Add noise
-                positive_batch = base_model.encode(positive_batch).detach()
-            else:
-                positive_batch = None
-
-            # Optionally sample user interactions
-            if sample_users:
-                batched_interactions = sampled_interactions(batched_interactions)
-
-            # Encode interactions through base model
-            embedding_batch = base_model.encode(batched_interactions).detach()
-
-            # Train SAE
-            losses = model.train_step(optimizer, embedding_batch, positive_batch)
+        def step(anchor, positive, pbar):
+            """Shared per-batch update + loss accumulation."""
+            losses = model.train_step(optimizer, anchor, positive)
             pbar.set_postfix({"train_loss": losses["Loss"].cpu().item()})
-            for key, val in train_losses.items():
-                val.append(losses[key].item())
+            for key in train_losses:
+                train_losses[key].append(losses[key].item())
+
+        if are_interactions_needed:
+            pbar = tqdm(d["train_interaction_dataloader"], desc=f"Epoch {epoch}/{epochs}")
+            for batched_interactions in pbar:
+                if cancellation is not None:
+                    cancellation.raise_if_cancelled()
+
+                # Contrastive positive view (freshly sampled each epoch):
+                # keep ~50% of interactions + ~10% noise, then encode.
+                if contrastive_coef > 0:
+                    positive_batch = batched_interactions * (
+                        torch.rand_like(batched_interactions) < 0.5
+                    )
+                    positive_batch += (torch.rand_like(positive_batch) < 0.1).float()  # add noise
+                    positive_batch = base_model.encode(positive_batch).detach()
+                else:
+                    positive_batch = None
+
+                # Optional anchor augmentation: keep ~80% of interactions.
+                if sample_users:
+                    batched_interactions = batched_interactions * (
+                        torch.rand_like(batched_interactions) < 0.8
+                    )
+
+                anchor_batch = base_model.encode(batched_interactions).detach()
+                step(anchor_batch, positive_batch, pbar)
+        else:
+            pbar = tqdm(d["train_embeddings_dataloader"], desc=f"Epoch {epoch}/{epochs}")
+            for batched_embeddings in pbar:
+                if cancellation is not None:
+                    cancellation.raise_if_cancelled()
+                step(batched_embeddings, None, pbar)
+
         return train_losses
 
-    def train_epoch_from_embeddings():
-        """Train one epoch using pre-computed embeddings.
+    def evaluate(epoch, d):
+        """Run one validation pass; log losses + metrics and return (loss, metrics).
 
-        This mode is faster but doesn't support data augmentation or contrastive learning.
-
-        Returns:
-            dict: Training losses for this epoch.
+        Validation losses use a SAMPLE-WEIGHTED mean over batches
+        (sum(loss*batch_rows)/n_val_users) so early stopping sees the true
+        per-user mean regardless of an uneven final batch.
         """
-        train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
-        model.train()
-        pbar = tqdm(train_embeddings_dataloader, desc=f"Epoch {epoch}/{epochs}")
-        for batched_embeddings in pbar:
-            if cancellation is not None:
-                cancellation.raise_if_cancelled()
-            losses = model.train_step(optimizer, batched_embeddings, None)
-            pbar.set_postfix({"train_loss": losses["Loss"].cpu().item()})
-            for key, val in train_losses.items():
-                val.append(losses[key].item())
+        model.eval()
+        valid_losses = {
+            "Loss": [],
+            "L2": [],
+            "L1": [],
+            "L0": [],
+            "Cosine": [],
+            "Auxiliary": [],
+            "Contrastive": [],
+        }
+        # The contrastive positive view is only built when contrastive is enabled;
+        # otherwise pass None (compute_loss_dict then reports Contrastive as 0).
+        if contrastive_coef > 0:
+            pairs = zip(d["valid_embeddings_dataloader"], d["val_positive_embeddings_dataloader"])
+        else:
+            pairs = ((embedding, None) for embedding in d["valid_embeddings_dataloader"])
 
-        return train_losses
+        valid_batch_rows = []
+        for embedding, positive_embedding in pairs:
+            losses = model.compute_loss_dict(embedding, positive_embedding)
+            valid_batch_rows.append(embedding.shape[0])
+            for key, val in losses.items():
+                valid_losses[key].append(val.item())
+
+        valid_batch_rows = np.asarray(valid_batch_rows, dtype=np.float64)
+        n_val_users = valid_batch_rows.sum()
+
+        def _weighted_mean(values):
+            return float(np.dot(values, valid_batch_rows) / n_val_users)
+
+        for key, val in valid_losses.items():
+            mlflow.log_metric(f"loss/{key}/valid", _weighted_mean(val), step=epoch)
+
+        valid_metrics = evaluate_sparse_encoder(
+            base_model, model, valid_csr, target_ratio, batch_size, device, seed=seed
+        )
+        for key, val in valid_metrics.items():
+            mlflow.log_metric(f"{key}/valid", val, step=epoch)
+
+        return _weighted_mean(valid_losses["Loss"]), valid_metrics
+
+    # ── orchestration ────────────────────────────────────────────────────────
+
+    d = prepare()
 
     # Initialize early stopping
     if early_stop > 0:
@@ -202,68 +253,13 @@ def train(
         best_optimizer = deepcopy(optimizer)
         best_model = deepcopy(model)
 
-    # Determine training mode based on whether we need on-the-fly encoding
-    are_interactions_needed = sample_users or contrastive_coef > 0
-
-    # Training loop
     for epoch in range(1, epochs + 1):
-        if are_interactions_needed:
-            train_losses = train_epoch_from_interactions()
-        else:
-            train_losses = train_epoch_from_embeddings()
-
-        # Log training losses
+        train_losses = train_epoch(epoch, d)
         for key, val in train_losses.items():
             mlflow.log_metric(f"loss/{key}/train", float(np.mean(val)), step=epoch)
 
-        # Periodic evaluation
         if epoch % evaluate_every == 0:
-            model.eval()
-            # Compute validation losses as a SAMPLE-WEIGHTED mean over batches
-            # (sum(loss*batch_rows)/n_val_users), so early stopping sees the true
-            # per-user mean regardless of an uneven final batch.
-            valid_losses = {
-                "Loss": [],
-                "L2": [],
-                "L1": [],
-                "L0": [],
-                "Cosine": [],
-                "Auxiliary": [],
-                "Contrastive": [],
-            }
-            valid_batch_rows = []
-            for embedding, positive_embedding in zip(
-                valid_embeddings_dataloader, val_positive_embeddings_dataloader
-            ):
-                losses = model.compute_loss_dict(embedding, positive_embedding)
-                valid_batch_rows.append(embedding.shape[0])
-                for key, val in losses.items():
-                    valid_losses[key].append(val.item())
-
-            valid_batch_rows = np.asarray(valid_batch_rows, dtype=np.float64)
-            n_val_users = valid_batch_rows.sum()
-
-            def _weighted_mean(values, batch_rows=valid_batch_rows, n=n_val_users):
-                return float(np.dot(values, batch_rows) / n)
-
-            # Log validation losses
-            for key, val in valid_losses.items():
-                mlflow.log_metric(f"loss/{key}/valid", _weighted_mean(val), step=epoch)
-
-            # Compute validation metrics (sparsity, reconstruction quality, recommendation performance)
-            valid_metrics = evaluate_sparse_encoder(
-                base_model,
-                model,
-                valid_csr,
-                target_ratio,
-                batch_size,
-                device,
-                seed=seed,
-            )
-            for key, val in valid_metrics.items():
-                mlflow.log_metric(f"{key}/valid", val, step=epoch)
-
-            valid_loss = _weighted_mean(valid_losses["Loss"])
+            valid_loss, valid_metrics = evaluate(epoch, d)
             logger.info(
                 f"Epoch {epoch}/{epochs} - "
                 f"Loss: {valid_loss:.4f} - "
@@ -294,6 +290,7 @@ def train(
                                 f"Early stopping at epoch {epoch} (best was epoch {best_epoch})"
                             )
                         break
+
     # Restore best model if early stopping was used
     if early_stop > 0:
         logger.info(f"Loading best model from epoch {best_epoch}")
@@ -323,21 +320,22 @@ def train(
 
 
 class Plugin(BasePlugin):
-    """SAE (Sparse Autoencoder) training plugin.
+    """Batch-Top-K SAE training plugin.
 
-    Trains a sparse autoencoder on top of a pre-trained base model to learn
-    interpretable, sparse representations of user embeddings while maintaining
-    recommendation quality.
+    Trains a Batch-Top-K sparse autoencoder on top of a pre-trained base model. The
+    ``top_k`` budget is shared across the whole batch (so the active-feature count per
+    user flexes around top_k), and a learned threshold gates activations at inference.
+    Learns interpretable, sparse representations while maintaining recommendation quality.
 
     Expects prior dataset_loading and training_cfm steps in the pipeline context.
     """
 
-    name = "SAE Trainer"
+    name = "Batch TopK SAE Trainer"
     description = (
-        "Trains a sparse autoencoder on the recommender's dense embeddings, re-encoding "
-        "each into a wider but sparse vector where only a few 'neurons' fire. Each neuron "
-        "ideally captures one interpretable concept while reconstruction preserves "
-        "recommendation quality — the foundation for labeling, inspection and steering."
+        "Trains a Batch-Top-K sparse autoencoder on the recommender's dense embeddings, "
+        "re-encoding each into a wider but sparse vector. The top_k budget is shared across "
+        "the batch (active features per user flex around top_k) and a learned threshold gates "
+        "activations at inference."
     )
 
     io_spec = PluginIOSpec(
@@ -387,13 +385,12 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("trained_model", "", "model"),
         ],
         param_ui_hints=[
-            StaticDropdownHint("model", choices=["TopKSAE", "BatchTopKSAE", "BasicSAE"]),
             StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
             ToggleHint("sample_users"),
             ToggleHint("normalize"),
         ],
         param_groups=[
-            ParamGroup("Architecture", ["model", "embedding_dim", "top_k", "normalize"]),
+            ParamGroup("Architecture", ["embedding_dim", "top_k", "normalize"]),
             ParamGroup(
                 "Training Loop",
                 ["epochs", "batch_size", "early_stop", "sample_users", "seed"],
@@ -469,10 +466,9 @@ class Plugin(BasePlugin):
         ] = 8192,
         top_k: Annotated[
             int,
-            "Active features allowed per input for TopKSAE/BatchTopKSAE "
-            "(the sparsity level). Lower is sparser and more interpretable "
-            "but reconstructs worse; unused by BasicSAE, which relies on "
-            "l1_coef instead. Default 32.",
+            "Active-feature budget shared across the batch (k x batch_size "
+            "total), so the count per user flexes around top_k. Lower is "
+            "sparser and more interpretable but reconstructs worse. Default 32.",
         ] = 32,
         sample_users: Annotated[
             bool,
@@ -480,12 +476,6 @@ class Plugin(BasePlugin):
             "epoch as data augmentation. Improves robustness but slows "
             "training (forces on-the-fly encoding).",
         ] = False,
-        model: Annotated[
-            str,
-            "Sparse-autoencoder variant. 'TopKSAE'/'BatchTopKSAE' enforce a "
-            "hard active-feature budget (top_k); 'BasicSAE' uses a soft L1 "
-            "penalty (l1_coef) instead.",
-        ] = "TopKSAE",
         target_ratio: Annotated[
             float,
             "Fraction of each user's interactions hidden as targets when "
@@ -539,9 +529,9 @@ class Plugin(BasePlugin):
         ] = 0.99,
         l1_coef: Annotated[
             float,
-            "Strength of the L1 sparsity penalty on activations. Higher is "
-            "sparser and more interpretable but reconstructs worse. Primary "
-            "sparsity control for BasicSAE.",
+            "Strength of the L1 sparsity penalty on activations. Secondary "
+            "to top_k here (shrinks the surviving activations); set 0 to "
+            "rely on top_k alone. Default 3e-4.",
         ] = 3e-4,
         evaluate_every: Annotated[
             int,
@@ -562,16 +552,15 @@ class Plugin(BasePlugin):
             "reconstruction noise.",
         ] = 512,
     ):
-        """Execute the SAE training pipeline.
+        """Execute the Batch-Top-K SAE training pipeline.
 
         Args:
             epochs: Maximum number of training epochs.
             early_stop: Number of epochs without improvement before stopping.
             batch_size: Batch size for training.
             embedding_dim: Dimension of sparse embeddings.
-            top_k: Number of active features (for TopKSAE/BatchTopKSAE).
+            top_k: Per-batch active-feature budget (k x batch_size total).
             sample_users: Whether to randomly sample user interactions.
-            model: SAE variant ('BasicSAE', 'TopKSAE', or 'BatchTopKSAE').
             target_ratio: Fraction of interactions to use as targets for evaluation.
             normalize: Whether to L2-normalize sparse embeddings.
             seed: Random seed for reproducibility.
@@ -593,7 +582,7 @@ class Plugin(BasePlugin):
         device = set_device()
         logger.info(f"Using device: {device}")
         self.notifier.info(
-            f"SAE training starting — {model} {embedding_dim}d, {epochs} epochs"
+            f"Batch-Top-K SAE training starting — {embedding_dim}d, {epochs} epochs"
             f", top_k={top_k}, device={device}"
         )
 
@@ -616,9 +605,8 @@ class Plugin(BasePlugin):
             f"Expansion ratio: {expansion_ratio:.1f}x ({self.base_factors} → {embedding_dim})"
         )
 
-        # Initialize SAE model via registry
-        sae_cls = get_sae_model_class(model)
-        sae = sae_cls(
+        # Initialize the Batch-Top-K SAE model
+        sae = BatchTopKSAE(
             input_dim=self.base_factors,
             embedding_dim=embedding_dim,
             reconstruction_loss=reconstruction_loss,
@@ -633,7 +621,7 @@ class Plugin(BasePlugin):
             reconstruction_coef=reconstruction_coef,
         ).to(device)
 
-        logger.info(f"Initialized {model} with {embedding_dim} dimensions")
+        logger.info(f"Initialized BatchTopKSAE with {embedding_dim} dimensions")
 
         # Initialize optimizer
         optimizer = torch.optim.Adam(sae.parameters(), lr=lr, betas=(beta1, beta2))
@@ -673,7 +661,7 @@ class Plugin(BasePlugin):
                 "contrastive_coef": contrastive_coef,
                 "n_batches_to_dead": n_batches_to_dead,
                 "test_ratio": self.test_ratio,
-                "model": model,
+                "model": "BatchTopKSAE",
                 "base_min_user_interactions": self.base_min_user_interactions,
                 "sample_users": sample_users,
             }
