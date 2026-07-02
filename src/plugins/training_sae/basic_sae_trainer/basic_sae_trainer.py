@@ -289,7 +289,7 @@ class Plugin(BasePlugin):
     Expects prior dataset_loading and training_cfm steps in the pipeline context.
     """
 
-    name = "SAE Trainer"
+    name = "Basic SAE Trainer"
     description = (
         "Trains a Basic sparse autoencoder on the recommender's dense embeddings, "
         "re-encoding each into a wider but sparse vector. Sparsity comes from a soft L1 "
