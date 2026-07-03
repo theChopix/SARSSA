@@ -12,13 +12,13 @@ from plugins.plugin_interface import (
 )
 from utils.plugin_logger import get_logger
 from utils.torch.evaluation import compute_sae_item_activations
-from utils.torch.runtime import set_device, set_seed
+from utils.torch.runtime import set_seed
 
 logger = get_logger(__name__)
 
 
 class Plugin(BasePlugin):
-    name = "TF-IDF Labeling"
+    name = "Tag TF-IDF Labeling"
     description = (
         "Assigns a human-readable label to every autoencoder neuron. It runs the "
         "autoencoder over all items to measure each neuron's activations, then uses "
@@ -62,7 +62,6 @@ class Plugin(BasePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("neuron_labeling", "neuron_labeling"),
             OutputParamSpec("num_tags", "num_tags"),
             OutputParamSpec("num_neurons", "num_neurons"),
         ],
@@ -88,7 +87,8 @@ class Plugin(BasePlugin):
             batch_size: Batch size for computing SAE activations.
             seed: Random seed for reproducibility.
         """
-        device = set_device()
+        # CPU: wide one-hot pass OOMs small GPUs
+        device = "cpu"
         set_seed(seed)
 
         self.base_model.to(device)
@@ -152,7 +152,6 @@ class Plugin(BasePlugin):
         self.item_acts = sp.csr_matrix(item_acts_np)
 
         # output params
-        self.neuron_labeling = True
         self.num_tags = len(self.tag_ids)
         self.num_neurons = item_acts.shape[1]
 
