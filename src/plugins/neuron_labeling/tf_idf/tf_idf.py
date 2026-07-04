@@ -3,6 +3,10 @@ from typing import Annotated
 import numpy as np
 import scipy.sparse as sp
 
+from plugins.neuron_labeling._confidence import (
+    labels_with_confidence,
+    point_biserial_matrix,
+)
 from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
@@ -51,6 +55,11 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("tag_item_prob", "tag_item_prob.npz", "npz"),
             OutputArtifactSpec("neuron_labels", "neuron_labels.json", "json"),
             OutputArtifactSpec(
+                "neuron_labels_with_confidence",
+                "neuron_labels_with_confidence.json",
+                "json",
+            ),
+            OutputArtifactSpec(
                 "top_tag_per_neuron",
                 "top_tag_per_neuron.json",
                 "json",
@@ -64,6 +73,7 @@ class Plugin(BasePlugin):
         output_params=[
             OutputParamSpec("num_tags", "num_tags"),
             OutputParamSpec("num_neurons", "num_neurons"),
+            OutputParamSpec("mean_confidence", "mean_confidence"),
         ],
     )
 
@@ -126,14 +136,28 @@ class Plugin(BasePlugin):
         tfidf_nt = self._compute_tfidf(tag_neuron_dense.T)
 
         # top_tag_per_neuron: for each neuron, the tag with highest tfidf
-        #   score; dead neurons get no label (None).
-        self.top_tag_per_neuron = {
-            int(n): None if dead_neuron_mask[n] else self.tag_ids[int(tfidf_nt[n].argmax())]
+        #   score; dead neurons get no label (None). The chosen tag index is
+        #   kept so its activation-presence correlation can score the label.
+        label_tag_index = {
+            int(n): None if dead_neuron_mask[n] else int(tfidf_nt[n].argmax())
             for n in range(tfidf_nt.shape[0])
+        }
+        self.top_tag_per_neuron = {
+            n: None if idx is None else self.tag_ids[idx] for n, idx in label_tag_index.items()
         }
 
         # neuron_labels is a copy of top_tag_per_neuron
         self.neuron_labels = dict(self.top_tag_per_neuron)
+
+        # confidence: point-biserial correlation between a neuron's activation
+        #   and the binary presence of its TF-IDF label tag. TF-IDF picks
+        #   distinctive tags, so this exposes how well activation actually
+        #   tracks the chosen tag (can be weak or negative).
+        attr = (self.tag_item_counts > 0).astype(np.float64).T.tocsr()
+        corr = point_biserial_matrix(item_acts_np, attr)
+        self.neuron_labels_with_confidence, self.mean_confidence = labels_with_confidence(
+            self.neuron_labels, label_tag_index, corr
+        )
 
         # top_neuron_per_tag: for each tag, the neuron that best
         #   characterises it. Uses the same (neuron x tag) tfidf as above
