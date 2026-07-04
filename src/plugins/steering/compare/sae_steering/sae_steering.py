@@ -165,14 +165,14 @@ class Plugin(BaseComparePlugin):
             DynamicDropdownHint(
                 param_name="neuron_id",
                 artifact_step="neuron_labeling",
-                artifact_file="neuron_labels.json",
+                artifact_file="neuron_labels_with_confidence.json",
                 artifact_loader="json",
                 formatter="_format_neuron_choices",
             ),
             DynamicDropdownHint(
                 param_name="past_neuron_id",
                 artifact_step="neuron_labeling",
-                artifact_file="neuron_labels.json",
+                artifact_file="neuron_labels_with_confidence.json",
                 artifact_loader="json",
                 formatter="_format_neuron_choices",
                 source_run_param="past_run_id",
@@ -188,24 +188,28 @@ class Plugin(BaseComparePlugin):
 
     @staticmethod
     def _format_neuron_choices(
-        data: dict[str, str],
+        data: dict[str, dict],
     ) -> list[dict[str, str]]:
-        """Format ``neuron_labels.json`` into dropdown options.
+        """Format ``neuron_labels_with_confidence.json`` into dropdown options.
 
         Args:
-            data: Mapping of neuron id (string) to label string.
+            data: Mapping of neuron id (string) to a
+                ``{"label", "confidence"}`` entry.
 
         Returns:
-            list[dict[str, str]]: Options with ``"label"`` and
-                ``"value"`` keys.
+            list[dict[str, str]]: Options with ``"label"`` and ``"value"``
+                keys; each label shows the confidence score.
         """
-        return [
-            {
-                "label": f"{label} [neuron id {nid}]",
-                "value": nid,
-            }
-            for nid, label in data.items()
-        ]
+        choices = []
+        for nid, entry in data.items():
+            label = entry["label"]
+            confidence = entry["confidence"]
+            if confidence is None:
+                text = f"{label} [neuron id {nid}]"
+            else:
+                text = f"{label} · conf {confidence:.2f} [neuron id {nid}]"
+            choices.append({"label": text, "value": nid})
+        return choices
 
     def run(
         self,
