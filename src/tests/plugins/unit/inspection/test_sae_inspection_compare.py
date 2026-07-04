@@ -160,12 +160,22 @@ class TestCompareSaeInspectionRun:
 class TestCompareSaeInspectionFormatter:
     """Tests for the static _format_neuron_choices helper."""
 
-    def test_formats_label_value_pairs(self) -> None:
-        """Verify dropdown entries follow {label, value} contract."""
-        result = Plugin._format_neuron_choices({"0": "concept_a", "5": "concept_b"})
-        assert {"label": "concept_a [neuron id 0]", "value": "0"} in result
-        assert {"label": "concept_b [neuron id 5]", "value": "5"} in result
+    def test_formats_label_value_pairs_with_confidence(self) -> None:
+        """Verify dropdown entries show the confidence and keep the value."""
+        result = Plugin._format_neuron_choices(
+            {
+                "0": {"label": "concept_a", "confidence": 0.5},
+                "5": {"label": "concept_b", "confidence": -0.1},
+            }
+        )
+        assert {"label": "concept_a · conf 0.50 [neuron id 0]", "value": "0"} in result
+        assert {"label": "concept_b · conf -0.10 [neuron id 5]", "value": "5"} in result
         assert len(result) == 2
+
+    def test_null_confidence_omits_score(self) -> None:
+        """Verify a dead/unscored neuron renders label and id only."""
+        result = Plugin._format_neuron_choices({"3": {"label": None, "confidence": None}})
+        assert result == [{"label": "None [neuron id 3]", "value": "3"}]
 
     def test_handles_empty_mapping(self) -> None:
         """Verify the formatter handles an empty input."""
