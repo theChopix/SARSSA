@@ -3,6 +3,10 @@ from typing import Annotated
 import numpy as np
 import scipy.sparse as sp
 
+from plugins.neuron_labeling._confidence import (
+    labels_with_confidence,
+    point_biserial_matrix,
+)
 from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
@@ -51,6 +55,11 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("item_acts", "item_acts.npz", "npz"),
             OutputArtifactSpec("neuron_labels", "neuron_labels.json", "json"),
             OutputArtifactSpec(
+                "neuron_labels_with_confidence",
+                "neuron_labels_with_confidence.json",
+                "json",
+            ),
+            OutputArtifactSpec(
                 "top_tag_per_neuron",
                 "top_tag_per_neuron.json",
                 "json",
@@ -65,6 +74,7 @@ class Plugin(BasePlugin):
             OutputParamSpec("num_tags", "num_tags"),
             OutputParamSpec("num_neurons", "num_neurons"),
             OutputParamSpec("mean_top_correlation", "mean_top_correlation"),
+            OutputParamSpec("mean_confidence", "mean_confidence"),
         ],
     )
 
@@ -122,26 +132,35 @@ class Plugin(BasePlugin):
         if not valid_tag_mask.any():
             logger.warning("No tag meets min_support=%d; neurons stay unlabelled.", min_support)
 
-        corr = self._point_biserial(item_acts_np, attr)
+        corr = point_biserial_matrix(item_acts_np, attr)
 
         # dead neurons never activate (all-zero column) -> no variance -> masked
         #   out and left unlabelled
         dead_neuron_mask = item_acts_np.sum(axis=0) == 0
 
         # label each neuron with its most-correlated valid tag; dead neurons
-        #   (and the no-valid-tag case) get None.
+        #   (and the no-valid-tag case) get None. The tag index is kept so its
+        #   correlation can be reused as the label's confidence.
         corr_by_neuron = corr.copy()
         corr_by_neuron[~valid_tag_mask, :] = -np.inf
         labelled = valid_tag_mask.any()
-        self.top_tag_per_neuron = {
+        label_tag_index = {
             int(n): None
             if dead_neuron_mask[n] or not labelled
-            else self.tag_ids[int(corr_by_neuron[:, n].argmax())]
+            else int(corr_by_neuron[:, n].argmax())
             for n in range(num_neurons)
+        }
+        self.top_tag_per_neuron = {
+            n: None if idx is None else self.tag_ids[idx] for n, idx in label_tag_index.items()
         }
 
         # neuron_labels is a copy of top_tag_per_neuron
         self.neuron_labels = dict(self.top_tag_per_neuron)
+
+        # attach each label's point-biserial correlation as its confidence
+        self.neuron_labels_with_confidence, self.mean_confidence = labels_with_confidence(
+            self.neuron_labels, label_tag_index, corr
+        )
 
         # best neuron per valid tag; dead neurons masked so never selected.
         corr_by_tag = corr.copy()
@@ -160,41 +179,3 @@ class Plugin(BasePlugin):
 
         self.num_tags = len(self.tag_ids)
         self.num_neurons = num_neurons
-
-    @staticmethod
-    def _point_biserial(activations: np.ndarray, attributes: sp.spmatrix) -> np.ndarray:
-        """Point-biserial correlation for every (tag, neuron) pair.
-
-        Pearson correlation between each neuron's continuous activation and each
-        tag's binary presence indicator, evaluated for all pairs at once via the
-        sum form ``r = (n·Σay − Σa·Σy) / √((n·Σa² − Σa²)(n·Σy² − Σy²))``. Since
-        the attribute is binary, ``Σy² = Σy``. Pairs with zero variance (a dead
-        neuron or an all/no-item tag) are set to 0.
-
-        Args:
-            activations: Dense ``(num_items, num_neurons)`` activation matrix.
-            attributes: Binary ``(num_items, num_tags)`` attribute matrix.
-
-        Returns:
-            np.ndarray: Correlation matrix of shape ``(num_tags, num_neurons)``.
-        """
-        a = activations.astype(np.float64)
-        n = a.shape[0]
-
-        cross = attributes.T @ a  # (tags x neurons) = Σ(a·y)
-        if sp.issparse(cross):
-            cross = cross.toarray()
-
-        sum_a = a.sum(axis=0)  # Σa  (neurons,)
-        sum_a2 = (a * a).sum(axis=0)  # Σa² (neurons,)
-        n1 = np.asarray(attributes.sum(axis=0)).ravel()  # Σy = items per tag (tags,)
-
-        num = n * cross - n1[:, None] * sum_a[None, :]
-        var_a = n * sum_a2 - sum_a**2  # (neurons,)
-        var_y = n * n1 - n1**2  # (tags,), using Σy² = n1
-        denom = np.sqrt(var_y[:, None] * var_a[None, :])
-
-        with np.errstate(divide="ignore", invalid="ignore"):
-            corr = num / denom
-        corr[~np.isfinite(corr)] = 0.0
-        return corr
