@@ -92,7 +92,7 @@ class Plugin(BasePlugin):
     @staticmethod
     def _format_neuron_choices(
         data: dict[str, dict],
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, object]]:
         """Format neuron_labels_with_confidence.json into dropdown options.
 
         Args:
@@ -100,18 +100,19 @@ class Plugin(BasePlugin):
                 ``{"label", "confidence"}`` entry.
 
         Returns:
-            list[dict[str, str]]: Options with ``"label"`` and ``"value"``
-                keys; each label shows the confidence score.
+            list[dict[str, object]]: Options with ``"label"``, ``"value"`` and
+                a numeric ``"tint"`` in [-1, 1] (the label confidence) that the
+                frontend maps to a background colour; the label shows it too.
         """
-        choices = []
+        choices: list[dict[str, object]] = []
         for nid, entry in data.items():
             label = entry["label"]
             confidence = entry["confidence"]
             if confidence is None:
                 text = f"{label} [neuron id {nid}]"
             else:
-                text = f"{label} · conf {confidence:.2f} [neuron id {nid}]"
-            choices.append({"label": text, "value": nid})
+                text = f"{label} [neuron id {nid}] · conf {confidence:.2f}"
+            choices.append({"label": text, "value": nid, "tint": confidence})
         return choices
 
     def run(
