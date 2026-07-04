@@ -42,6 +42,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
+import type { CSSProperties } from "react";
 import { Settings, CheckCircle2, Loader2, AlertCircle, Eye, ChevronDown } from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
@@ -457,6 +458,29 @@ function StaticDropdownSelect({
   );
 }
 
+// ── Option tint ─────────────────────────────────────────
+
+/** Peak background opacity for a |tint| of 1. */
+const MAX_TINT_ALPHA = 0.55;
+
+/**
+ * Background style for a dropdown option from its signed `tint` in [-1, 1]:
+ *
+ * - `0` / `null` / `undefined` → no tint (white),
+ * - positive → blue, deepening toward +1,
+ * - negative → red, deepening toward -1.
+ *
+ * Opacity scales with `sqrt(|tint|)` so small magnitudes stay visible, and
+ * stays light enough to keep the dark option text readable.
+ */
+function tintStyle(tint?: number | null): CSSProperties | undefined {
+  if (tint == null || tint === 0) return undefined;
+  const magnitude = Math.min(1, Math.abs(tint));
+  const alpha = Math.sqrt(magnitude) * MAX_TINT_ALPHA;
+  const [r, g, b] = tint > 0 ? [59, 130, 246] : [239, 68, 68];
+  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})` };
+}
+
 // ── Dropdown select for dynamic choices ─────────────────
 
 /**
@@ -670,8 +694,10 @@ function DropdownSelect({
                 <li
                   key={opt.value}
                   onClick={() => { onChange(opt.value); onLabelChange?.(opt.label); setOpen(false); setFilter(""); }}
-                  className={`px-2 py-1.5 text-sm cursor-pointer hover:bg-blue-50
-                    ${opt.value === value ? "bg-blue-100 font-medium" : "text-gray-800"}`}
+                  style={tintStyle(opt.tint)}
+                  className={`px-2 py-1.5 text-sm text-gray-800 cursor-pointer
+                    transition hover:brightness-95
+                    ${opt.value === value ? "font-medium ring-2 ring-inset ring-blue-500" : ""}`}
                 >
                   {opt.label}
                 </li>

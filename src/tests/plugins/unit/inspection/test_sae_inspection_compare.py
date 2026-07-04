@@ -168,14 +168,22 @@ class TestCompareSaeInspectionFormatter:
                 "5": {"label": "concept_b", "confidence": -0.1},
             }
         )
-        assert {"label": "concept_a · conf 0.50 [neuron id 0]", "value": "0"} in result
-        assert {"label": "concept_b · conf -0.10 [neuron id 5]", "value": "5"} in result
+        assert {
+            "label": "concept_a [neuron id 0] · conf 0.50",
+            "value": "0",
+            "tint": 0.5,
+        } in result
+        assert {
+            "label": "concept_b [neuron id 5] · conf -0.10",
+            "value": "5",
+            "tint": -0.1,
+        } in result
         assert len(result) == 2
 
     def test_null_confidence_omits_score(self) -> None:
         """Verify a dead/unscored neuron renders label and id only."""
         result = Plugin._format_neuron_choices({"3": {"label": None, "confidence": None}})
-        assert result == [{"label": "None [neuron id 3]", "value": "3"}]
+        assert result == [{"label": "None [neuron id 3]", "value": "3", "tint": None}]
 
     def test_handles_empty_mapping(self) -> None:
         """Verify the formatter handles an empty input."""

@@ -41,7 +41,7 @@ def get_param_choices(
         None,
         description="Current value of the controlling param (dependent dropdowns).",
     ),
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Return dropdown options for a plugin parameter.
 
     For a ``DependentDropdownHint`` the options are computed from the
@@ -59,8 +59,8 @@ def get_param_choices(
             (dependent dropdowns).
 
     Returns:
-        list[dict[str, str]]: Each dict has ``"label"`` and
-            ``"value"`` keys.
+        list[dict[str, Any]]: Each dict has ``"label"`` and ``"value"``
+            keys; neuron dropdowns also carry a numeric ``"confidence"``.
 
     Raises:
         HTTPException: 404 if the plugin, parameter hint, resolver, or

@@ -31,6 +31,12 @@ import type { PluginRegistry } from "../types/plugin";
 export interface ParamChoice {
   label: string;
   value: string;
+  /**
+   * Optional signed value in [-1, 1] used to tint the option's background:
+   * 0 (or null/absent) leaves it untinted, positive shades one way, negative
+   * the other. Only some choice kinds provide it.
+   */
+  tint?: number | null;
 }
 
 /**
