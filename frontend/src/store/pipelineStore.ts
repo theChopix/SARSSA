@@ -723,11 +723,15 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   },
 
   setCardMode: (category: string, mode: CardMode) => {
-    const { registry, cards: prev } = get();
+    const { registry, cards: prev, context: prevContext } = get();
     const cards = { ...prev };
+    // Prune context alongside every card we reset, so a stale run_id from a
+    // previously loaded run can't leak into the next pipeline request.
+    const context: PipelineContext = { ...(prevContext ?? {}) };
     if (mode === "setup") {
       // Fully reset the clicked card when switching away from "load".
       cards[category] = { ...defaultCard() };
+      delete context[category];
     } else {
       cards[category] = { ...cards[category], mode };
     }
@@ -747,17 +751,19 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         }
         if (pastTarget && cards[key]) {
           cards[key] = { ...defaultCard() };
+          delete context[key];
         }
       }
 
       for (const [key, entry] of Object.entries(registry)) {
         if (entry.category_info.type === "multi_run" && cards[key]) {
           cards[key] = { ...defaultCard() };
+          delete context[key];
         }
       }
     }
 
-    set({ cards });
+    set({ cards, context });
   },
 
   setPendingSteps: (steps: StepDefinition[] | null) => {
