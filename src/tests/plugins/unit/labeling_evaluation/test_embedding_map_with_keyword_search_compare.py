@@ -25,7 +25,7 @@ def _build_plugin() -> Any:
     )
 
     plugin = Plugin()
-    plugin.neuron_labels = {"0": "current_a", "1": "current_b"}
+    plugin.neuron_labels = {"0": {"label": "current_a"}, "1": {"label": "current_b"}}
     plugin.current_neuron_ids = ["0", "1"]
     plugin.current_label_texts = ["current_a", "current_b"]
     return plugin
@@ -117,7 +117,11 @@ class TestCompareKeywordSearchSeparate:
         """
         mock_compare_loader_cls.return_value = _make_past_loader(
             context={"neuron_labeling": {"run_id": "nl_past"}},
-            past_neuron_labels={"7": "past_a", "8": "past_b", "9": "past_c"},
+            past_neuron_labels={
+                "7": {"label": "past_a"},
+                "8": {"label": "past_b"},
+                "9": {"label": "past_c"},
+            },
         )
         mock_embed_labels.return_value = _SHARED_EMBEDDINGS
         mock_compute_coords.return_value = _SHARED_COORDS
@@ -172,7 +176,11 @@ class TestCompareKeywordSearchSeparate:
         """
         mock_compare_loader_cls.return_value = _make_past_loader(
             context={"neuron_labeling": {"run_id": "nl_past"}},
-            past_neuron_labels={"7": "past_a", "8": "past_b", "9": "past_c"},
+            past_neuron_labels={
+                "7": {"label": "past_a"},
+                "8": {"label": "past_b"},
+                "9": {"label": "past_c"},
+            },
         )
         mock_embed_labels.return_value = _SHARED_EMBEDDINGS
         mock_compute_coords.return_value = _SHARED_COORDS
@@ -224,7 +232,11 @@ class TestCompareKeywordSearchCombined:
         """
         mock_compare_loader_cls.return_value = _make_past_loader(
             context={"neuron_labeling": {"run_id": "nl_past"}},
-            past_neuron_labels={"7": "past_a", "8": "past_b", "9": "past_c"},
+            past_neuron_labels={
+                "7": {"label": "past_a"},
+                "8": {"label": "past_b"},
+                "9": {"label": "past_c"},
+            },
         )
         mock_embed_labels.return_value = _SHARED_EMBEDDINGS
         mock_compute_coords.return_value = _SHARED_COORDS
@@ -275,7 +287,11 @@ class TestCompareKeywordSearchCombined:
         """
         mock_compare_loader_cls.return_value = _make_past_loader(
             context={"neuron_labeling": {"run_id": "nl_past"}},
-            past_neuron_labels={"7": "past_a", "8": "past_b", "9": "past_c"},
+            past_neuron_labels={
+                "7": {"label": "past_a"},
+                "8": {"label": "past_b"},
+                "9": {"label": "past_c"},
+            },
         )
         mock_embed_labels.return_value = _SHARED_EMBEDDINGS
         mock_compute_coords.return_value = _SHARED_COORDS

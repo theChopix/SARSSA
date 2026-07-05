@@ -104,14 +104,14 @@ class Plugin(BaseComparePlugin):
             DynamicDropdownHint(
                 param_name="neuron_id",
                 artifact_step="neuron_labeling",
-                artifact_file="neuron_labels_with_confidence.json",
+                artifact_file="neuron_labels.json",
                 artifact_loader="json",
                 formatter="_format_neuron_choices",
             ),
             DynamicDropdownHint(
                 param_name="past_neuron_id",
                 artifact_step="neuron_labeling",
-                artifact_file="neuron_labels_with_confidence.json",
+                artifact_file="neuron_labels.json",
                 artifact_loader="json",
                 formatter="_format_neuron_choices",
                 source_run_param="past_run_id",
@@ -123,21 +123,21 @@ class Plugin(BaseComparePlugin):
     def _format_neuron_choices(
         data: dict[str, dict],
     ) -> list[dict[str, object]]:
-        """Format ``neuron_labels_with_confidence.json`` into dropdown options.
+        """Format ``neuron_labels.json`` into dropdown options.
 
         Args:
-            data: Mapping of neuron id (string) to a
-                ``{"label", "confidence"}`` entry.
+            data: Mapping of neuron id (string) to a ``{"label"}`` entry,
+                optionally carrying a numeric ``"confidence"``.
 
         Returns:
-            list[dict[str, object]]: Options with ``"label"``, ``"value"`` and
-                a numeric ``"tint"`` in [-1, 1] (the label confidence) that the
-                frontend maps to a background colour; the label shows it too.
+            list[dict[str, object]]: Options with ``"label"``, ``"value"`` and,
+                when the entry has a confidence, a numeric ``"tint"`` in [-1, 1]
+                the frontend maps to a background colour; the label shows it too.
         """
         choices: list[dict[str, object]] = []
         for nid, entry in data.items():
-            label = entry["label"]
-            confidence = entry["confidence"]
+            label = entry.get("label")
+            confidence = entry.get("confidence")
             if confidence is None:
                 text = f"{label} [neuron id {nid}]"
             else:

@@ -129,7 +129,9 @@ class Plugin(BaseComparePlugin):
         """
         super().load_context(context)
         self.current_neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
-        self.current_label_texts = [str(self.neuron_labels[nid]) for nid in self.current_neuron_ids]
+        self.current_label_texts = [
+            str(self.neuron_labels[nid]["label"]) for nid in self.current_neuron_ids
+        ]
         logger.info(f"Loaded {len(self.current_neuron_ids)} current-run neuron labels")
 
     def run(
@@ -203,7 +205,7 @@ class Plugin(BaseComparePlugin):
             "json",
         )
         past_neuron_ids = sorted(past_neuron_labels.keys(), key=lambda x: int(x))
-        past_label_texts = [str(past_neuron_labels[nid]) for nid in past_neuron_ids]
+        past_label_texts = [str(past_neuron_labels[nid]["label"]) for nid in past_neuron_ids]
 
         logger.info(
             "Embedding %d current + %d past labels with %s:%s; "
@@ -232,11 +234,11 @@ class Plugin(BaseComparePlugin):
         self.past_umap_coords = combined_coords[split:]
 
         current_hover = [
-            f"<b>Current Run · Neuron {nid}</b><br>{self.neuron_labels[nid]}"
+            f"<b>Current Run · Neuron {nid}</b><br>{self.neuron_labels[nid]['label']}"
             for nid in self.current_neuron_ids
         ]
         past_hover = [
-            f"<b>Past Run · Neuron {nid}</b><br>{past_neuron_labels[nid]}"
+            f"<b>Past Run · Neuron {nid}</b><br>{past_neuron_labels[nid]['label']}"
             for nid in past_neuron_ids
         ]
 

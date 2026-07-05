@@ -15,7 +15,7 @@ import torch
 
 def compute_top_k_for_neuron(
     neuron_id: str,
-    neuron_labels: dict[str, str],
+    neuron_labels: dict[str, dict],
     items: np.ndarray,
     item_acts: torch.Tensor | sp.csr_matrix,
     k: int,
@@ -25,7 +25,8 @@ def compute_top_k_for_neuron(
     Args:
         neuron_id: SAE neuron id as a string; must match a key in
             *neuron_labels*.
-        neuron_labels: Mapping from neuron id (string) to label.
+        neuron_labels: Mapping from neuron id (string) to its label entry;
+            only the ``"label"`` field is read here.
         items: Array of item ids indexable by row index of
             *item_acts*.
         item_acts: Activation tensor with shape
@@ -51,7 +52,7 @@ def compute_top_k_for_neuron(
         raise ValueError(f"k must be positive, got {k}")
 
     int_id = int(neuron_id)
-    label = neuron_labels[neuron_id]
+    label = neuron_labels[neuron_id]["label"]
 
     column = item_acts[:, int_id]
     if sp.issparse(column):

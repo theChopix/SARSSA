@@ -94,7 +94,7 @@ class Plugin(BasePlugin):
         """Load neuron labels and derive sorted IDs and label texts."""
         super().load_context(context)
         self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
-        self.label_texts = [str(self.neuron_labels[nid]) for nid in self.neuron_ids]
+        self.label_texts = [str(self.neuron_labels[nid]["label"]) for nid in self.neuron_ids]
         logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
 
     def run(
@@ -152,7 +152,9 @@ class Plugin(BasePlugin):
         logger.info(
             f"Creating dendrogram with {num_labels} labels (figure height={dynamic_height})"
         )
-        label_texts = [f"[neuron {nid}] {self.neuron_labels[nid]}" for nid in self.neuron_ids]
+        label_texts = [
+            f"[neuron {nid}] {self.neuron_labels[nid]['label']}" for nid in self.neuron_ids
+        ]
 
         self._fig, ax = plt.subplots(figsize=(figure_width, dynamic_height))
 

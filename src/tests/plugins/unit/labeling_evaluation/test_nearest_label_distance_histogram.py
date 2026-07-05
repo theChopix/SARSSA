@@ -25,7 +25,11 @@ def _build_plugin() -> Any:
     )
 
     plugin = Plugin()
-    plugin.neuron_labels = {"0": "current_a", "1": "current_b", "2": "current_c"}
+    plugin.neuron_labels = {
+        "0": {"label": "current_a"},
+        "1": {"label": "current_b"},
+        "2": {"label": "current_c"},
+    }
     plugin.current_neuron_ids = ["0", "1", "2"]
     plugin.current_label_texts = ["current_a", "current_b", "current_c"]
     return plugin
@@ -83,7 +87,7 @@ class TestHistogramRun:
         past_context = {"neuron_labeling": {"run_id": "nl_past"}}
         mock_compare_loader_cls.return_value = _make_past_loader(
             context=past_context,
-            past_neuron_labels={"7": "past_a", "9": "past_b"},
+            past_neuron_labels={"7": {"label": "past_a"}, "9": {"label": "past_b"}},
         )
 
         from plugins.labeling_evaluation._nearest_label_distance import (

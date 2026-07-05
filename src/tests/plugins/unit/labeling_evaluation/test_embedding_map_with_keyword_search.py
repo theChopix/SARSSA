@@ -25,10 +25,10 @@ def _build_plugin() -> Any:
 
     plugin = Plugin()
     plugin.neuron_labels = {
-        "0": "alpha",
-        "1": "beta",
-        "2": "gamma",
-        "3": "delta",
+        "0": {"label": "alpha"},
+        "1": {"label": "beta"},
+        "2": {"label": "gamma"},
+        "3": {"label": "delta"},
     }
     plugin.neuron_ids = ["0", "1", "2", "3"]
     plugin.label_texts = ["alpha", "beta", "gamma", "delta"]
