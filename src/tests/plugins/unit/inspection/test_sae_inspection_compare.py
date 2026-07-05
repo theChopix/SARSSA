@@ -26,7 +26,7 @@ def _build_plugin() -> Plugin:
             mocked ``MLflowRunLoader``.
     """
     plugin = Plugin()
-    plugin.neuron_labels = {"0": "current_a", "1": "current_b"}
+    plugin.neuron_labels = {"0": {"label": "current_a"}, "1": {"label": "current_b"}}
     plugin.items = np.array(["c_item_0", "c_item_1", "c_item_2"])
     plugin.item_acts = torch.tensor(
         [
@@ -101,7 +101,7 @@ class TestCompareSaeInspectionRun:
         }
         past_loader = _make_past_loader(
             context=past_context,
-            past_neuron_labels={"0": "past_a", "1": "past_b"},
+            past_neuron_labels={"0": {"label": "past_a"}, "1": {"label": "past_b"}},
             past_items=np.array(["p_item_0", "p_item_1", "p_item_2"]),
             past_item_acts=sp.csr_matrix(
                 np.array(
@@ -184,6 +184,11 @@ class TestCompareSaeInspectionFormatter:
         """Verify a dead/unscored neuron renders label and id only."""
         result = Plugin._format_neuron_choices({"3": {"label": None, "confidence": None}})
         assert result == [{"label": "None [neuron id 3]", "value": "3", "tint": None}]
+
+    def test_confidence_is_optional(self) -> None:
+        """Verify an entry without a confidence key renders label and id only."""
+        result = Plugin._format_neuron_choices({"4": {"label": "concept_x"}})
+        assert result == [{"label": "concept_x [neuron id 4]", "value": "4", "tint": None}]
 
     def test_handles_empty_mapping(self) -> None:
         """Verify the formatter handles an empty input."""

@@ -21,7 +21,7 @@ class TestComputeTopKForNeuron:
                 [0.3, 0.7],
             ]
         )
-        labels = {"0": "concept_a", "1": "concept_b"}
+        labels = {"0": {"label": "concept_a"}, "1": {"label": "concept_b"}}
 
         result = compute_top_k_for_neuron(
             neuron_id="0",
@@ -38,7 +38,7 @@ class TestComputeTopKForNeuron:
         """Verify neuron_id is parsed to int and label is included."""
         items = np.array(["x"])
         item_acts = torch.tensor([[1.0, 2.0]])
-        labels = {"1": "concept_b"}
+        labels = {"1": {"label": "concept_b"}}
 
         result = compute_top_k_for_neuron(
             neuron_id="1",
@@ -55,7 +55,7 @@ class TestComputeTopKForNeuron:
         """Verify k larger than the number of items is clamped."""
         items = np.array(["a", "b"])
         item_acts = torch.tensor([[0.5], [0.9]])
-        labels = {"0": "x"}
+        labels = {"0": {"label": "x"}}
 
         result = compute_top_k_for_neuron(
             neuron_id="0",
@@ -73,7 +73,7 @@ class TestComputeTopKForNeuron:
         """Verify a neuron id not in the mapping raises ValueError."""
         items = np.array(["a"])
         item_acts = torch.tensor([[0.0]])
-        labels = {"0": "concept"}
+        labels = {"0": {"label": "concept"}}
 
         with pytest.raises(ValueError, match="999"):
             compute_top_k_for_neuron(
@@ -88,7 +88,7 @@ class TestComputeTopKForNeuron:
         """Verify k <= 0 is rejected up front."""
         items = np.array(["a"])
         item_acts = torch.tensor([[0.5]])
-        labels = {"0": "x"}
+        labels = {"0": {"label": "x"}}
 
         with pytest.raises(ValueError, match="positive"):
             compute_top_k_for_neuron(
@@ -103,7 +103,7 @@ class TestComputeTopKForNeuron:
         """Verify outputs are JSON-serialisable plain Python floats."""
         items = np.array(["a", "b"])
         item_acts = torch.tensor([[0.5], [0.9]])
-        labels = {"0": "x"}
+        labels = {"0": {"label": "x"}}
 
         result = compute_top_k_for_neuron(
             neuron_id="0",

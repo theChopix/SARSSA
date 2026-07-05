@@ -55,11 +55,6 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("item_acts", "item_acts.npz", "npz"),
             OutputArtifactSpec("neuron_labels", "neuron_labels.json", "json"),
             OutputArtifactSpec(
-                "neuron_labels_with_confidence",
-                "neuron_labels_with_confidence.json",
-                "json",
-            ),
-            OutputArtifactSpec(
                 "top_tag_per_neuron",
                 "top_tag_per_neuron.json",
                 "json",
@@ -154,12 +149,10 @@ class Plugin(BasePlugin):
             n: None if idx is None else self.tag_ids[idx] for n, idx in label_tag_index.items()
         }
 
-        # neuron_labels is a copy of top_tag_per_neuron
-        self.neuron_labels = dict(self.top_tag_per_neuron)
-
-        # attach each label's point-biserial correlation as its confidence
-        self.neuron_labels_with_confidence, self.mean_confidence = labels_with_confidence(
-            self.neuron_labels, label_tag_index, corr
+        # neuron_labels pairs each label with its confidence (the tag's
+        #   point-biserial correlation, already computed above)
+        self.neuron_labels, self.mean_confidence = labels_with_confidence(
+            self.top_tag_per_neuron, label_tag_index, corr
         )
 
         # best neuron per valid tag; dead neurons masked so never selected.

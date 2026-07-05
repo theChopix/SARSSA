@@ -21,7 +21,7 @@ def compute_steered_recommendations(
     users: np.ndarray,
     base_model: Any,
     sae: Any,
-    neuron_labels: dict[str, str],
+    neuron_labels: dict[str, dict],
     user_id: int,
     neuron_id: str,
     alpha: float,
@@ -42,7 +42,8 @@ def compute_steered_recommendations(
         users: Array of user ids indexable by user row index.
         base_model: Trained recommender model exposing ``recommend``.
         sae: Trained sparse autoencoder paired with *base_model*.
-        neuron_labels: Mapping from neuron id (string) to label.
+        neuron_labels: Mapping from neuron id (string) to its label entry;
+            only the ``"label"`` field is read here.
         user_id: Index of the user in *full_csr* (0-based).
         neuron_id: SAE neuron id as a string; must match a key in
             *neuron_labels*.
@@ -71,7 +72,7 @@ def compute_steered_recommendations(
         raise ValueError(f"alpha must be in [0, 1], got {alpha}")
 
     int_neuron_id = int(neuron_id)
-    label = neuron_labels[neuron_id]
+    label = neuron_labels[neuron_id]["label"]
 
     base_model.to(device)
     sae.to(device)

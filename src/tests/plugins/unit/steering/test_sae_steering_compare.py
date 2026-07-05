@@ -53,7 +53,7 @@ def _build_plugin() -> Any:
     plugin.users = np.array(["c_user"])
     plugin.base_model = _make_recommender([2, 1])
     plugin.sae = MagicMock()
-    plugin.neuron_labels = {"0": "current_a", "1": "current_b"}
+    plugin.neuron_labels = {"0": {"label": "current_a"}, "1": {"label": "current_b"}}
     return plugin
 
 
@@ -123,7 +123,7 @@ class TestCompareSaeSteeringRun:
         }
         past_loader = _make_past_loader(
             context=past_context,
-            past_neuron_labels={"0": "past_a", "1": "past_b"},
+            past_neuron_labels={"0": {"label": "past_a"}, "1": {"label": "past_b"}},
             past_full_csr=_make_csr([[1]], num_items=3),
             past_users=np.array(["p_user"]),
             past_items=np.array(["p_a", "p_b", "p_c"]),
@@ -220,6 +220,13 @@ class TestCompareSaeSteeringFormatter:
 
         result = Plugin._format_neuron_choices({"3": {"label": None, "confidence": None}})
         assert result == [{"label": "None [neuron id 3]", "value": "3", "tint": None}]
+
+    def test_confidence_is_optional(self) -> None:
+        """Verify an entry without a confidence key renders label and id only."""
+        from plugins.steering.compare.sae_steering.sae_steering import Plugin
+
+        result = Plugin._format_neuron_choices({"4": {"label": "concept_x"}})
+        assert result == [{"label": "concept_x [neuron id 4]", "value": "4", "tint": None}]
 
     def test_handles_empty_mapping(self) -> None:
         """Verify the formatter handles an empty input."""

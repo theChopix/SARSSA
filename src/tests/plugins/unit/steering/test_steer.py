@@ -65,7 +65,7 @@ class TestComputeSteeredRecommendations:
         full_csr = _make_csr([[0, 2]], num_items=4)
         items = np.array(["item_a", "item_b", "item_c", "item_d"])
         users = np.array(["u_orig"])
-        labels = {"7": "concept_a"}
+        labels = {"7": {"label": "concept_a"}}
 
         base_model = _make_recommender([3, 1])
         sae = MagicMock()
@@ -117,7 +117,7 @@ class TestComputeSteeredRecommendations:
             users=users,
             base_model=base_model,
             sae=sae,
-            neuron_labels={"3": "x"},
+            neuron_labels={"3": {"label": "x"}},
             user_id=0,
             neuron_id="3",
             alpha=0.7,
@@ -146,7 +146,7 @@ class TestComputeSteeredRecommendations:
             "users": np.array(["u"]),
             "base_model": MagicMock(),
             "sae": MagicMock(),
-            "neuron_labels": {"0": "x"},
+            "neuron_labels": {"0": {"label": "x"}},
             "user_id": 5,
             "neuron_id": "0",
             "alpha": 0.1,
@@ -171,7 +171,7 @@ class TestComputeSteeredRecommendations:
             "users": np.array(["u"]),
             "base_model": MagicMock(),
             "sae": MagicMock(),
-            "neuron_labels": {"0": "x"},
+            "neuron_labels": {"0": {"label": "x"}},
             "user_id": 0,
             "neuron_id": "99",
             "alpha": 0.1,
@@ -196,7 +196,7 @@ class TestComputeSteeredRecommendations:
             "users": np.array(["u"]),
             "base_model": MagicMock(),
             "sae": MagicMock(),
-            "neuron_labels": {"0": "x"},
+            "neuron_labels": {"0": {"label": "x"}},
             "user_id": 0,
             "neuron_id": "0",
             "alpha": 1.5,
@@ -217,7 +217,7 @@ class TestComputeSteeredRecommendations:
         full_csr = _make_csr([[]], num_items=1)
         items = np.array(["a"])
         users = np.array([42])
-        labels = {"0": "x"}
+        labels = {"0": {"label": "x"}}
 
         base_model = _make_recommender([0])
         sae = MagicMock()

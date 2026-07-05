@@ -23,7 +23,7 @@ def _build_plugin() -> Any:
     from plugins.labeling_evaluation.compare.embedding_map.embedding_map import Plugin
 
     plugin = Plugin()
-    plugin.neuron_labels = {"0": "current_a", "1": "current_b"}
+    plugin.neuron_labels = {"0": {"label": "current_a"}, "1": {"label": "current_b"}}
     plugin.current_neuron_ids = ["0", "1"]
     plugin.current_label_texts = ["current_a", "current_b"]
     return plugin
@@ -67,7 +67,11 @@ class TestCompareEmbeddingMapRun:
         past_context = {"neuron_labeling": {"run_id": "nl_past"}}
         past_loader = _make_past_loader(
             context=past_context,
-            past_neuron_labels={"7": "past_a", "9": "past_b", "12": "past_c"},
+            past_neuron_labels={
+                "7": {"label": "past_a"},
+                "9": {"label": "past_b"},
+                "12": {"label": "past_c"},
+            },
         )
         mock_compare_loader_cls.return_value = past_loader
 
@@ -131,7 +135,7 @@ class TestCompareEmbeddingMapRun:
         past_context = {"neuron_labeling": {"run_id": "nl_past"}}
         mock_compare_loader_cls.return_value = _make_past_loader(
             context=past_context,
-            past_neuron_labels={"7": "past_a"},
+            past_neuron_labels={"7": {"label": "past_a"}},
         )
         mock_compute.return_value = np.array(
             [

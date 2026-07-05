@@ -23,7 +23,11 @@ def _build_plugin() -> Any:
     from plugins.labeling_evaluation.single.dendrogram.dendrogram import Plugin
 
     plugin = Plugin()
-    plugin.neuron_labels = {"0": "alpha", "1": "beta", "2": "gamma"}
+    plugin.neuron_labels = {
+        "0": {"label": "alpha"},
+        "1": {"label": "beta"},
+        "2": {"label": "gamma"},
+    }
     plugin.neuron_ids = ["0", "1", "2"]
     plugin.label_texts = ["alpha", "beta", "gamma"]
     return plugin

@@ -138,7 +138,7 @@ class Plugin(BasePlugin):
         """
         super().load_context(context)
         self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
-        self.label_texts = [str(self.neuron_labels[nid]) for nid in self.neuron_ids]
+        self.label_texts = [str(self.neuron_labels[nid]["label"]) for nid in self.neuron_ids]
         logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
 
     def run(
