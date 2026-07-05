@@ -47,6 +47,7 @@ class PipelineEngine:
         tags: dict[str, str] | None = None,
         description: str = "",
         pipeline_name: str = "",
+        derived: bool = False,
     ) -> str:
         """Create a new parent pipeline run in MLflow.
 
@@ -60,6 +61,8 @@ class PipelineEngine:
             pipeline_name: Optional user-provided label woven into the
                 run name (see
                 :func:`~app.core.plugin_discovery.naming.format_pipeline_run_name`).
+            derived: Whether the run inherited upstream steps from another
+                run; adds a ``( inherited )`` marker to the run name.
 
         Returns:
             str: The parent run ID.
@@ -80,7 +83,9 @@ class PipelineEngine:
             mlflow_tags = {f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()}
 
         run = mlflow.start_run(
-            run_name=format_pipeline_run_name(pipeline_name, datetime.datetime.now(TIMEZONE)),
+            run_name=format_pipeline_run_name(
+                pipeline_name, datetime.datetime.now(TIMEZONE), derived=derived
+            ),
             tags=mlflow_tags,
             description=description or None,
         )

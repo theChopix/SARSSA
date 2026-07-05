@@ -87,6 +87,7 @@ def format_step_run_name(
 def format_pipeline_run_name(
     user_pipeline_name: str,
     now: datetime.datetime,
+    derived: bool = False,
 ) -> str:
     """Build the display name for a parent pipeline run.
 
@@ -98,11 +99,14 @@ def format_pipeline_run_name(
 
     A blank or whitespace-only ``user_pipeline_name`` yields the no-name
     form.  ``now`` is taken as an argument (rather than read from the
-    clock) so the function stays pure and trivially testable.
+    clock) so the function stays pure and trivially testable.  A *derived*
+    run (one that inherited upstream steps from an earlier run) gets a
+    trailing ``( inherited )`` marker so it stands out in the run list.
 
     Args:
         user_pipeline_name: Optional user-supplied label for the run.
         now: Timestamp to render into the name.
+        derived: Whether the run inherited upstream steps from another run.
 
     Returns:
         str: The formatted parent-run name.
@@ -110,4 +114,5 @@ def format_pipeline_run_name(
     stamp = now.strftime(_PIPELINE_RUN_TS_FORMAT)
     name = user_pipeline_name.strip()
     label = f" | {name}" if name else ""
-    return f"Pipeline Run{label} [ {stamp} ]"
+    suffix = " ( inherited )" if derived else ""
+    return f"Pipeline Run{label} [ {stamp} ]{suffix}"

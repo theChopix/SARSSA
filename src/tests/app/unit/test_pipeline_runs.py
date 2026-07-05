@@ -6,13 +6,109 @@ All MLflow interactions are mocked to keep tests fast and isolated.
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+from mlflow.exceptions import MlflowException
 
-from app.config.config import EXPERIMENT_NAME
+from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL, PLUGIN_CATEGORIES
 from app.core.pipeline_runs import (
+    build_provenance_note,
     get_eligible_pipeline_runs,
     get_pipeline_runs,
     get_run_context,
 )
+
+
+def _make_provenance_run(
+    run_id: str,
+    run_name: str = "Run",
+    experiment_id: str = "0",
+    parent_run_id: str | None = None,
+) -> MagicMock:
+    """Mock MLflow Run with the fields build_provenance_note reads."""
+    run = MagicMock()
+    run.info.run_id = run_id
+    run.info.run_name = run_name
+    run.info.experiment_id = experiment_id
+    tags = {"mlflow.runName": run_name}
+    if parent_run_id is not None:
+        tags["mlflow.parentRunId"] = parent_run_id
+    run.data.tags = tags
+    return run
+
+
+def _provenance_client(runs: dict[str, MagicMock]) -> MagicMock:
+    """MlflowClient mock resolving *runs* by id and raising for unknown ids."""
+    client = MagicMock()
+
+    def get_run(run_id: str) -> MagicMock:
+        if run_id in runs:
+            return runs[run_id]
+        raise MlflowException(f"no run {run_id}")
+
+    client.get_run.side_effect = get_run
+    return client
+
+
+class TestBuildProvenanceNote:
+    """Tests for build_provenance_note (MLflow mocked)."""
+
+    def test_empty_context_returns_empty(self) -> None:
+        """Verify a from-scratch run (no inherited context) gets no note."""
+        assert build_provenance_note({}) == ""
+
+    def test_single_source_groups_categories(self) -> None:
+        """Verify steps from one source run are grouped into one linked bullet."""
+        runs = {
+            "parentA": _make_provenance_run("parentA", "Pipeline Run [ X ]", "7"),
+            "child_ds": _make_provenance_run("child_ds", parent_run_id="parentA"),
+            "child_sae": _make_provenance_run("child_sae", parent_run_id="parentA"),
+        }
+        with patch("app.core.pipeline_runs.MlflowClient", return_value=_provenance_client(runs)):
+            note = build_provenance_note(
+                {
+                    "dataset_loading": {"run_id": "child_ds"},
+                    "training_sae": {"run_id": "child_sae"},
+                }
+            )
+
+        assert "Inherited upstream from:" in note
+        assert note.count("\n- ") == 1  # one grouped bullet for the single source
+        assert "[Pipeline Run [ X ]]" in note
+        assert f"{MLFLOW_UI_BASE_URL}/#/experiments/7/runs/parentA" in note
+        assert PLUGIN_CATEGORIES["dataset_loading"].display_name in note
+        assert PLUGIN_CATEGORIES["training_sae"].display_name in note
+
+    def test_multiple_sources_yield_one_bullet_each(self) -> None:
+        """Verify steps from two source runs produce two linked bullets."""
+        runs = {
+            "P1": _make_provenance_run("P1", "First"),
+            "P2": _make_provenance_run("P2", "Second"),
+            "c1": _make_provenance_run("c1", parent_run_id="P1"),
+            "c2": _make_provenance_run("c2", parent_run_id="P2"),
+        }
+        with patch("app.core.pipeline_runs.MlflowClient", return_value=_provenance_client(runs)):
+            note = build_provenance_note(
+                {
+                    "dataset_loading": {"run_id": "c1"},
+                    "training_sae": {"run_id": "c2"},
+                }
+            )
+
+        assert note.count("\n- ") == 2
+        assert "runs/P1" in note
+        assert "runs/P2" in note
+
+    def test_orphaned_child_is_skipped(self) -> None:
+        """Verify an unresolvable child run is skipped (no note)."""
+        with patch("app.core.pipeline_runs.MlflowClient", return_value=_provenance_client({})):
+            note = build_provenance_note({"dataset_loading": {"run_id": "missing"}})
+        assert note == ""
+
+    def test_child_without_parent_tag_is_skipped(self) -> None:
+        """Verify a child lacking a parentRunId tag contributes nothing."""
+        runs = {"c1": _make_provenance_run("c1")}  # no parent_run_id
+        with patch("app.core.pipeline_runs.MlflowClient", return_value=_provenance_client(runs)):
+            note = build_provenance_note({"dataset_loading": {"run_id": "c1"}})
+        assert note == ""
 
 
 def _make_mock_run(

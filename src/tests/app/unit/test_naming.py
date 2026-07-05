@@ -45,6 +45,16 @@ class TestFormatPipelineRunName:
         result = format_pipeline_run_name("", now)
         assert result == "Pipeline Run [ 02/01/2026 | 03:04 ]"
 
+    def test_derived_appends_marker(self) -> None:
+        """Verify a derived run gets a trailing ( inherited ) marker."""
+        result = format_pipeline_run_name("Baseline ELSA", _FIXED_NOW, derived=True)
+        assert result == "Pipeline Run | Baseline ELSA [ 31/05/2026 | 14:07 ] ( inherited )"
+
+    def test_non_derived_has_no_marker(self) -> None:
+        """Verify the marker is absent by default."""
+        result = format_pipeline_run_name("", _FIXED_NOW, derived=False)
+        assert result == "Pipeline Run [ 31/05/2026 | 14:07 ]"
+
 
 class TestMakeDatasetLabel:
     """Tests for make_dataset_label (pure, no mocking)."""

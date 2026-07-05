@@ -212,6 +212,7 @@ class TestWorkerTags:
             tags={"dataset": "MovieLens", "model": "ELSA"},
             description="",
             pipeline_name="",
+            derived=False,
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -234,7 +235,7 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="Baseline run", pipeline_name=""
+            tags={}, description="Baseline run", pipeline_name="", derived=False
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -257,7 +258,7 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="", pipeline_name="Baseline ELSA"
+            tags={}, description="", pipeline_name="Baseline ELSA", derived=False
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -278,7 +279,71 @@ class TestWorkerTags:
         task = _make_task()
         run_pipeline_worker(task)
 
-        mock_engine.start_run.assert_called_once_with(tags={}, description="", pipeline_name="")
+        mock_engine.start_run.assert_called_once_with(
+            tags={}, description="", pipeline_name="", derived=False
+        )
+
+    @patch("app.core.pipeline_worker.build_provenance_note")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_derived_run_is_marked_and_notes_provenance(
+        self, mock_engine_cls: MagicMock, mock_note: MagicMock
+    ) -> None:
+        """Verify an inherited context marks the run derived and adds the note."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+        mock_note.return_value = "**Inherited upstream from:**\n- [src](url) — Dataset Loading"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        task.initial_context = {"dataset_loading": {"run_id": "child_x"}}
+        run_pipeline_worker(task)
+
+        mock_note.assert_called_once_with({"dataset_loading": {"run_id": "child_x"}})
+        kwargs = mock_engine.start_run.call_args.kwargs
+        assert kwargs["derived"] is True
+        assert "Inherited upstream from:" in kwargs["description"]
+
+    @patch("app.core.pipeline_worker.build_provenance_note")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_recomputed_category_excluded_from_provenance(
+        self, mock_engine_cls: MagicMock, mock_note: MagicMock
+    ) -> None:
+        """Verify a step executed in this run is not counted as inherited.
+
+        Even when the loaded context carried an older version of the same
+        category, the step being (re)computed here must be excluded from the
+        provenance — only the genuinely inherited upstream is recorded.
+        """
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+        mock_note.return_value = "note"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task(steps=[{"plugin": "neuron_labeling.tf_idf.tf_idf", "params": {}}])
+        task.initial_context = {
+            "dataset_loading": {"run_id": "ds"},
+            "neuron_labeling": {"run_id": "old_labeling"},
+        }
+        run_pipeline_worker(task)
+
+        # neuron_labeling is executed here, so only dataset_loading is inherited.
+        mock_note.assert_called_once_with({"dataset_loading": {"run_id": "ds"}})
 
 
 class TestWorkerCancellation:
