@@ -168,3 +168,8 @@ class Plugin(BasePlugin):
 
         self.num_tags = len(self.tag_ids)
         self.num_neurons = num_neurons
+
+        self.notifier.success(
+            f"Tag-correlation labeling DONE. Mean label confidence: {mean_confidence:.3f} — "
+            "the average correlation between a neuron's activation and its assigned tag."
+        )
