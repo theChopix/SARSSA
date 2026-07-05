@@ -1,4 +1,4 @@
-"""Confidence scoring shared by the neuron-labeling plugins.
+"""Confidence scoring shared by the TAG-based neuron-labeling plugins.
 
 A label's confidence is the point-biserial correlation ``r`` in ``[-1, 1]``
 between a neuron's activation and the binary presence of its assigned tag.
