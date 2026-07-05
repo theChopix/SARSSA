@@ -206,11 +206,13 @@ class TestCompareSaeSteeringFormatter:
             "label": "concept_a [neuron id 0] · conf 0.50",
             "value": "0",
             "tint": 0.5,
+            "emphasis": "concept_a",
         } in result
         assert {
             "label": "concept_b [neuron id 5] · conf -0.10",
             "value": "5",
             "tint": -0.1,
+            "emphasis": "concept_b",
         } in result
         assert len(result) == 2
 
@@ -219,14 +221,23 @@ class TestCompareSaeSteeringFormatter:
         from plugins.steering.compare.sae_steering.sae_steering import Plugin
 
         result = Plugin._format_neuron_choices({"3": {"label": None, "confidence": None}})
-        assert result == [{"label": "None [neuron id 3]", "value": "3", "tint": None}]
+        assert result == [
+            {"label": "None [neuron id 3]", "value": "3", "tint": None, "emphasis": "None"}
+        ]
 
     def test_confidence_is_optional(self) -> None:
         """Verify an entry without a confidence key renders label and id only."""
         from plugins.steering.compare.sae_steering.sae_steering import Plugin
 
         result = Plugin._format_neuron_choices({"4": {"label": "concept_x"}})
-        assert result == [{"label": "concept_x [neuron id 4]", "value": "4", "tint": None}]
+        assert result == [
+            {
+                "label": "concept_x [neuron id 4]",
+                "value": "4",
+                "tint": None,
+                "emphasis": "concept_x",
+            }
+        ]
 
     def test_handles_empty_mapping(self) -> None:
         """Verify the formatter handles an empty input."""

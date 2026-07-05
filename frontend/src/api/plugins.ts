@@ -37,6 +37,12 @@ export interface ParamChoice {
    * the other. Only some choice kinds provide it.
    */
   tint?: number | null;
+  /**
+   * Optional leading substring of `label` to render in bold (e.g. the
+   * option's primary name, with trailing metadata left in normal weight).
+   * Ignored when `label` does not start with it.
+   */
+  emphasis?: string | null;
 }
 
 /**

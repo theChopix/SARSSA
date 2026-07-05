@@ -100,19 +100,20 @@ class Plugin(BasePlugin):
                 optionally carrying a numeric ``"confidence"``.
 
         Returns:
-            list[dict[str, object]]: Options with ``"label"``, ``"value"`` and,
-                when the entry has a confidence, a numeric ``"tint"`` in [-1, 1]
-                the frontend maps to a background colour; the label shows it too.
+            list[dict[str, object]]: Options with ``"label"``, ``"value"``, an
+                ``"emphasis"`` (the label text to bold) and, when the entry has
+                a confidence, a numeric ``"tint"`` in [-1, 1] the frontend maps
+                to a background colour; the label shows the score too.
         """
         choices: list[dict[str, object]] = []
         for nid, entry in data.items():
-            label = entry.get("label")
+            name = f"{entry.get('label')}"
             confidence = entry.get("confidence")
             if confidence is None:
-                text = f"{label} [neuron id {nid}]"
+                text = f"{name} [neuron id {nid}]"
             else:
-                text = f"{label} [neuron id {nid}] · conf {confidence:.2f}"
-            choices.append({"label": text, "value": nid, "tint": confidence})
+                text = f"{name} [neuron id {nid}] · conf {confidence:.2f}"
+            choices.append({"label": text, "value": nid, "tint": confidence, "emphasis": name})
         return choices
 
     def run(
