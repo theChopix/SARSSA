@@ -173,6 +173,11 @@ class Plugin(BasePlugin):
         self.num_tags = len(self.tag_ids)
         self.num_neurons = item_acts.shape[1]
 
+        self.notifier.success(
+            f"TF-IDF labeling DONE. Mean label confidence: {mean_confidence:.3f} — "
+            "the average correlation between a neuron's activation and its assigned tag."
+        )
+
     @staticmethod
     def _compute_tfidf(x: np.ndarray) -> np.ndarray:
         """Compute TF-IDF for a term-document value matrix.
