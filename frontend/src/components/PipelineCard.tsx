@@ -699,7 +699,14 @@ function DropdownSelect({
                     transition hover:brightness-95
                     ${opt.value === value ? "font-medium ring-2 ring-inset ring-blue-500" : ""}`}
                 >
-                  {opt.label}
+                  {opt.emphasis && opt.label.startsWith(opt.emphasis) ? (
+                    <>
+                      <b>{opt.emphasis}</b>
+                      {opt.label.slice(opt.emphasis.length)}
+                    </>
+                  ) : (
+                    opt.label
+                  )}
                 </li>
               ))}
           </ul>
