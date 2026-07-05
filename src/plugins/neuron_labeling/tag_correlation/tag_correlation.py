@@ -1,5 +1,6 @@
 from typing import Annotated
 
+import mlflow
 import numpy as np
 import scipy.sparse as sp
 
@@ -68,8 +69,6 @@ class Plugin(BasePlugin):
         output_params=[
             OutputParamSpec("num_tags", "num_tags"),
             OutputParamSpec("num_neurons", "num_neurons"),
-            OutputParamSpec("mean_top_correlation", "mean_top_correlation"),
-            OutputParamSpec("mean_confidence", "mean_confidence"),
         ],
     )
 
@@ -151,9 +150,10 @@ class Plugin(BasePlugin):
 
         # neuron_labels pairs each label with its confidence (the tag's
         #   point-biserial correlation, already computed above)
-        self.neuron_labels, self.mean_confidence = labels_with_confidence(
+        self.neuron_labels, mean_confidence = labels_with_confidence(
             self.top_tag_per_neuron, label_tag_index, corr
         )
+        mlflow.log_metric("mean_confidence", mean_confidence)
 
         # best neuron per valid tag; dead neurons masked so never selected.
         corr_by_tag = corr.copy()
@@ -163,10 +163,6 @@ class Plugin(BasePlugin):
             for t in range(corr.shape[0])
             if valid_tag_mask[t]
         }
-
-        # overall SAE interpretability - mean best correlation per valid tag
-        top_corr = corr_by_tag[valid_tag_mask].max(axis=1) if labelled else np.array([])
-        self.mean_top_correlation = float(top_corr.mean()) if top_corr.size else 0.0
 
         self.item_acts = sp.csr_matrix(item_acts_np)
 
