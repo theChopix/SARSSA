@@ -1,5 +1,6 @@
 from typing import Annotated
 
+import mlflow
 import numpy as np
 import scipy.sparse as sp
 
@@ -68,7 +69,6 @@ class Plugin(BasePlugin):
         output_params=[
             OutputParamSpec("num_tags", "num_tags"),
             OutputParamSpec("num_neurons", "num_neurons"),
-            OutputParamSpec("mean_confidence", "mean_confidence"),
         ],
     )
 
@@ -148,9 +148,10 @@ class Plugin(BasePlugin):
         #   weak or negative).
         attr = (self.tag_item_counts > 0).astype(np.float64).T.tocsr()
         corr = point_biserial_matrix(item_acts_np, attr)
-        self.neuron_labels, self.mean_confidence = labels_with_confidence(
+        self.neuron_labels, mean_confidence = labels_with_confidence(
             self.top_tag_per_neuron, label_tag_index, corr
         )
+        mlflow.log_metric("mean_confidence", mean_confidence)
 
         # top_neuron_per_tag: for each tag, the neuron that best
         #   characterises it. Uses the same (neuron x tag) tfidf as above
