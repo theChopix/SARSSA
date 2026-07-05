@@ -14,12 +14,17 @@ from plugins.plugin_interface import (
     OutputArtifactSpec,
     OutputParamSpec,
     PluginIOSpec,
+    StaticDropdownHint,
 )
 from utils.plugin_logger import get_logger
 from utils.torch.evaluation import compute_sae_item_activations
 from utils.torch.runtime import set_seed
 
 logger = get_logger(__name__)
+
+# TF-IDF orientations — which entity plays the "document" role.
+_ORIENTATION_NEURON_DOC = "neuron_as_document"
+_ORIENTATION_TAG_DOC = "tag_as_document"
 
 
 class Plugin(BasePlugin):
@@ -28,7 +33,7 @@ class Plugin(BasePlugin):
         "Assigns a human-readable label to every autoencoder neuron. It runs the "
         "autoencoder over all items to measure each neuron's activations, then uses "
         "TF-IDF over the dataset's tags to pick the tag that most distinctively "
-        "characterizes each neuron. These labels drive inspection, steering and evaluation."
+        "characterizes each neuron."
     )
 
     io_spec = PluginIOSpec(
@@ -70,10 +75,22 @@ class Plugin(BasePlugin):
             OutputParamSpec("num_tags", "num_tags"),
             OutputParamSpec("num_neurons", "num_neurons"),
         ],
+        param_ui_hints=[
+            StaticDropdownHint(
+                param_name="orientation",
+                choices=[_ORIENTATION_TAG_DOC, _ORIENTATION_NEURON_DOC],
+            ),
+        ],
     )
 
     def run(
         self,
+        orientation: Annotated[
+            str,
+            "TF-IDF orientation — which entity is the document. 'tag_as_document' "
+            "normalises the term frequency per tag; 'neuron_as_document' "
+            "normalises it per neuron.",
+        ] = _ORIENTATION_TAG_DOC,
         batch_size: Annotated[
             int,
             "Items encoded per forward pass when computing SAE activations. "
@@ -91,7 +108,15 @@ class Plugin(BasePlugin):
         Args:
             batch_size: Batch size for computing SAE activations.
             seed: Random seed for reproducibility.
+            orientation: Which entity is the TF-IDF document; see the
+                parameter annotation.
         """
+        if orientation not in (_ORIENTATION_NEURON_DOC, _ORIENTATION_TAG_DOC):
+            raise ValueError(
+                f"orientation must be one of ({_ORIENTATION_NEURON_DOC!r}, "
+                f"{_ORIENTATION_TAG_DOC!r}), got {orientation!r}"
+            )
+
         # CPU: wide one-hot pass OOMs small GPUs
         device = "cpu"
         set_seed(seed)
@@ -126,9 +151,9 @@ class Plugin(BasePlugin):
             tag_neuron.toarray() if sp.issparse(tag_neuron) else np.asarray(tag_neuron)
         )
 
-        # tfidf with rows=neurons (terms), columns=tags (documents);
-        #   shape: (num_neurons, num_tags)
-        tfidf_nt = self._compute_tfidf(tag_neuron_dense.T)
+        # TF-IDF in the requested orientation, as a (num_neurons, num_tags)
+        #   score matrix so the downstream argmaxes are identical either way.
+        tfidf_nt = self._oriented_tfidf(tag_neuron_dense, orientation)
 
         # top_tag_per_neuron: for each neuron, the tag with highest tfidf
         #   score; dead neurons get no label (None). The chosen tag index is
@@ -153,11 +178,9 @@ class Plugin(BasePlugin):
         )
         mlflow.log_metric("mean_confidence", mean_confidence)
 
-        # top_neuron_per_tag: for each tag, the neuron that best
-        #   characterises it. Uses the same (neuron x tag) tfidf as above
-        #   (term=neuron, document=tag), taking the argmax over the neuron
-        #   axis per tag. Dead neurons are masked to -inf so they are never
-        #   selected.
+        # top_neuron_per_tag: for each tag, the neuron that best characterises
+        #   it — argmax over the neuron axis of the same oriented tfidf. Dead
+        #   neurons are masked to -inf so they are never selected.
         tfidf_nt_masked = tfidf_nt.copy()
         tfidf_nt_masked[dead_neuron_mask, :] = -np.inf
         self.top_neuron_per_tag = {
@@ -177,6 +200,24 @@ class Plugin(BasePlugin):
             f"TF-IDF labeling DONE. Mean label confidence: {mean_confidence:.3f} — "
             "the average correlation between a neuron's activation and its assigned tag."
         )
+
+    @staticmethod
+    def _oriented_tfidf(tag_neuron: np.ndarray, orientation: str) -> np.ndarray:
+        """TF-IDF scores as ``(num_neurons, num_tags)`` for the orientation.
+
+        Args:
+            tag_neuron: Dense ``(num_tags, num_neurons)`` association matrix.
+            orientation: Which entity is the TF-IDF document — one of the
+                module-level orientation constants.
+
+        Returns:
+            np.ndarray: ``(num_neurons, num_tags)`` TF-IDF score matrix.
+        """
+        if orientation == _ORIENTATION_TAG_DOC:
+            # document=tag, term=neuron (original): TF normalised per tag.
+            return Plugin._compute_tfidf(tag_neuron.T)
+        # document=neuron, term=tag: TF normalised per neuron.
+        return Plugin._compute_tfidf(tag_neuron).T
 
     @staticmethod
     def _compute_tfidf(x: np.ndarray) -> np.ndarray:
