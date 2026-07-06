@@ -129,6 +129,8 @@ function HomePage() {
     for (const key of oneTimeKeys) {
       const card = cards[key];
       if (!card?.selectedPlugin) continue;
+      // Loaded cards are inherited via context, not re-executed.
+      if (card.mode === "load") continue;
 
       // Build params: start from defaults, override with user input.
       const entry = registry[key];

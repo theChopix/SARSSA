@@ -664,8 +664,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     for (const [key] of sorted) {
       if (!cards[key]) continue;
       if (allowedCategories.has(key) && scopedContext[key]) {
+        // Clean base so no stale setup selection leaks into a loaded card.
         cards[key] = {
-          ...cards[key],
+          ...defaultCard(),
           status: "done",
           stepRunId: scopedContext[key].run_id,
           mode: "load",
