@@ -786,6 +786,45 @@ class TestStepWorkerFailure:
 
         assert task.context is None
 
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_restores_parent_status_on_failure(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify the parent run's prior status is restored when the step fails."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+        mock_engine.execute_step.side_effect = RuntimeError("crash")
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        mock_engine.restore_resumed_status.assert_called_once()
+
+    @patch("app.core.pipeline_worker.get_run_context")
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_no_status_restore_on_success(
+        self, mock_engine_cls: MagicMock, mock_get_ctx: MagicMock
+    ) -> None:
+        """Verify the status restore is not triggered when the step succeeds."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_get_ctx.return_value = {}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_step_task()
+        run_step_worker(task)
+
+        mock_engine.restore_resumed_status.assert_not_called()
+
 
 class TestPipelineWorkerNotifier:
     """Tests for notifier wiring in run_pipeline_worker."""

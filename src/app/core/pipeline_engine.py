@@ -36,6 +36,7 @@ class PipelineEngine:
     def __init__(self, steps: list[dict[str, Any]] | None = None) -> None:
         self.steps = steps or []
         self._parent_run_id: str | None = None
+        self._resumed_status: str | None = None
 
     # ── Step-by-step mode ─────────────────────────────
 
@@ -301,6 +302,27 @@ class PipelineEngine:
 
         mlflow.set_experiment(EXPERIMENT_NAME)
         self._parent_run_id = run_id
+        # Remember the run's terminal status so restore_resumed_status() can
+        # put it back if a failing step flips the reopened parent to FAILED.
+        client = mlflow.tracking.MlflowClient()
+        self._resumed_status = client.get_run(run_id).info.status
+
+    def restore_resumed_status(self) -> None:
+        """Restore a resumed parent run's original terminal status and detach.
+
+        A failing step marks the reopened parent FAILED on exit; this puts
+        the status captured by :meth:`resume_run` back. No-op unless a
+        resumed run is active.
+        """
+        if self._parent_run_id is None or self._resumed_status is None:
+            return
+
+        client = mlflow.tracking.MlflowClient()
+        if client.get_run(self._parent_run_id).info.status != self._resumed_status:
+            client.set_terminated(self._parent_run_id, status=self._resumed_status)
+
+        self._parent_run_id = None
+        self._resumed_status = None
 
     # ── Batch mode (original) ─────────────────────────
 

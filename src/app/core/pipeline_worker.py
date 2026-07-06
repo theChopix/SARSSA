@@ -153,3 +153,8 @@ def run_step_worker(task: TaskState) -> None:
         logger.exception("[STEP WORKER] Step failed: %s", exc)
         task.status = "error"
         task.error = str(exc)
+        # A failed step must not leave a previously FINISHED parent run FAILED.
+        try:
+            engine.restore_resumed_status()
+        except Exception:
+            logger.warning("[STEP WORKER] Could not restore the parent run's status.")

@@ -557,6 +557,84 @@ class TestResumeRun:
         assert "cat" in ctx
 
 
+def _mock_run_with_status(status: str) -> MagicMock:
+    """Create a mock MLflow Run whose ``info.status`` is *status*."""
+    run = MagicMock()
+    run.info.status = status
+    return run
+
+
+class TestRestoreResumedStatus:
+    """Tests for PipelineEngine.restore_resumed_status."""
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_restores_prior_status_when_flipped(self, mock_mlflow: MagicMock) -> None:
+        """Verify a FINISHED run flipped to FAILED is set back to FINISHED."""
+        client = mock_mlflow.tracking.MlflowClient.return_value
+        client.get_run.side_effect = [
+            _mock_run_with_status("FINISHED"),  # captured by resume_run
+            _mock_run_with_status("FAILED"),  # read back after the failed step
+        ]
+
+        engine = PipelineEngine()
+        engine.resume_run("parent_id")
+        engine.restore_resumed_status()
+
+        client.set_terminated.assert_called_once_with("parent_id", status="FINISHED")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_noop_when_status_unchanged(self, mock_mlflow: MagicMock) -> None:
+        """Verify no status write happens when the run was not flipped."""
+        client = mock_mlflow.tracking.MlflowClient.return_value
+        client.get_run.side_effect = [
+            _mock_run_with_status("FINISHED"),
+            _mock_run_with_status("FINISHED"),
+        ]
+
+        engine = PipelineEngine()
+        engine.resume_run("parent_id")
+        engine.restore_resumed_status()
+
+        client.set_terminated.assert_not_called()
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_noop_without_resumed_run(self, mock_mlflow: MagicMock) -> None:
+        """Verify calling on a fresh engine does nothing."""
+        client = mock_mlflow.tracking.MlflowClient.return_value
+
+        engine = PipelineEngine()
+        engine.restore_resumed_status()
+
+        client.set_terminated.assert_not_called()
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_noop_on_fresh_start_run(self, mock_mlflow: MagicMock) -> None:
+        """Verify a run created via start_run (not resumed) is never touched."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
+        client = mock_mlflow.tracking.MlflowClient.return_value
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.restore_resumed_status()
+
+        client.set_terminated.assert_not_called()
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_detaches_from_run(self, mock_mlflow: MagicMock) -> None:
+        """Verify _parent_run_id is cleared after restoring."""
+        client = mock_mlflow.tracking.MlflowClient.return_value
+        client.get_run.side_effect = [
+            _mock_run_with_status("FINISHED"),
+            _mock_run_with_status("FAILED"),
+        ]
+
+        engine = PipelineEngine()
+        engine.resume_run("parent_id")
+        engine.restore_resumed_status()
+
+        assert engine._parent_run_id is None
+
+
 class TestFailRun:
     """Tests for PipelineEngine.fail_run."""
 
