@@ -78,8 +78,14 @@ function HomePage() {
   const clearError = usePipelineStore((s) => s.clearError);
   const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
   const totalSteps = usePipelineStore((s) => s.totalSteps);
-  const cancellationPending = usePipelineStore((s) => s.cancellationPending);
-  const abortPending = usePipelineStore((s) => s.abortPending);
+  const currentTaskId = usePipelineStore((s) => s.currentTaskId);
+  const cancelRequested = usePipelineStore((s) => s.cancelRequested);
+  const pendingCancel =
+    cancelRequested && cancelRequested.taskId === currentTaskId
+      ? cancelRequested
+      : null;
+  const cancellationPending = pendingCancel !== null;
+  const abortPending = pendingCancel?.hard ?? false;
   const cancelPipeline = usePipelineStore((s) => s.cancelPipeline);
   const abortPipeline = usePipelineStore((s) => s.abortPipeline);
   const anyStepRunning = usePipelineStore((s) =>

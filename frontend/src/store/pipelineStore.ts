@@ -170,11 +170,12 @@ interface PipelineStore {
   /** Task ID of the currently running background pipeline task. */
   currentTaskId: string | null;
 
-  /** Whether a cancellation request has been sent but not yet acknowledged. */
-  cancellationPending: boolean;
-
-  /** Whether a hard ("Cancel now") abort has been requested. */
-  abortPending: boolean;
+  /**
+   * Pending cancellation request, tied to the task it was issued for
+   * (`hard` = "Cancel now"). Keeping the task id means a request for one
+   * task can never render as "Cancelling…" on another. `null` when none.
+   */
+  cancelRequested: { taskId: string; hard: boolean } | null;
 
   /**
    * Steps waiting for modal confirmation before launching.
@@ -281,7 +282,7 @@ interface PipelineStore {
 
   /**
    * Request cancellation of the currently running pipeline.
-   * Sets cancellationPending immediately; the polling loop will
+   * Sets cancelRequested immediately; the polling loop will
    * detect the "cancelled" status and update the UI.
    */
   cancelPipeline: () => Promise<void>;
@@ -377,6 +378,16 @@ function markLoadedContext(
 }
 
 /**
+ * Drop the pending cancellation request if it belongs to *taskId* — used
+ * when that task reaches a terminal state. A request for a different task
+ * is left alone (its own tracker clears it when that task ends).
+ */
+function cancelCleanup(get: StoreGet, taskId: string): Partial<PipelineStore> {
+  const pending = get().cancelRequested;
+  return pending?.taskId === taskId ? { cancelRequested: null } : {};
+}
+
+/**
  * Reset to a clean idle state after polling a tracked run failed — the
  * task was evicted/404'd or the request errored. Shared by the
  * refresh-resume and load-task flows.
@@ -399,8 +410,7 @@ function handleTrackingFailure(
     cards,
     pipelineRunning: false,
     currentTaskId: null,
-    cancellationPending: false,
-    abortPending: false,
+    ...cancelCleanup(get, taskId),
     errorMessage: gone
       ? "The run is no longer available (it may have just finished, or the backend restarted)."
       : error instanceof Error
@@ -516,6 +526,9 @@ function pollTaskUntilDone(
             pipelineRunning: false,
             context: status.context as PipelineContext | null,
             currentRunId: status.run_id,
+            // A cancel that arrived too late (task completed anyway) must
+            // not linger and label the next run as "Cancelling…".
+            ...cancelCleanup(get, taskId),
           });
           // Refresh past runs so the new run name is available.
           get().loadPastRuns();
@@ -533,8 +546,7 @@ function pollTaskUntilDone(
           set({
             cards: cc,
             pipelineRunning: false,
-            cancellationPending: false,
-            abortPending: false,
+            ...cancelCleanup(get, taskId),
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline cancelled by user.",
           });
@@ -552,6 +564,7 @@ function pollTaskUntilDone(
           set({
             cards: ec,
             pipelineRunning: false,
+            ...cancelCleanup(get, taskId),
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline failed",
           });
@@ -591,8 +604,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   currentStepIndex: 0,
   totalSteps: 0,
   currentTaskId: null,
-  cancellationPending: false,
-  abortPending: false,
+  cancelRequested: null,
   pendingSteps: null,
   runningTasks: [],
 
@@ -1005,13 +1017,17 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     const taskId = get().currentTaskId;
     if (!taskId) return;
 
-    set({ cancellationPending: true });
+    set({ cancelRequested: { taskId, hard: false } });
 
     try {
       await cancelTask(taskId);
     } catch (error) {
       console.error("Cancel pipeline error:", error);
-      set({ cancellationPending: false });
+      // Revert only our own graceful request
+      const pending = get().cancelRequested;
+      if (pending?.taskId === taskId && !pending.hard) {
+        set({ cancelRequested: null });
+      }
     }
   },
 
@@ -1020,13 +1036,17 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     if (!taskId) return;
 
     // Implies graceful too — no further steps start.
-    set({ cancellationPending: true, abortPending: true });
+    set({ cancelRequested: { taskId, hard: true } });
 
     try {
       await cancelTask(taskId, "now");
     } catch (error) {
       console.error("Abort pipeline error:", error);
-      set({ abortPending: false });
+      // Downgrade back to a graceful request
+      const pending = get().cancelRequested;
+      if (pending?.taskId === taskId && pending.hard) {
+        set({ cancelRequested: { taskId, hard: false } });
+      }
     }
   },
 
@@ -1045,8 +1065,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       currentStepIndex: 0,
       totalSteps: 0,
       currentTaskId: null,
-      cancellationPending: false,
-      abortPending: false,
+      cancelRequested: null,
       pendingSteps: null,
     });
   },
