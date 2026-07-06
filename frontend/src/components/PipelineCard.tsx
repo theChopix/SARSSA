@@ -1237,7 +1237,7 @@ export default function PipelineCard({
           </button>
         ) : (cardMode === "setup" && card.status !== "done") ? (
           <button
-            disabled={busy}
+            disabled={busy || !card.selectedPlugin}
             onClick={() => onRunUpTo?.(categoryKey)}
             className="w-full py-2 rounded-md text-sm font-medium
                        border border-gray-300 text-gray-700

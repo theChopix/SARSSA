@@ -27,6 +27,7 @@
 import { useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Loader2, X, Ban, OctagonX } from "lucide-react";
+import { toast } from "sonner";
 
 import PipelineCard from "./components/PipelineCard";
 import { Layout } from "./components/Layout";
@@ -71,6 +72,7 @@ function HomePage() {
   const resetCards = usePipelineStore((s) => s.resetCards);
   const setPendingSteps = usePipelineStore((s) => s.setPendingSteps);
   const currentRunId = usePipelineStore((s) => s.currentRunId);
+  const context = usePipelineStore((s) => s.context);
   const runSingleStep = usePipelineStore((s) => s.runSingleStep);
   const errorMessage = usePipelineStore((s) => s.errorMessage);
   const clearError = usePipelineStore((s) => s.clearError);
@@ -126,11 +128,27 @@ function HomePage() {
 
     const steps: StepDefinition[] = [];
 
-    for (const key of oneTimeKeys) {
+    // Walk the chain only up to (and including) the clicked card; anything
+    // configured past it must never leak into the launched steps.
+    const chain = oneTimeKeys.slice(
+      0,
+      oneTimeKeys.indexOf(targetCategoryKey) + 1
+    );
+    for (const key of chain) {
       const card = cards[key];
-      if (!card?.selectedPlugin) continue;
+
       // Loaded cards are inherited via context, not re-executed.
-      if (card.mode === "load") continue;
+      if (card?.mode === "load" && context?.[key]) continue;
+
+      // Any other card in the chain must be configured, otherwise the
+      // pipeline would have a hole and fail mid-run.
+      if (!card?.selectedPlugin) {
+        toast.error(
+          `${registry[key].category_info.display_name} is not configured — ` +
+            "select a plugin or load it from a previous run."
+        );
+        return;
+      }
 
       // Build params: start from defaults, override with user input.
       const entry = registry[key];
@@ -150,9 +168,6 @@ function HomePage() {
       }
 
       steps.push({ plugin: card.selectedPlugin, params });
-
-      // Stop after the target category.
-      if (key === targetCategoryKey) break;
     }
 
     if (steps.length > 0) {
