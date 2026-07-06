@@ -832,12 +832,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       await pollTaskUntilDone(task_id, set, get);
     } catch (error) {
       console.error("Pipeline error:", error);
-      clearRunSnapshot(get().currentTaskId ?? "");
-      set({
-        pipelineRunning: false,
-        errorMessage:
-          error instanceof Error ? error.message : "Pipeline failed",
-      });
+      // Shared cleanup also flips any stuck "running" cards back to idle,
+      // so a mid-run polling failure can't leave the UI locked as busy.
+      handleTrackingFailure(error, get().currentTaskId ?? "", set, get);
     }
   },
 
