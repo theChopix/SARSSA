@@ -41,13 +41,14 @@ class PipelineEngine:
 
     _TAG_PREFIX = "sarssa."
     _DATASET_CATEGORY = "dataset_loading"
+    _ORDER_OFFSET_TAG = "sarssa.order_offset"
 
     def start_run(
         self,
         tags: dict[str, str] | None = None,
         description: str = "",
         pipeline_name: str = "",
-        derived: bool = False,
+        order_offset: int = 0,
     ) -> str:
         """Create a new parent pipeline run in MLflow.
 
@@ -61,8 +62,9 @@ class PipelineEngine:
             pipeline_name: Optional user-provided label woven into the
                 run name (see
                 :func:`~app.core.plugin_discovery.naming.format_pipeline_run_name`).
-            derived: Whether the run inherited upstream steps from another
-                run; adds a ``( inherited )`` marker to the run name.
+            order_offset: Number of inherited upstream steps. Offsets nested
+                step numbering so a derived run continues past them, and when
+                > 0 adds an ``( inherited )`` marker to the run name.
 
         Returns:
             str: The parent run ID.
@@ -78,15 +80,19 @@ class PipelineEngine:
 
         mlflow.set_experiment(EXPERIMENT_NAME)
 
-        mlflow_tags: dict[str, str] | None = None
+        mlflow_tags: dict[str, str] = {}
         if tags:
-            mlflow_tags = {f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()}
+            mlflow_tags.update({f"{self._TAG_PREFIX}{k}": v for k, v in tags.items()})
+        if order_offset:
+            # Persist the offset so step numbering keeps continuing past the
+            # inherited steps even for later execute-step calls on this run.
+            mlflow_tags[self._ORDER_OFFSET_TAG] = str(order_offset)
 
         run = mlflow.start_run(
             run_name=format_pipeline_run_name(
-                pipeline_name, datetime.datetime.now(TIMEZONE), derived=derived
+                pipeline_name, datetime.datetime.now(TIMEZONE), derived=order_offset > 0
             ),
-            tags=mlflow_tags,
+            tags=mlflow_tags or None,
             description=description or None,
         )
         self._parent_run_id = run.info.run_id
@@ -98,10 +104,11 @@ class PipelineEngine:
         """Return the 1-based execution position of the next nested step.
 
         Counts the nested runs already attached to the active parent run
-        (via the ``mlflow.parentRunId`` tag) and adds one.  This is the
-        single source of truth that works both in batch mode and across
-        separate phase-2 ``execute-step`` calls, neither of which keeps
-        an in-memory counter.
+        (via the ``mlflow.parentRunId`` tag), adds one, and offsets by any
+        inherited-step count stored on the parent so a derived run keeps
+        numbering past its inherited upstream.  This is the single source of
+        truth that works both in batch mode and across separate phase-2
+        ``execute-step`` calls, neither of which keeps an in-memory counter.
 
         Note:
             If two phase-2 steps are executed concurrently on the same
@@ -120,11 +127,14 @@ class PipelineEngine:
 
         client = mlflow.tracking.MlflowClient()
         parent = client.get_run(self._parent_run_id)
+        # Inherited upstream steps aren't children of this run, so their count is
+        # carried on the parent as a tag and added to the child-based counter.
+        offset = int(parent.data.tags.get(self._ORDER_OFFSET_TAG, "0"))
         children = client.search_runs(
             experiment_ids=[parent.info.experiment_id],
             filter_string=f"tags.`mlflow.parentRunId` = '{self._parent_run_id}'",
         )
-        return len(children) + 1
+        return offset + len(children) + 1
 
     def execute_step(
         self,

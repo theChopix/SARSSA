@@ -212,7 +212,7 @@ class TestWorkerTags:
             tags={"dataset": "MovieLens", "model": "ELSA"},
             description="",
             pipeline_name="",
-            derived=False,
+            order_offset=0,
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -235,7 +235,7 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="Baseline run", pipeline_name="", derived=False
+            tags={}, description="Baseline run", pipeline_name="", order_offset=0
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -258,7 +258,7 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="", pipeline_name="Baseline ELSA", derived=False
+            tags={}, description="", pipeline_name="Baseline ELSA", order_offset=0
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -280,7 +280,7 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="", pipeline_name="", derived=False
+            tags={}, description="", pipeline_name="", order_offset=0
         )
 
     @patch("app.core.pipeline_worker.build_provenance_note")
@@ -308,7 +308,7 @@ class TestWorkerTags:
 
         mock_note.assert_called_once_with({"dataset_loading": {"run_id": "child_x"}})
         kwargs = mock_engine.start_run.call_args.kwargs
-        assert kwargs["derived"] is True
+        assert kwargs["order_offset"] == 1  # one inherited step
         assert "Inherited upstream from:" in kwargs["description"]
 
     @patch("app.core.pipeline_worker.build_provenance_note")

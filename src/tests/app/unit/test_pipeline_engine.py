@@ -27,21 +27,23 @@ def _mock_start_run(run_id: str = "parent_id") -> MagicMock:
     return mock_run
 
 
-def _arm_execution_order(mock_mlflow: MagicMock, existing: int = 0) -> None:
+def _arm_execution_order(mock_mlflow: MagicMock, existing: int = 0, offset: int = 0) -> None:
     """Make ``_next_execution_order`` resolve under a mocked ``mlflow``.
 
-    ``_next_execution_order`` counts the parent run's existing nested
-    children via ``MlflowClient.search_runs`` and adds one.  Under a bare
-    mock, ``search_runs`` returns a ``MagicMock`` that ``len()`` rejects,
-    so tests must supply a concrete list.
+    ``_next_execution_order`` counts the parent run's existing nested children
+    via ``MlflowClient.search_runs``, adds one, and adds the inherited-step
+    offset read from the parent run's tags.  Under a bare mock, ``search_runs``
+    returns a ``MagicMock`` that ``len()`` rejects and ``get_run().data.tags``
+    is not a real dict, so tests must supply both.
 
     Args:
         mock_mlflow: The patched ``mlflow`` module mock.
-        existing: How many nested children already exist (the next
-            execution order becomes ``existing + 1``).
+        existing: How many nested children already exist.
+        offset: Inherited-step offset stored on the parent run.
     """
     client = mock_mlflow.tracking.MlflowClient.return_value
     client.search_runs.return_value = [MagicMock() for _ in range(existing)]
+    client.get_run.return_value.data.tags = {"sarssa.order_offset": str(offset)} if offset else {}
 
 
 class TestStartRun:
@@ -124,6 +126,30 @@ class TestStartRun:
         _, kwargs = mock_mlflow.start_run.call_args
         assert kwargs["tags"] is None
         assert kwargs["description"] is None
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_stores_order_offset_tag_and_marks_name(self, mock_mlflow: MagicMock) -> None:
+        """Verify a positive order_offset is tagged and marks the run name."""
+        mock_mlflow.start_run.return_value = _mock_start_run("run_42")
+
+        engine = PipelineEngine()
+        engine.start_run(order_offset=2)
+
+        _, kwargs = mock_mlflow.start_run.call_args
+        assert kwargs["tags"]["sarssa.order_offset"] == "2"
+        assert "( inherited )" in kwargs["run_name"]
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_no_offset_tag_or_marker_when_zero(self, mock_mlflow: MagicMock) -> None:
+        """Verify a zero order_offset adds no tag and no name marker."""
+        mock_mlflow.start_run.return_value = _mock_start_run("run_42")
+
+        engine = PipelineEngine()
+        engine.start_run(order_offset=0)
+
+        _, kwargs = mock_mlflow.start_run.call_args
+        assert kwargs["tags"] is None
+        assert "( inherited )" not in kwargs["run_name"]
 
     @patch("app.core.pipeline_engine.datetime")
     @patch("app.core.pipeline_engine.mlflow")
@@ -637,3 +663,25 @@ class TestBatchRun:
         engine.run({})
 
         assert engine._parent_run_id is None
+
+
+class TestNextExecutionOrder:
+    """Tests for the inherited-step offset in nested step numbering."""
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_adds_inherited_offset(self, mock_mlflow: MagicMock) -> None:
+        """Verify order == offset + existing children + 1."""
+        engine = PipelineEngine()
+        engine._parent_run_id = "parent"
+        _arm_execution_order(mock_mlflow, existing=1, offset=2)
+
+        assert engine._next_execution_order() == 4
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_no_offset_when_tag_absent(self, mock_mlflow: MagicMock) -> None:
+        """Verify a fresh run (no offset tag) numbers from children + 1."""
+        engine = PipelineEngine()
+        engine._parent_run_id = "parent"
+        _arm_execution_order(mock_mlflow, existing=2, offset=0)
+
+        assert engine._next_execution_order() == 3

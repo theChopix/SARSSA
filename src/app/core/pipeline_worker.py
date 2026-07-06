@@ -41,7 +41,6 @@ def run_pipeline_worker(task: TaskState) -> None:
     # they came from. Steps executed here are not inherited, so exclude them.
     executed = {step["plugin"].split(".")[0] for step in task.steps_requested}
     inherited = {c: entry for c, entry in task.initial_context.items() if c not in executed}
-    derived = bool(inherited)
     provenance = build_provenance_note(inherited)
     description = f"{task.description}\n\n{provenance}".strip() if provenance else task.description
     try:
@@ -49,7 +48,7 @@ def run_pipeline_worker(task: TaskState) -> None:
             tags=task.tags,
             description=description,
             pipeline_name=task.pipeline_name,
-            derived=derived,
+            order_offset=len(inherited),
         )
         task.run_id = run_id
         logger.info("[WORKER] Pipeline run started: %s", run_id)
