@@ -74,6 +74,7 @@ def run_pipeline_worker(task: TaskState) -> None:
             engine.execute_step(
                 plugin, params, context, notifier=notifier, cancellation=cancellation
             )
+            engine.log_step_param(plugin)
 
             task.completed_steps.append(
                 {"category": category, "run_id": context[category]["run_id"]}

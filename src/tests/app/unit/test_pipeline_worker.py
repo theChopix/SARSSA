@@ -345,6 +345,26 @@ class TestWorkerTags:
         # neuron_labeling is executed here, so only dataset_loading is inherited.
         mock_note.assert_called_once_with({"dataset_loading": {"run_id": "ds"}})
 
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_logs_each_executed_step_as_param(self, mock_engine_cls: MagicMock) -> None:
+        """Verify the run's own steps are logged as parent params, in order."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "run_123"
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            ctx[plugin.split(".")[0]] = {"run_id": "r"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        run_pipeline_worker(_make_task())
+
+        logged = [c.args[0] for c in mock_engine.log_step_param.call_args_list]
+        assert logged == ["cat_a.impl.impl", "cat_b.impl.impl"]
+
 
 class TestWorkerCancellation:
     """Tests for cooperative cancellation via cancel_event."""

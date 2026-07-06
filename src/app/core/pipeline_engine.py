@@ -219,6 +219,26 @@ class PipelineEngine:
         with mlflow.start_run(run_id=self._parent_run_id):
             mlflow.log_input(dataset)
 
+    def log_step_param(self, plugin_name: str) -> None:
+        """Log a step's plugin as a ``{category: plugin}`` param on the parent.
+
+        Surfaces which plugin produced each of the run's own steps on the parent
+        run page. Only steps this run executed are recorded; inherited upstream
+        is linked from the run description instead.
+
+        Args:
+            plugin_name: Dotted module path of the executed plugin.
+
+        Raises:
+            RuntimeError: If no parent run is active.
+        """
+        if self._parent_run_id is None:
+            raise RuntimeError("No active pipeline run. Call start_run() first.")
+
+        category = plugin_name.split(".")[0]
+        with mlflow.start_run(run_id=self._parent_run_id):
+            mlflow.log_param(category, plugin_name.split(".")[-2])
+
     def finalize_run(self, context: dict[str, Any]) -> None:
         """Log the final context and close the parent pipeline run.
 

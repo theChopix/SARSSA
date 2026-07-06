@@ -685,3 +685,25 @@ class TestNextExecutionOrder:
         _arm_execution_order(mock_mlflow, existing=2, offset=0)
 
         assert engine._next_execution_order() == 3
+
+
+class TestLogStepParam:
+    """Tests for logging a step's plugin as a parent-run param."""
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_logs_category_to_impl_name(self, mock_mlflow: MagicMock) -> None:
+        """Verify param key is the category and value is the impl segment."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent")
+        engine = PipelineEngine()
+        engine._parent_run_id = "parent"
+
+        engine.log_step_param("dataset_loading.movieLens_loader.movieLens_loader")
+
+        mock_mlflow.log_param.assert_called_once_with("dataset_loading", "movieLens_loader")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_raises_without_active_run(self, _mock_mlflow: MagicMock) -> None:
+        """Verify RuntimeError when no parent run is active."""
+        engine = PipelineEngine()
+        with pytest.raises(RuntimeError, match="No active pipeline run"):
+            engine.log_step_param("x.y.z")
