@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, Loader2 } from "lucide-react";
 
 import { usePipelineStore } from "../store/pipelineStore";
 import type { TaskSummary } from "../types/pipeline";
@@ -93,7 +93,11 @@ export function RunningTasksMenu() {
                   onClick={() => handleSelect(task)}
                   className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-gray-50"
                 >
-                  <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-500" />
+                  {task.status === "queued" ? (
+                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                  ) : (
+                    <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-blue-500" />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-medium text-gray-800">
@@ -105,7 +109,9 @@ export function RunningTasksMenu() {
                         )}
                       </span>
                       <span className="shrink-0 text-xs text-gray-500">
-                        step {task.current_step_index + 1} / {task.total_steps}
+                        {task.status === "queued"
+                          ? "queued"
+                          : `step ${task.current_step_index + 1} / ${task.total_steps}`}
                       </span>
                     </span>
                     {task.current_step && (

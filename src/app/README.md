@@ -75,8 +75,9 @@ JSON document called the **context** (see §6).
 | `main.py` | FastAPI app creation, CORS, MLflow bootstrap, router mounting |
 | `api/` | HTTP endpoints (`routes_pipelines`, `routes_plugins`, `routes_items`) |
 | `core/pipeline_engine.py` | Runs plugin steps inside MLflow parent/nested runs |
-| `core/pipeline_worker.py` | Daemon‑thread workers for async execution |
-| `core/task_store.py` | In‑memory registry of background tasks |
+| `core/pipeline_worker.py` | Worker functions executed by the task-queue dispatcher |
+| `core/tasks/task_queue.py` | FIFO queue + dispatcher thread — compute tasks run one at a time |
+| `core/tasks/task_store.py` | In‑memory registry of background tasks |
 | `core/pipeline_runs.py` | Querying past pipeline runs & their context |
 | `core/plugin_discovery/` | Walk `src/plugins`, import plugins, build the registry |
 | `core/item_enrichment/` | Join item IDs with dataset metadata for the UI |
@@ -137,12 +138,12 @@ when the server is running.
 | `GET /pipelines/mlflow-info` | Resolve experiment name → ID + UI base URL for deep links | → `{ui_base_url, experiment_id}` | `get_mlflow_info` |
 | `GET /pipelines/runs` | List parent pipeline runs, newest first. `?required_steps=a&required_steps=b` filters to runs whose context has all listed steps | → `[{run_id, run_name, status, start_time}]` | `list_runs` |
 | `GET /pipelines/runs/{run_id}/context` | Fetch a run's `context.json` artifact | → context dict | `get_context` |
-| `POST /pipelines/run-async` | Start a full pipeline in a background thread | `PipelineRequest` → `{task_id}` | `run_pipeline_async` |
-| `GET /pipelines/tasks` | List currently running tasks, newest first (backs the running-tasks menu) | → `[TaskSummary]` | `list_running_tasks` |
+| `POST /pipelines/run-async` | Queue a full pipeline for execution (compute tasks run one at a time, FIFO) | `PipelineRequest` → `{task_id}` | `run_pipeline_async` |
+| `GET /pipelines/tasks` | List queued + running tasks, newest first (backs the running-tasks menu) | → `[TaskSummary]` | `list_running_tasks` |
 | `GET /pipelines/tasks/{task_id}` | Poll status/progress of a background task | → `TaskStatusResponse` | `get_task_status` |
-| `POST /pipelines/tasks/{task_id}/cancel` | Cancel a running task. `?mode=graceful` (default) stops before the next step; `?mode=now` also aborts the current step in a cooperating plugin | → `{message}` (409 if not running) | `cancel_task_endpoint` |
-| `POST /pipelines/runs/{run_id}/execute-step` | Run **one** plugin step on an existing run (synchronous, scripting/testing) | `StepDefinition` → `{category, step_run_id}` | `execute_step` |
-| `POST /pipelines/runs/{run_id}/execute-step-async` | Run one plugin step on an existing run in a background thread (used by the UI for multi‑run steps) | `StepDefinition` → `{task_id}` | `execute_step_async` |
+| `POST /pipelines/tasks/{task_id}/cancel` | Cancel a queued or running task. A queued task is removed from the queue immediately; for a running one `?mode=graceful` (default) stops before the next step, `?mode=now` also aborts the current step in a cooperating plugin | → `{message}` (409 if not cancellable) | `cancel_task_endpoint` |
+| `POST /pipelines/runs/{run_id}/execute-step` | Run **one** plugin step on an existing run (synchronous, scripting/testing; bypasses the queue) | `StepDefinition` → `{category, step_run_id}` | `execute_step` |
+| `POST /pipelines/runs/{run_id}/execute-step-async` | Queue one plugin step on an existing run (used by the UI for multi‑run steps) | `StepDefinition` → `{task_id}` | `execute_step_async` |
 | `POST /pipelines/run` | Execute all steps **synchronously** (legacy; blocks the request) | `PipelineRequest` → `{message, result}` | `run_pipeline` |
 
 ### `/plugins` — registry & dropdowns
@@ -216,25 +217,34 @@ it has **no notifier** so it produces no progress messages.
 The UI never blocks on a pipeline. The flow is:
 
 ```
-POST /run-async ──▶ create_task(...) ──▶ daemon thread: run_pipeline_worker(task)
-       │                  │                        │
-       └─▶ {task_id} ◀────┘            mutates the shared TaskState in place
+POST /run-async ──▶ create_task(...) ──▶ submit(task, run_pipeline_worker)
+       │                  │                        │  (task_queue.py, status "queued")
+       └─▶ {task_id} ◀────┘                        ▼
+                                    FIFO dispatcher thread — one task at a time:
+                                    status "running" ──▶ run_pipeline_worker(task)
                                                    │
 GET /tasks/{task_id}  (polled ~every 2s) ──reads── TaskState
 ```
 
-- `create_task` (`task_store.py`) builds a `TaskState`, stores it in
-  the process‑local `_tasks` dict (`task_store.py`), and returns it.
+- `create_task` (`task_store.py`) builds a `TaskState` with status
+  `"queued"`, stores it in the process‑local `_tasks` dict, and
+  returns it.
+- `submit` (`task_queue.py`) enqueues the task. A single dispatcher
+  thread executes queued workers strictly **one at a time** (FIFO), so
+  concurrent launches never contest the GPU, the process-global RNG
+  streams, or MLflow child numbering — the later task just waits as
+  `"queued"` and starts automatically.
 - `run_pipeline_worker` (`pipeline_worker.py`) creates its own
   `PluginNotifier`, **aliases** `task.messages` to the notifier's list
   (`pipeline_worker.py` — same object, so the polling endpoint sees
   messages immediately), then loops the requested steps. Before each
   step it checks `task.cancel_event`; if set, it marks the task
   `cancelled`, calls `engine.fail_run`, and returns.
-- `cancel_task` (`task_store.py`) sets that event. Cancellation is
-  **not immediate** — the currently executing step always runs to
-  completion (it cannot be interrupted mid‑plugin); the cancel takes
-  effect at the next step boundary.
+- `cancel_task` (`task_store.py`) sets that event. A still-queued task
+  is resolved to `cancelled` immediately (the dispatcher skips it); for
+  a running one the cancel is **not immediate** — the currently
+  executing step always runs to completion (it cannot be interrupted
+  mid‑plugin) and the cancel takes effect at the next step boundary.
 - On success the worker sets `task.status="completed"` and
   `task.context`; on exception, `task.status="error"` and `task.error`.
 

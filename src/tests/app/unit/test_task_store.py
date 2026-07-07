@@ -1,10 +1,10 @@
-"""Unit tests for app.core.task_store."""
+"""Unit tests for app.core.tasks.task_store."""
 
 import threading
 
 import pytest
 
-from app.core.task_store import (
+from app.core.tasks.task_store import (
     _tasks,
     cancel_task,
     create_task,
@@ -37,11 +37,11 @@ class TestCreateTask:
         t2 = create_task([])
         assert t1.task_id != t2.task_id
 
-    def test_status_is_running(self) -> None:
-        """Verify new task has status 'running'."""
+    def test_status_is_queued(self) -> None:
+        """Verify a new task waits as 'queued' until the dispatcher picks it."""
         _clear_store()
         task = create_task([])
-        assert task.status == "running"
+        assert task.status == "queued"
 
     def test_stores_steps_requested(self) -> None:
         """Verify steps_requested is stored on the task."""
@@ -205,6 +205,27 @@ class TestCancelTask:
         with pytest.raises(ValueError, match="not cancellable"):
             cancel_task(task.task_id)
 
+    def test_queued_task_is_resolved_immediately(self) -> None:
+        """Verify a queued task is marked cancelled right away (no worker owns it)."""
+        _clear_store()
+        task = create_task([])
+
+        cancel_task(task.task_id)
+
+        assert task.status == "cancelled"
+        assert task.error == "Cancelled while queued."
+
+    def test_running_task_keeps_status(self) -> None:
+        """Verify a running task's status is left for its worker to resolve."""
+        _clear_store()
+        task = create_task([])
+        task.status = "running"
+
+        cancel_task(task.task_id)
+
+        assert task.status == "running"
+        assert task.cancel_event.is_set()
+
 
 class TestTaskToResponse:
     """Tests for task_to_response."""
@@ -320,6 +341,18 @@ class TestListActiveTasks:
 
         assert list_active_tasks() == [second, first]
 
+    def test_includes_queued_and_running(self) -> None:
+        """Verify both queued and running tasks count as active."""
+        _clear_store()
+        queued = create_task([])
+        running = create_task([])
+        running.status = "running"
+
+        active = list_active_tasks()
+
+        assert queued in active
+        assert running in active
+
 
 class TestTaskToSummary:
     """Tests for task_to_summary."""
@@ -342,7 +375,7 @@ class TestTaskToSummary:
         assert summary.task_id == task.task_id
         assert summary.run_id == "run1"
         assert summary.pipeline_name == "Baseline"
-        assert summary.status == "running"
+        assert summary.status == "queued"
         assert summary.current_step == "a"
         assert summary.current_step_index == 1
         assert summary.total_steps == 2

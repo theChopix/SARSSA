@@ -143,6 +143,9 @@ interface PipelineStore {
   /** Whether the full pipeline is currently running. */
   pipelineRunning: boolean;
 
+  /** Whether the tracked task is still waiting in the compute queue. */
+  pipelineQueued: boolean;
+
   /** MLflow run ID of the current/last pipeline run. */
   currentRunId: string | null;
 
@@ -409,6 +412,7 @@ function handleTrackingFailure(
   set({
     cards,
     pipelineRunning: false,
+    pipelineQueued: false,
     currentTaskId: null,
     ...cancelCleanup(get, taskId),
     errorMessage: gone
@@ -464,10 +468,11 @@ function pollTaskUntilDone(
           }
         }
 
-        // Update progress counters.
+        // Update progress counters and the queued indicator.
         set({
           currentStepIndex: status.current_step_index,
           totalSteps: status.total_steps,
+          pipelineQueued: status.status === "queued",
         });
 
         // Mark completed steps as "done".
@@ -524,6 +529,7 @@ function pollTaskUntilDone(
           clearRunSnapshot(taskId);
           set({
             pipelineRunning: false,
+            pipelineQueued: false,
             context: status.context as PipelineContext | null,
             currentRunId: status.run_id,
             // A cancel that arrived too late (task completed anyway) must
@@ -546,6 +552,7 @@ function pollTaskUntilDone(
           set({
             cards: cc,
             pipelineRunning: false,
+            pipelineQueued: false,
             ...cancelCleanup(get, taskId),
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline cancelled by user.",
@@ -564,6 +571,7 @@ function pollTaskUntilDone(
           set({
             cards: ec,
             pipelineRunning: false,
+            pipelineQueued: false,
             ...cancelCleanup(get, taskId),
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline failed",
@@ -595,6 +603,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   registry: null,
   cards: {},
   pipelineRunning: false,
+  pipelineQueued: false,
   currentRunId: null,
   context: null,
   pastRuns: [],
@@ -814,6 +823,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     set({
       cards,
       pipelineRunning: true,
+      pipelineQueued: false,
       currentRunId: null,
       errorMessage: null,
       currentStepIndex: 0,
@@ -909,6 +919,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
             summary.initial_context
           ),
       pipelineRunning: true,
+      pipelineQueued: summary.status === "queued",
       currentTaskId: summary.task_id,
       currentRunId: summary.run_id,
       currentStepIndex: snapshot?.currentStepIndex ?? summary.current_step_index,
@@ -1061,6 +1072,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     set({
       cards,
       pipelineRunning: false,
+      pipelineQueued: false,
       currentRunId: null,
       context: null,
       targetRunId: null,

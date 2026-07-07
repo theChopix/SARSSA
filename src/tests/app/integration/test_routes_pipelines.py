@@ -4,10 +4,26 @@ GET /runs and GET /runs/{run_id}/context hit the real MLflow tracking
 store. POST endpoints mock the engine to avoid running actual plugins.
 """
 
+import time
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+
+
+def _wait_until(predicate: Callable[[], bool], timeout: float = 2.0) -> bool:
+    """Poll *predicate* until true or *timeout* elapses.
+
+    The async endpoints hand tasks to the queue dispatcher thread, so
+    assertions about worker calls / task status need a short wait.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
 
 
 class TestListRuns:
@@ -155,11 +171,12 @@ class TestRunAsync:
         )
         task_id = response.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
-        assert task.status == "running"
+        # Queued at creation; the dispatcher flips it to running shortly.
+        assert _wait_until(lambda: task.status == "running")
 
     @patch("app.api.routes_pipelines.run_pipeline_worker")
     def test_spawns_worker(self, mock_worker: MagicMock, client: TestClient) -> None:
@@ -169,6 +186,7 @@ class TestRunAsync:
             json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
         )
 
+        assert _wait_until(lambda: mock_worker.called)
         mock_worker.assert_called_once()
 
     @patch("app.api.routes_pipelines.run_pipeline_worker")
@@ -183,7 +201,7 @@ class TestRunAsync:
         )
         task_id = response.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -203,7 +221,7 @@ class TestRunAsync:
         )
         task_id = response.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -223,7 +241,7 @@ class TestRunAsync:
         )
         task_id = response.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -251,7 +269,7 @@ class TestListRunningTasks:
     @patch("app.api.routes_pipelines.run_pipeline_worker")
     def test_lists_only_running_tasks(self, _mock_worker: MagicMock, client: TestClient) -> None:
         """Verify completed tasks are excluded from the listing."""
-        from app.core.task_store import _tasks, get_task
+        from app.core.tasks.task_store import _tasks, get_task
 
         _tasks.clear()
         r1 = self._start(client, steps=[{"plugin": "cat_a.p.p", "params": {}}])
@@ -274,7 +292,7 @@ class TestListRunningTasks:
         self, _mock_worker: MagicMock, client: TestClient
     ) -> None:
         """Verify the summary carries progress and the full steps_requested."""
-        from app.core.task_store import _tasks, get_task
+        from app.core.tasks.task_store import _tasks, get_task
 
         _tasks.clear()
         task_id = self._start(
@@ -299,7 +317,7 @@ class TestListRunningTasks:
 
     def test_empty_when_none_running(self, client: TestClient) -> None:
         """Verify an empty list when the store has no running tasks."""
-        from app.core.task_store import _tasks
+        from app.core.tasks.task_store import _tasks
 
         _tasks.clear()
         response = client.get("/pipelines/tasks")
@@ -319,6 +337,12 @@ class TestGetTaskStatus:
             json={"steps": [{"plugin": "cat.p.p", "params": {}}]},
         )
         task_id = create_resp.json()["task_id"]
+
+        from app.core.tasks.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert _wait_until(lambda: task.status == "running")
 
         response = client.get(f"/pipelines/tasks/{task_id}")
 
@@ -350,7 +374,7 @@ class TestGetTaskStatus:
         )
         task_id = create_resp.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -397,7 +421,7 @@ class TestCancelTask:
 
         client.post(f"/pipelines/tasks/{task_id}/cancel")
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -421,7 +445,7 @@ class TestCancelTask:
 
         client.post(f"/pipelines/tasks/{task_id}/cancel")
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -440,7 +464,7 @@ class TestCancelTask:
         response = client.post(f"/pipelines/tasks/{task_id}/cancel?mode=now")
 
         assert response.status_code == 200
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -463,7 +487,7 @@ class TestCancelTask:
         )
         task_id = create_resp.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -607,7 +631,7 @@ class TestExecuteStepAsync:
         )
         task_id = response.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -625,7 +649,7 @@ class TestExecuteStepAsync:
         )
         task_id = response.json()["task_id"]
 
-        from app.core.task_store import get_task
+        from app.core.tasks.task_store import get_task
 
         task = get_task(task_id)
         assert task is not None
@@ -640,6 +664,7 @@ class TestExecuteStepAsync:
             json={"plugin": "inspection.insp.insp", "params": {}},
         )
 
+        assert _wait_until(lambda: mock_worker.called)
         mock_worker.assert_called_once()
 
     @patch("app.api.routes_pipelines.run_step_worker")
@@ -652,6 +677,12 @@ class TestExecuteStepAsync:
             json={"plugin": "labeling_evaluation.impl.impl", "params": {}},
         )
         task_id = create_resp.json()["task_id"]
+
+        from app.core.tasks.task_store import get_task
+
+        task = get_task(task_id)
+        assert task is not None
+        assert _wait_until(lambda: task.status == "running")
 
         poll_resp = client.get(f"/pipelines/tasks/{task_id}")
 

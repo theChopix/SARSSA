@@ -48,6 +48,7 @@ function HomePage() {
   const registry = usePipelineStore((s) => s.registry);
   const cards = usePipelineStore((s) => s.cards);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
+  const pipelineQueued = usePipelineStore((s) => s.pipelineQueued);
   const loadRegistry = usePipelineStore((s) => s.loadRegistry);
   const resumeRun = usePipelineStore((s) => s.resumeRun);
   const resetCards = usePipelineStore((s) => s.resetCards);
@@ -268,11 +269,15 @@ function HomePage() {
                             bg-blue-500 opacity-70 text-center">
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {abortPending
-                  ? "Stopping current step now..."
-                  : cancellationPending
-                    ? "Cancelling... waiting for current step to finish"
-                    : `Running pipeline... Step ${currentStepIndex + 1} / ${totalSteps}`}
+                {cancellationPending && pipelineQueued
+                  ? "Removing from queue..."
+                  : abortPending
+                    ? "Stopping current step now..."
+                    : cancellationPending
+                      ? "Cancelling... waiting for current step to finish"
+                      : pipelineQueued
+                        ? "Waiting in queue... another task is still running"
+                        : `Running pipeline... Step ${currentStepIndex + 1} / ${totalSteps}`}
               </span>
             </div>
             <button

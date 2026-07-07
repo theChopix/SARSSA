@@ -38,8 +38,8 @@ class TaskState:
 
     Attributes:
         task_id: Unique identifier for this task.
-        status: One of ``"running"``, ``"completed"``, ``"error"``,
-            ``"cancelled"``.
+        status: One of ``"queued"``, ``"running"``, ``"completed"``,
+            ``"error"``, ``"cancelled"``.
         run_id: MLflow parent run ID (set after ``engine.start_run()``).
         steps_requested: The original step dicts submitted by the user.
         initial_context: Pre-populated context from a previous run (empty for fresh runs).
