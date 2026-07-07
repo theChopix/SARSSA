@@ -5,9 +5,9 @@
 #   * frontend — React/Vite build served by nginx  http://localhost:5173
 #
 # The backend talks to the `mlflow` service over HTTP; the server owns
-# the SQLite store (`sqlite:///mlflow.db`) and proxies artifact reads and
-# writes into `./mlartifacts` (mlflow-artifacts:/ URIs — no host paths in
-# the DB). This mirrors the local `just run` + `just mlflow` setup.
+# the SQLite store (`sqlite:///mlflow-data/mlflow.db`) and proxies artifact
+# reads and writes into `./mlartifacts` (mlflow-artifacts:/ URIs — no host
+# paths in the DB). This mirrors the local `just run` + `just mlflow` setup.
 #
 # Secrets (OPENAI_API_KEY, CHAT_MODEL, EMBEDDING_MODEL) come from the
 # project's .env file at runtime — they are never baked into the image.
@@ -67,7 +67,7 @@ services:
       - mlflow
       - server
       - --backend-store-uri
-      - sqlite:///mlflow.db
+      - sqlite:///mlflow-data/mlflow.db
       - --artifacts-destination
       - ./mlartifacts
       - --serve-artifacts
@@ -81,7 +81,9 @@ services:
       - "5000:5000"
     volumes:
       # The server owns the SQLite store and the artifacts destination.
-      - ./src/mlflow.db:/app/src/mlflow.db
+      # Mounting the DB's directory (not the file) keeps SQLite journal
+      # files on the host and works on a fresh clone where no DB exists.
+      - ./src/mlflow-data:/app/src/mlflow-data
       - ./src/mlartifacts:/app/src/mlartifacts
       # Kept for legacy: same mount as the backend — the MLflow UI serves
       # pre-switch runs by the absolute path stored in mlflow.db.

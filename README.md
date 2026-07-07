@@ -348,7 +348,7 @@ bind-mount targets must exist on the host **before** the first build
 cp .env.sample .env                       # then set OPENAI_API_KEY (§5)
 bash scripts/download_movieLens_all.sh    # datasets (Quick start, step 3)
 bash scripts/download_lastFm1k_all.sh
-mkdir -p src/mlartifacts data && touch src/mlflow.db   # bind-mount targets
+mkdir -p src/mlartifacts src/mlflow-data data          # bind-mount targets
 ```
 
 Then build and start the stack:
@@ -401,15 +401,16 @@ docker compose down                   # or: just docker-down
 ```
 
 (Add `-v` to also drop the named volumes. Your `data/`,
-`src/mlartifacts/` and `src/mlflow.db` are host bind mounts, so they
+`src/mlartifacts/` and `src/mlflow-data/` are host bind mounts, so they
 survive `down` regardless.)
 
 Notes:
 
 - The root `.env` is read at runtime — never baked into the image.
-- `data/`, `src/mlartifacts/` and `src/mlflow.db` are bind-mounted;
-  the `mlflow` service owns both and the backend talks to it over
-  HTTP, exactly like running `just mlflow` + `just run` locally.
+- `data/`, `src/mlartifacts/` and `src/mlflow-data/` (SQLite DB +
+  its journal files) are bind-mounted; the `mlflow` service owns the
+  MLflow state and the backend talks to it over HTTP, exactly like
+  running `just mlflow` + `just run` locally.
 - Other commands: `just docker-build` / `docker-down` / `docker-logs`.
 
 > **Image size:** `pyproject.toml` pins `torch==2.7.1`, which the
