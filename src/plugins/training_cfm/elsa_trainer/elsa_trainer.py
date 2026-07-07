@@ -112,7 +112,7 @@ def train(
     )
 
     # Create data loaders for training and validation
-    train_dataloader = DataLoader(train_csr, batch_size, device, shuffle=True)
+    train_dataloader = DataLoader(train_csr, batch_size, device, shuffle=True, seed=seed)
     valid_dataloader = DataLoader(valid_csr, batch_size, device, shuffle=False)
 
     # Initialize early stopping variables

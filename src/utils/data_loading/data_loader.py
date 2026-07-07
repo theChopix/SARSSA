@@ -4,19 +4,27 @@ import torch
 
 
 class DataLoader:
-    def __init__(self, data, batch_size: int, device: torch.device, shuffle: bool = False):
+    def __init__(
+        self,
+        data,
+        batch_size: int,
+        device: torch.device,
+        shuffle: bool = False,
+        seed: int | None = None,
+    ):
         self.data = data
         self.dataset_size = self.data.shape[0]
         self.batch_size = batch_size
         self.device = device
         self.shuffle = shuffle
+        self.rng = np.random.default_rng(seed)
 
     def __len__(self) -> int:
         return self.dataset_size // self.batch_size + (self.dataset_size % self.batch_size != 0)
 
     def __iter__(self):
         self.permutation = (
-            np.random.permutation(self.dataset_size)
+            self.rng.permutation(self.dataset_size)
             if self.shuffle
             else np.arange(self.dataset_size)
         )

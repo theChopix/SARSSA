@@ -26,11 +26,12 @@ def split_input_target_interactions(
     Returns:
         tuple: (inputs, targets) - Two sparse CSR matrices with the same shape.
     """
-    np.random.seed(seed)
+    # Local generator: deterministic split without touching the global RNG.
+    rng = np.random.default_rng(seed)
 
     target_mask = np.concatenate(
         [
-            np.random.permutation(
+            rng.permutation(
                 np.array(
                     [True] * int(np.ceil(row_nnz * target_ratio))
                     + [False] * int(row_nnz - np.ceil(row_nnz * target_ratio))

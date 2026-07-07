@@ -102,7 +102,7 @@ def train(
                 ]
             )
             loaders["train_embeddings_dataloader"] = DataLoader(
-                train_user_embeddings, batch_size, device, shuffle=True
+                train_user_embeddings, batch_size, device, shuffle=True, seed=seed
             )
 
         valid_interaction_dataloader = DataLoader(valid_csr, batch_size, device, shuffle=False)
