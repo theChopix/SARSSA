@@ -34,27 +34,8 @@ import { Layout } from "./components/Layout";
 import { ResultsPage } from "./pages/ResultsPage";
 import { GuidePage } from "./pages/GuidePage";
 import { usePipelineStore } from "./store/pipelineStore";
+import { collectParams } from "./utils/paramValidation";
 import type { StepDefinition } from "./types/pipeline";
-
-/**
- * Coerce a string value from an HTML input to the correct JS type
- * based on the Python type string from the plugin registry.
- *
- * HTML inputs always produce strings, but the backend expects
- * native types (int → number, float → number, bool → boolean).
- */
-function coerceParamValue(value: string, pythonType: string): unknown {
-  switch (pythonType) {
-    case "int":
-      return parseInt(value, 10);
-    case "float":
-      return parseFloat(value);
-    case "bool":
-      return value.toLowerCase() === "true";
-    default:
-      return value;
-  }
-}
 
 /**
  * HomePage — the main pipeline configuration page.
@@ -156,24 +137,20 @@ function HomePage() {
         return;
       }
 
-      // Build params: start from defaults, override with user input.
+      // Build params: registry defaults overridden by validated user
+      // input. An invalid or missing-required value blocks the launch —
+      // it would otherwise fail mid-run inside the step.
       const entry = registry[key];
       const impl = entry.implementations.find(
         (i) => i.plugin_name === card.selectedPlugin
       );
-      const params: Record<string, unknown> = {};
-      if (impl) {
-        for (const p of impl.params) {
-          const userVal = card.params[p.name];
-          if (userVal !== undefined && userVal !== "") {
-            params[p.name] = coerceParamValue(userVal, p.type);
-          } else if (p.default != null) {
-            params[p.name] = p.default;
-          }
-        }
+      const result = impl ? collectParams(impl, card.params) : { params: {} };
+      if ("error" in result) {
+        toast.error(`${entry.category_info.display_name}: ${result.error}`);
+        return;
       }
 
-      steps.push({ plugin: card.selectedPlugin, params });
+      steps.push({ plugin: card.selectedPlugin, params: result.params });
     }
 
     if (steps.length > 0) {
@@ -193,19 +170,13 @@ function HomePage() {
     const impl = entry.implementations.find(
       (i) => i.plugin_name === card.selectedPlugin
     );
-    const params: Record<string, unknown> = {};
-    if (impl) {
-      for (const p of impl.params) {
-        const userVal = card.params[p.name];
-        if (userVal !== undefined && userVal !== "") {
-          params[p.name] = coerceParamValue(userVal, p.type);
-        } else if (p.default != null) {
-          params[p.name] = p.default;
-        }
-      }
+    const result = impl ? collectParams(impl, card.params) : { params: {} };
+    if ("error" in result) {
+      toast.error(`${entry.category_info.display_name}: ${result.error}`);
+      return;
     }
 
-    runSingleStep(currentRunId, { plugin: card.selectedPlugin, params });
+    runSingleStep(currentRunId, { plugin: card.selectedPlugin, params: result.params });
   };
 
 
