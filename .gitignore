@@ -46,6 +46,7 @@ data/
 docs/
 mlruns/
 mlartifacts/
+mlflow-data/
 wandb/
 outputs/
 checkpoints/

@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import mlflow
 from fastapi import FastAPI
@@ -15,6 +16,10 @@ from app.config.config import ARTIFACT_ROOT, EXPERIMENT_NAME, TRACKING_URI
 from app.core.run_recovery import fail_orphaned_runs
 
 mlflow.set_tracking_uri(TRACKING_URI)
+
+# SQLite needs the DB's parent directory to exist (fresh clones).
+if TRACKING_URI.startswith("sqlite:///"):
+    Path(TRACKING_URI.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
 
 # ensuring the experiment exists before any run starts.
 #  Via the MLflow server we omit artifact_location so

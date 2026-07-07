@@ -411,7 +411,7 @@ How that maps onto SARSSA:
 Two sections, loaded and typed in `config/config.py`:
 
 - **`mlflow`** → `EXPERIMENT_NAME`, `TRACKING_URI`
-  (`sqlite:///mlflow.db` — a fallback for tests/scripts; `just run`
+  (`sqlite:///mlflow-data/mlflow.db` — a fallback for tests/scripts; `just run`
   and Docker override it with `MLFLOW_TRACKING_URI` so tracking goes
   through the MLflow server), `ARTIFACT_ROOT` (`./mlartifacts`, used
   only with that fallback), `MLFLOW_UI_BASE_URL` (`config.py`).

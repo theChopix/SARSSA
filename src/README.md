@@ -28,7 +28,8 @@ needed. Start with the plugin contract in
 [`plugins/dataset_loading/README.md`](plugins/dataset_loading/README.md).
 
 `src/` may also contain **runtime-generated MLflow data** —
-`mlflow.db`, `mlartifacts/`, `mlruns/` — created when pipelines run.
+`mlflow-data/` (SQLite DB), `mlartifacts/`, `mlruns/` — created when
+pipelines run.
 These are not source code (they are gitignored); ignore them when
 reading the tree.
 
