@@ -1,6 +1,5 @@
 """API routes for pipeline execution and run management."""
 
-import threading
 from typing import Any, Literal
 
 import mlflow
@@ -14,7 +13,8 @@ from app.core.pipeline_runs import (
     get_run_context,
 )
 from app.core.pipeline_worker import run_pipeline_worker, run_step_worker
-from app.core.task_store import (
+from app.core.tasks.task_queue import submit
+from app.core.tasks.task_store import (
     cancel_task,
     create_task,
     get_task,
@@ -108,9 +108,11 @@ def get_context(run_id: str) -> dict[str, Any]:
 
 @router.post("/run-async")
 def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
-    """Start a pipeline in a background thread and return the task ID.
+    """Queue a pipeline for execution and return the task ID.
 
-    The caller should poll ``GET /tasks/{task_id}`` to track progress.
+    Compute tasks run one at a time; the task waits as ``"queued"`` until
+    the queue reaches it. The caller should poll ``GET /tasks/{task_id}``
+    to track progress.
 
     Args:
         pipeline_request: Steps to execute.
@@ -127,12 +129,7 @@ def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
         pipeline_name=pipeline_request.pipeline_name,
     )
 
-    thread = threading.Thread(
-        target=run_pipeline_worker,
-        args=(task,),
-        daemon=True,
-    )
-    thread.start()
+    submit(task, run_pipeline_worker)
 
     return {"task_id": task.task_id}
 
@@ -253,13 +250,14 @@ def execute_step(run_id: str, step: StepDefinition) -> dict[str, Any]:
 
 @router.post("/runs/{run_id}/execute-step-async")
 def execute_step_async(run_id: str, step: StepDefinition) -> dict[str, str]:
-    """Start a single plugin step in a background thread and return the task ID.
+    """Queue a single plugin step for execution and return the task ID.
 
-    Fires a background thread that resumes the existing pipeline run
-    identified by *run_id*, executes the requested step, and
-    re-persists ``context.json``.  The caller should poll
-    ``GET /tasks/{task_id}`` every 2 seconds until the task reaches a
-    terminal state.
+    The queued worker resumes the existing pipeline run identified by
+    *run_id*, executes the requested step, and re-persists
+    ``context.json``.  Compute tasks run one at a time, so the step may
+    wait as ``"queued"`` behind an in-flight pipeline.  The caller
+    should poll ``GET /tasks/{task_id}`` every 2 seconds until the task
+    reaches a terminal state.
 
     The synchronous ``POST /runs/{run_id}/execute-step`` endpoint is
     kept as-is for scripting and testing.
@@ -274,12 +272,7 @@ def execute_step_async(run_id: str, step: StepDefinition) -> dict[str, str]:
     """
     task = create_task(steps=[step.model_dump()], run_id=run_id)
 
-    thread = threading.Thread(
-        target=run_step_worker,
-        args=(task,),
-        daemon=True,
-    )
-    thread.start()
+    submit(task, run_step_worker)
 
     return {"task_id": task.task_id}
 

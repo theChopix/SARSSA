@@ -1,9 +1,7 @@
 """In-memory task store for background pipeline executions.
 
 Provides a simple dict-backed store where each task is a
-:class:`~app.models.pipeline.TaskState` object.  The background worker
-thread mutates the ``TaskState`` in-place; the ``GET /tasks/{id}``
-endpoint reads it via :func:`task_to_response`.
+:class:`~app.models.pipeline.TaskState` object.
 """
 
 import uuid
@@ -36,11 +34,12 @@ def create_task(
             existing run rather than starting a fresh one.
 
     Returns:
-        TaskState: The newly created task with status ``"running"``.
+        TaskState: The newly created task with status ``"queued"``.
     """
     task_id = uuid.uuid4().hex
     task = TaskState(
         task_id=task_id,
+        status="queued",
         steps_requested=steps,
         initial_context=initial_context or {},
         tags=tags or {},
@@ -85,23 +84,26 @@ def cancel_task(task_id: str, hard: bool = False) -> TaskState | None:
     task = _tasks.get(task_id)
     if task is None:
         return None
-    if task.status != "running":
+    if task.status not in ("running", "queued"):
         raise ValueError(f"Task '{task_id}' is '{task.status}', not cancellable.")
     task.cancel_event.set()
     if hard:
         task.abort_event.set()
+    if task.status == "queued":
+        task.status = "cancelled"
+        task.error = "Cancelled while queued."
     return task
 
 
 def list_active_tasks() -> list[TaskState]:
-    """Return all tasks still in the ``"running"`` state, newest first.
+    """Return all queued or running tasks, newest first.
 
     Returns:
-        list[TaskState]: Running tasks, most recently created first.
+        list[TaskState]: Active tasks, most recently created first.
     """
-    running = [task for task in _tasks.values() if task.status == "running"]
-    running.reverse()
-    return running
+    active = [task for task in _tasks.values() if task.status in ("running", "queued")]
+    active.reverse()
+    return active
 
 
 def task_to_summary(task: TaskState) -> TaskSummary:

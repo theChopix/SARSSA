@@ -378,17 +378,16 @@ docker exec sarssa-backend-1 python -c "import torch; print(torch.cuda.is_availa
 Without a GPU (or with `GPU_COUNT=0`) training still runs — just much
 slower on CPU.
 
-**Running pipelines in parallel (optional).** The backend runs each
-launch as an independent background task — there is no global lock, so
-several pipelines can run at once, and the header's *Running* menu lists
-every in-flight run. The UI tracks **one active run per browser tab**, so
-to start a second run alongside a first, open the app in **another
-browser tab** and launch from there. **Mind your hardware, though** —
-concurrent runs share CPU, RAM and especially **GPU memory**, so on a
-constrained host a parallel run won't just go slower, it can **fail
-outright** (e.g. a `CUDA out of memory` error aborts that step).
-Parallelise only when the machine has the headroom, and otherwise keep
-heavy GPU stages (CFM / SAE training) from overlapping.
+**Launching several pipelines.** Compute tasks run **one at a time**:
+each launch is accepted immediately, but waits in a FIFO queue until the
+previous task finishes, then starts automatically. The header's
+*Running* menu lists every task — the executing one and any queued ones
+(clock icon). Serialising the runs keeps them reproducible (no shared
+RNG or GPU contention) and means two trainings can never overlap into a
+`CUDA out of memory`. The UI tracks **one active run per browser tab**,
+so to launch a second run alongside a first, open the app in **another
+browser tab** and start it there; a queued run can be cancelled
+instantly from either tab.
 
 Open the UI at **http://localhost:5173** — use this exact port: the
 backend's CORS allow-list and the frontend's hardcoded API URL expect

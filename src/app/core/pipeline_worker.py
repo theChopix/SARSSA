@@ -1,7 +1,6 @@
-"""Background worker that executes a pipeline and updates a TaskState.
+"""Background workers that execute pipeline tasks and update a TaskState.
 
-The single public function :func:`run_pipeline_worker` is designed to
-be the ``target`` of a :class:`threading.Thread`.  It receives a shared
+The worker functions. Each receives a shared
 :class:`~app.models.pipeline.TaskState` object and mutates it in-place
 as it progresses through the requested steps.
 """
@@ -19,9 +18,9 @@ from utils.plugin_notifier import PluginNotifier
 def run_pipeline_worker(task: TaskState) -> None:
     """Execute all pipeline steps and update *task* in-place.
 
-    Called from a daemon thread spawned by the ``POST /run-async``
-    endpoint.  The ``GET /tasks/{id}`` endpoint reads the same
-    *task* object to report progress.
+    Executed by the task-queue dispatcher for tasks submitted by the
+    ``POST /run-async`` endpoint.  The ``GET /tasks/{id}`` endpoint
+    reads the same *task* object to report progress.
 
     On success, ``task.status`` is set to ``"completed"`` and
     ``task.context`` contains the final pipeline context.
@@ -107,7 +106,7 @@ def run_pipeline_worker(task: TaskState) -> None:
 def run_step_worker(task: TaskState) -> None:
     """Execute a single plugin step on an existing pipeline run.
 
-    Called from a daemon thread spawned by the
+    Executed by the task-queue dispatcher for tasks submitted by the
     ``POST /runs/{run_id}/execute-step-async`` endpoint.  The worker
     resumes the MLflow parent run identified by ``task.run_id``,
     executes the one step in ``task.steps_requested``, and

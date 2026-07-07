@@ -441,27 +441,25 @@ const SECTIONS: GuideSection[] = [
           </li>
           <li>
             <strong>Running tasks menu.</strong> When a pipeline is
-            running, a <em>Running (N)</em> pill appears in the header
-            (top-left). Open it to see every in-flight run with its
-            current step; click one to load it into the cards and follow
-            its progress — handy when several runs are going, or to jump
-            back into a run from a fresh tab.
+            running or waiting its turn, a <em>Running (N)</em> pill
+            appears in the header (top-left). Open it to see every task
+            with its current step — queued ones carry a clock icon and a{" "}
+            <em>queued</em> badge; click one to load it into the cards
+            and follow its progress — handy when several tasks are
+            lined up, or to jump back into a run from a fresh tab.
           </li>
           <li>
-            <strong>Running several pipelines at once.</strong> Each tab
-            tracks one active run, so to launch a second pipeline
-            alongside a running one, open SARSSAe in{" "}
+            <strong>Launching several pipelines.</strong> Compute tasks
+            run <strong>one at a time</strong>: launching a pipeline (or
+            an evaluation step) while another is still executing is
+            perfectly fine — the new task waits in a queue and starts
+            automatically as soon as the previous one finishes. This
+            keeps runs reproducible and prevents two trainings from
+            fighting over GPU memory. Each tab tracks one active run, so
+            to <em>launch</em> a second pipeline open SARSSAe in{" "}
             <strong>another browser tab</strong> and start it there; the{" "}
-            <em>Running</em> menu lists them all. This only works if your
-            hardware can fit the combined load, though — concurrent runs
-            share CPU, RAM and <strong>GPU memory</strong>, and on a
-            constrained machine a parallel run can{" "}
-            <strong>fail outright</strong> (e.g. a{" "}
-            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
-              CUDA out of memory
-            </code>{" "}
-            error), not just run slower. Run heavy training stages in
-            parallel only when you have the GPU headroom.
+            <em>Running</em> menu then lists both — the executing one and
+            the queued one.
           </li>
           <li>
             <strong>Refreshing is safe.</strong> If you reload the page
@@ -480,7 +478,9 @@ const SECTIONS: GuideSection[] = [
             first — so for those, <em>Cancel now</em> ends up behaving the
             same as <em>Cancel after this step</em>. Tip: if you already
             clicked <em>Cancel after this step</em> and changed your mind,
-            you can still click <em>Cancel now</em>.
+            you can still click <em>Cancel now</em>. A run that's still{" "}
+            <em>queued</em> is simply removed from the queue right away —
+            both buttons do the same thing there.
           </li>
           <li>
             <strong>Reset.</strong> <em>Reset pipeline settings</em>{" "}

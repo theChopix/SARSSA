@@ -131,8 +131,10 @@ registry loaded ──▶ a PipelineCard per category
         │  confirmLaunch
         ▼
    store.runPipeline ─▶ POST /pipelines/run-async ─▶ { task_id }
-        │
+        │                (task may wait as "queued" — compute tasks
+        │                 run one at a time on the backend)
         └─▶ poll GET /pipelines/tasks/{task_id} every 2 s
+              ├─ track the queued state ("Waiting in queue..." bar)
               ├─ update each card's status (running/done/error)
               ├─ update progress (step i / N)
               ├─ stream the plugin's notifier messages as sonner toasts
@@ -148,8 +150,9 @@ background task never stopped, the UI had just lost its handle to it. The
 snapshot is cleared on any terminal state.
 
 **Running-tasks menu.** A second, coarser poll (`RunningTasksMenu`,
-every 6 s) hits `GET /pipelines/tasks` for *all* in-flight runs and shows
-them as a header pill. Selecting one calls `store.loadRunningTask`, which
+every 6 s) hits `GET /pipelines/tasks` for *all* queued + running tasks
+and shows them as a header pill (queued rows carry a clock icon).
+Selecting one calls `store.loadRunningTask`, which
 makes it the active run — restoring cards from the session snapshot when
 present, else rebuilding them from the task's `steps_requested` (so a run
 started in another tab still loads). Only one detailed poller runs at a
