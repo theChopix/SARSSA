@@ -43,7 +43,15 @@
 
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import type { CSSProperties } from "react";
-import { Settings, CheckCircle2, Loader2, AlertCircle, Eye, ChevronDown } from "lucide-react";
+import {
+  Settings,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  AlertTriangle,
+  Eye,
+  ChevronDown,
+} from "lucide-react";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
@@ -1173,6 +1181,20 @@ export default function PipelineCard({
                   </div>
                 )}
             </Fragment>
+          ))}
+
+          {/* Plugins that failed to load during discovery. */}
+          {entry.load_errors.map((err) => (
+            <div
+              key={err.plugin_name}
+              className="flex items-center gap-1.5 py-1 text-xs text-amber-600"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {err.plugin_name.split(".").slice(-2)[0]} failed to load
+              </span>
+              <InfoTooltip text={err.error} ariaLabel="Plugin load error" />
+            </div>
           ))}
         </div>
       )}

@@ -467,7 +467,7 @@ class TestDiscoverImplementationsDisplayName:
             plugin_name="SAE Trainer",
         )
 
-        impls = _discover_implementations("cat")
+        impls, _ = _discover_implementations("cat")
 
         assert len(impls) == 1
         assert impls[0].display_name == "SAE Trainer"
@@ -490,7 +490,7 @@ class TestDiscoverImplementationsDisplayName:
             plugin_name=None,
         )
 
-        impls = _discover_implementations("cat")
+        impls, _ = _discover_implementations("cat")
 
         assert len(impls) == 1
         assert impls[0].display_name == "My Impl"
@@ -513,7 +513,7 @@ class TestDiscoverImplementationsDisplayName:
             plugin_name="",
         )
 
-        impls = _discover_implementations("cat")
+        impls, _ = _discover_implementations("cat")
 
         assert impls[0].display_name == "My Impl"
 
@@ -589,7 +589,7 @@ class TestDiscoverImplementationsDisplay:
             display=display,
         )
 
-        impls = _discover_implementations("cat")
+        impls, _ = _discover_implementations("cat")
         assert impls[0].display is not None
         assert isinstance(impls[0].display, ItemRowsDisplayModel)
         assert impls[0].display.type == "item_rows"
@@ -614,7 +614,7 @@ class TestDiscoverImplementationsDisplay:
             display=None,
         )
 
-        impls = _discover_implementations("cat")
+        impls, _ = _discover_implementations("cat")
         assert impls[0].display is None
 
 
@@ -636,7 +636,7 @@ class TestDiscoverImplementationsKind:
         mock_find.return_value = ["my_cat.single.impl.impl"]
         mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
 
-        impls = _discover_implementations("my_cat")
+        impls, _ = _discover_implementations("my_cat")
 
         assert len(impls) == 1
         assert impls[0].kind == "single"
@@ -656,7 +656,7 @@ class TestDiscoverImplementationsKind:
         mock_find.return_value = ["my_cat.compare.impl.impl"]
         mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
 
-        impls = _discover_implementations("my_cat")
+        impls, _ = _discover_implementations("my_cat")
 
         assert len(impls) == 1
         assert impls[0].kind == "compare"
@@ -676,7 +676,7 @@ class TestDiscoverImplementationsKind:
         mock_find.return_value = ["my_cat.impl.impl"]
         mock_pm.load.return_value = _make_mock_plugin({"x": (int, 1)})
 
-        impls = _discover_implementations("my_cat")
+        impls, _ = _discover_implementations("my_cat")
 
         assert len(impls) == 1
         assert impls[0].kind is None
@@ -695,7 +695,7 @@ class TestGetPluginRegistry:
     )
     def test_returns_entry_for_every_category(self, mock_discover: MagicMock) -> None:
         """Verify registry contains all mocked categories."""
-        mock_discover.return_value = []
+        mock_discover.return_value = ([], [])
         registry = get_plugin_registry()
         assert set(registry.keys()) == {"cat_a", "cat_b"}
 
@@ -708,7 +708,7 @@ class TestGetPluginRegistry:
     )
     def test_entries_are_category_registry_entry(self, mock_discover: MagicMock) -> None:
         """Verify each value is a CategoryRegistryEntry."""
-        mock_discover.return_value = []
+        mock_discover.return_value = ([], [])
         registry = get_plugin_registry()
         for entry in registry.values():
             assert isinstance(entry, CategoryRegistryEntry)
@@ -722,7 +722,7 @@ class TestGetPluginRegistry:
     )
     def test_passes_category_info_through(self, mock_discover: MagicMock) -> None:
         """Verify the category_info field matches the source."""
-        mock_discover.return_value = []
+        mock_discover.return_value = ([], [])
         registry = get_plugin_registry()
         assert registry["cat_a"].category_info.display_name == "Cat A"
 
@@ -1140,3 +1140,92 @@ class TestBuildParamGroups:
         )
         with pytest.raises(ValueError, match="re-uses parameter 'a'"):
             _build_param_groups(plugin, self._params(plugin))
+
+
+class TestDiscoveryErrorIsolation:
+    """Tests for per-plugin error isolation in _discover_implementations."""
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_broken_plugin_is_skipped_and_recorded(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify a failing plugin is reported while the healthy one loads."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.broken.broken", "cat.healthy.healthy"]
+        mock_pm.load.side_effect = [
+            ImportError("No module named 'nonsense'"),
+            _make_mock_plugin({"epochs": (int, 10)}),
+        ]
+
+        impls, errors = _discover_implementations("cat")
+
+        assert [i.plugin_name for i in impls] == ["cat.healthy.healthy"]
+        assert len(errors) == 1
+        assert errors[0].plugin_name == "cat.broken.broken"
+        assert "ImportError" in errors[0].error
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_all_plugins_broken_yields_empty_with_errors(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify a fully broken category returns no impls but all errors."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.a.a", "cat.b.b"]
+        mock_pm.load.side_effect = SyntaxError("bad file")
+
+        impls, errors = _discover_implementations("cat")
+
+        assert impls == []
+        assert [e.plugin_name for e in errors] == ["cat.a.a", "cat.b.b"]
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_missing_category_dir_is_reported(
+        self,
+        _mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify an unreadable category directory yields a category-level error."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.side_effect = FileNotFoundError("no such directory")
+
+        impls, errors = _discover_implementations("ghost_cat")
+
+        assert impls == []
+        assert len(errors) == 1
+        assert errors[0].plugin_name == "ghost_cat"
+
+    @patch("app.core.plugin_discovery.plugin_registry._find_plugin_modules")
+    @patch("app.core.plugin_discovery.plugin_registry.PluginManager")
+    def test_healthy_category_has_no_errors(
+        self,
+        mock_pm: MagicMock,
+        mock_find: MagicMock,
+    ) -> None:
+        """Verify a healthy category reports an empty error list."""
+        from app.core.plugin_discovery.plugin_registry import (
+            _discover_implementations,
+        )
+
+        mock_find.return_value = ["cat.impl.impl"]
+        mock_pm.load.return_value = _make_mock_plugin({"epochs": (int, 10)})
+
+        impls, errors = _discover_implementations("cat")
+
+        assert len(impls) == 1
+        assert errors == []

@@ -251,13 +251,29 @@ class ImplementationInfo(BaseModel):
     param_groups: list[ParamGroup] = []
 
 
+class PluginLoadError(BaseModel):
+    """A plugin module that failed to load during discovery.
+
+    Attributes:
+        plugin_name: Dotted module path of the failing plugin (or the
+            category name when the whole category directory is missing).
+        error: Short error message describing the failure.
+    """
+
+    plugin_name: str
+    error: str
+
+
 class CategoryRegistryEntry(BaseModel):
     """Full registry entry for a single plugin category.
 
     Attributes:
         category_info: Static metadata for the category.
         implementations: Discovered plugin implementations.
+        load_errors: Plugins in this category that failed to load; the
+            healthy implementations above are unaffected.
     """
 
     category_info: CategoryInfo
     implementations: list[ImplementationInfo]
+    load_errors: list[PluginLoadError] = []

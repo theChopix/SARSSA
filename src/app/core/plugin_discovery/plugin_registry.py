@@ -20,11 +20,13 @@ from app.models.plugin import (
     ItemRowsDisplayModel,
     ParameterInfo,
     ParamGroup,
+    PluginLoadError,
     WidgetConfig,
 )
 from app.models.plugin import (
     DisplayRowSpec as DisplayRowModel,
 )
+from app.utils.logger import logger
 
 if TYPE_CHECKING:
     from plugins.plugin_interface import (
@@ -418,36 +420,55 @@ def _build_param_groups(
 
 def _discover_implementations(
     category_name: str,
-) -> list[ImplementationInfo]:
+) -> tuple[list[ImplementationInfo], list[PluginLoadError]]:
     """Discover all plugin implementations for a given category.
+
+    Failures are isolated per plugin module: a plugin that cannot be
+    imported, instantiated, or introspected is recorded as a
+    :class:`PluginLoadError` and skipped, so one broken plugin never
+    takes down the rest of the category (or the whole registry).
 
     Args:
         category_name: Key from ``PLUGIN_CATEGORIES``
             (e.g. ``dataset_loading``).
 
     Returns:
-        list[ImplementationInfo]: All discovered implementations
-            with their parameters.
+        tuple: Discovered implementations with their parameters, and
+            the load errors for plugins that failed.
     """
     category_dir = PLUGINS_DIR / category_name
-    module_paths = _find_plugin_modules(category_dir, category_name)
+
+    try:
+        module_paths = _find_plugin_modules(category_dir, category_name)
+    except OSError as exc:
+        logger.warning("Category directory '%s' unreadable: %s", category_dir, exc)
+        error = PluginLoadError(plugin_name=category_name, error=f"{type(exc).__name__}: {exc}")
+        return [], [error]
 
     implementations: list[ImplementationInfo] = []
+    load_errors: list[PluginLoadError] = []
     for module_path in module_paths:
-        plugin_instance = PluginManager.load(module_path)
-        params = _extract_parameters_from_instance(
-            plugin_instance,
-            category_name,
-            module_path,
-        )
-        display_name = plugin_instance.name or make_plugin_display_name(module_path)
-        # getattr (not direct access) so a third-party plugin subclassing
-        # an older BasePlugin snapshot without ``description`` can't break
-        # discovery.
-        description = getattr(plugin_instance, "description", None)
-        display = _convert_display_spec(plugin_instance.io_spec.display)
-        kind = _derive_kind(module_path, category_name)
-        param_groups = _build_param_groups(plugin_instance, params)
+        try:
+            plugin_instance = PluginManager.load(module_path)
+            params = _extract_parameters_from_instance(
+                plugin_instance,
+                category_name,
+                module_path,
+            )
+            display_name = plugin_instance.name or make_plugin_display_name(module_path)
+            # getattr (not direct access) so a third-party plugin subclassing
+            # an older BasePlugin snapshot without ``description`` can't break
+            # discovery.
+            description = getattr(plugin_instance, "description", None)
+            display = _convert_display_spec(plugin_instance.io_spec.display)
+            kind = _derive_kind(module_path, category_name)
+            param_groups = _build_param_groups(plugin_instance, params)
+        except Exception as exc:
+            logger.warning("Plugin '%s' failed to load: %s", module_path, exc)
+            load_errors.append(
+                PluginLoadError(plugin_name=module_path, error=f"{type(exc).__name__}: {exc}")
+            )
+            continue
         implementations.append(
             ImplementationInfo(
                 plugin_name=module_path,
@@ -460,7 +481,7 @@ def _discover_implementations(
             )
         )
 
-    return implementations
+    return implementations, load_errors
 
 
 def get_plugin_registry() -> dict[str, CategoryRegistryEntry]:
@@ -476,10 +497,11 @@ def get_plugin_registry() -> dict[str, CategoryRegistryEntry]:
     registry: dict[str, CategoryRegistryEntry] = {}
 
     for category_name, category_info in PLUGIN_CATEGORIES.items():
-        implementations = _discover_implementations(category_name)
+        implementations, load_errors = _discover_implementations(category_name)
         registry[category_name] = CategoryRegistryEntry(
             category_info=category_info,
             implementations=implementations,
+            load_errors=load_errors,
         )
 
     return registry

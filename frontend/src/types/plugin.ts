@@ -234,10 +234,18 @@ export interface ImplementationInfo {
  *
  * - `category`        – Metadata about the category itself.
  * - `implementations` – All available plugins for this category.
+ * - `load_errors`     – Plugins that failed to load during discovery;
+ *                       the healthy implementations are unaffected.
  */
+export interface PluginLoadError {
+  plugin_name: string;
+  error: string;
+}
+
 export interface CategoryRegistryEntry {
   category_info: CategoryInfo;
   implementations: ImplementationInfo[];
+  load_errors: PluginLoadError[];
 }
 
 // ── The full registry response ──────────────────────────
