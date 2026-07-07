@@ -110,8 +110,8 @@ Two things matter here:
   `http://localhost:5173` (`main.py`). The UI must be served from
   that exact origin or browser requests are rejected.
 
-The backend expects an MLflow tracking store and artifact root to exist
-(SQLite `mlflow.db` + `./mlartifacts`, see §9). Full setup, Docker, and
+The backend expects a running MLflow server (`just mlflow`) and talks
+to it via `MLFLOW_TRACKING_URI` (see §9). Full setup, Docker, and
 dataset download instructions live in the
 [root README](../../README.md) — this document is about *architecture*,
 not provisioning.
@@ -381,9 +381,13 @@ its model registry or model serving). The vocabulary you need:
   **tags** (metadata). Runs can be **nested**: a parent run with child
   runs underneath it.
 - **Tracking store** — the database holding run metadata, params and
-  metrics. Here it is a local SQLite file, `mlflow.db` (`TRACKING_URI`).
-- **Artifact store** — where the artifact *files* actually live. Here
-  it is the local `./mlartifacts` directory (`ARTIFACT_ROOT`).
+  metrics. Here it is a SQLite file, `mlflow.db`, owned by the MLflow
+  server; the backend talks to the server over HTTP
+  (`MLFLOW_TRACKING_URI`).
+- **Artifact store** — where the artifact *files* actually live. The
+  server proxies uploads/downloads (`mlflow-artifacts:/` URIs) into its
+  `--artifacts-destination`, the local `./mlartifacts` directory — so
+  no machine-specific paths end up in the database.
 - **MLflow UI** — a web app for browsing runs; the backend builds
   deep links into it from `MLFLOW_UI_BASE_URL`.
 
@@ -407,8 +411,10 @@ How that maps onto SARSSA:
 Two sections, loaded and typed in `config/config.py`:
 
 - **`mlflow`** → `EXPERIMENT_NAME`, `TRACKING_URI`
-  (`sqlite:///mlflow.db`), `ARTIFACT_ROOT` (`./mlartifacts`),
-  `MLFLOW_UI_BASE_URL` (`config.py`).
+  (`sqlite:///mlflow.db` — a fallback for tests/scripts; `just run`
+  and Docker override it with `MLFLOW_TRACKING_URI` so tracking goes
+  through the MLflow server), `ARTIFACT_ROOT` (`./mlartifacts`, used
+  only with that fallback), `MLFLOW_UI_BASE_URL` (`config.py`).
 - **`plugin_categories`** → an ordered map of category →
   `CategoryInfo` (`order`, `type`, `display_name`,
   `has_visual_results`) parsed into typed models
@@ -425,12 +431,14 @@ endpoints).
 
 ### Experiment bootstrap
 
-`main.py` creates the experiment **with an explicit
-`artifact_location`** *before* anything calls
-`mlflow.set_experiment`. This is deliberate: otherwise MLflow would
-lazily auto‑create the experiment with the default `./mlruns/<id>`
-artifact location and ignore the configured `ARTIFACT_ROOT`. The
-comment in `main.py` explains the ordering hazard.
+`main.py` ensures the experiment exists *before* anything calls
+`mlflow.set_experiment`. Created through the MLflow server with **no
+explicit `artifact_location`**, the experiment gets a portable
+`mlflow-artifacts:/<id>` root — the server resolves the physical
+location at read/write time, so the tracking DB stays free of
+machine-specific paths. The direct-SQLite fallback still pins
+`ARTIFACT_ROOT` explicitly; otherwise MLflow would lazily auto‑create
+the experiment under the default `./mlruns/<id>`.
 
 ### `MLflowRunLoader`
 

@@ -10,9 +10,9 @@ install:
 install-dev:
     uv sync --all-extras --dev
 
-# Run the FastAPI application
+# Run the FastAPI application (needs `just mlflow` running)
 run:
-    cd src && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    cd src && MLFLOW_TRACKING_URI=http://localhost:5000 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Run tests
 test *ARGS:
@@ -80,9 +80,9 @@ frontend-dev:
 frontend-build:
     cd frontend && npm run build
 
-# Start MLflow server
+# Start MLflow server (owns the SQLite store and serves artifacts over HTTP)
 mlflow:
-    cd src && uv run mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlartifacts --host 127.0.0.1 --port 5000
+    cd src && uv run mlflow server --backend-store-uri sqlite:///mlflow.db --artifacts-destination ./mlartifacts --serve-artifacts --host 127.0.0.1 --port 5000
 
 # Download MovieLens dataset
 download-movielens:

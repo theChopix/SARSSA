@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import mlflow
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from mlflow.exceptions import MlflowException
 
 from app.api.routes_items import router as items_router
 from app.api.routes_pipelines import router as pipelines_router
@@ -15,12 +16,22 @@ from app.core.run_recovery import fail_orphaned_runs
 
 mlflow.set_tracking_uri(TRACKING_URI)
 
-# Ensure the experiment exists with the correct artifact storage path.
-# Without this, mlflow.set_experiment() (called later in pipeline_engine)
-# would auto-create the experiment with the default artifact location
-# (./mlruns/<id>), ignoring our configured ARTIFACT_ROOT.
-if mlflow.get_experiment_by_name(EXPERIMENT_NAME) is None:
-    mlflow.create_experiment(EXPERIMENT_NAME, artifact_location=ARTIFACT_ROOT)
+# ensuring the experiment exists before any run starts.
+#  Via the MLflow server we omit artifact_location so
+#   the experiment gets a portable mlflow-artifacts:/ root
+#    (proxied by the server); the direct-SQLite
+#  fallback keeps the configured local path.
+try:
+    if mlflow.get_experiment_by_name(EXPERIMENT_NAME) is None:
+        if TRACKING_URI.startswith("http"):
+            mlflow.create_experiment(EXPERIMENT_NAME)
+        else:
+            mlflow.create_experiment(EXPERIMENT_NAME, artifact_location=ARTIFACT_ROOT)
+except MlflowException as exc:
+    raise RuntimeError(
+        f"MLflow at {TRACKING_URI} is unreachable ({exc}). "
+        "If running locally, start it first with `just mlflow`."
+    ) from exc
 
 
 @asynccontextmanager

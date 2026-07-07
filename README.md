@@ -319,14 +319,15 @@ bash scripts/download_movieLens_all.sh
 bash scripts/download_lastFm1k_all.sh
 
 # 4. Run the stack (three terminals, or use Docker — see below)
+just mlflow                           # MLflow server → http://localhost:5000 (start first)
 just run                              # backend  → http://localhost:8000
-just mlflow                           # MLflow UI → http://localhost:5000
 just frontend-dev                     # frontend → http://localhost:5173
 ```
 
-Then open **http://localhost:5173**. A pipeline that starts with a
-dataset-loading step needs step 3 done first, or it fails with
-`FileNotFoundError`.
+Then open **http://localhost:5173**. The backend logs runs and
+artifacts through the MLflow server, so `just mlflow` must be up
+before `just run`. A pipeline that starts with a dataset-loading step
+needs step 3 done first, or it fails with `FileNotFoundError`.
 
 ### Run with Docker
 
@@ -407,8 +408,8 @@ Notes:
 
 - The root `.env` is read at runtime — never baked into the image.
 - `data/`, `src/mlartifacts/` and `src/mlflow.db` are bind-mounted;
-  the `mlflow` service reads the **same** files the backend writes,
-  exactly like running `just run` + `just mlflow` locally.
+  the `mlflow` service owns both and the backend talks to it over
+  HTTP, exactly like running `just mlflow` + `just run` locally.
 - Other commands: `just docker-build` / `docker-down` / `docker-logs`.
 
 > **Image size:** `pyproject.toml` pins `torch==2.7.1`, which the

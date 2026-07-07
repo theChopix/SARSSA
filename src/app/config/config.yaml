@@ -5,7 +5,11 @@ timezone: "Europe/Prague"
 
 mlflow:
   experiment_name: "pipeline_experiments_02"
+  # Fallback for tests/scripts; `just run` and Docker override it with
+  # MLFLOW_TRACKING_URI so all tracking goes through the MLflow server.
   tracking_uri: "sqlite:///mlflow.db"
+  # Used only with the direct-SQLite fallback; the server's artifact
+  # destination is set on its command line (justfile / docker-compose).
   artifact_root: "./mlartifacts"
   ui_base_url: "http://localhost:5000"
 

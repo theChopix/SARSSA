@@ -4,11 +4,10 @@
 #   * mlflow   — MLflow tracking + UI server       http://localhost:5000
 #   * frontend — React/Vite build served by nginx  http://localhost:5173
 #
-# The backend writes experiment data straight to a SQLite DB
-# (`sqlite:///mlflow.db`) and artifacts to `./mlartifacts`, both relative
-# to /app/src. The `mlflow` UI service reads the *same* files via the
-# shared bind mounts below — this mirrors the local `just run` + `just
-# mlflow` setup, so no application code or config is changed.
+# The backend talks to the `mlflow` service over HTTP; the server owns
+# the SQLite store (`sqlite:///mlflow.db`) and proxies artifact reads and
+# writes into `./mlartifacts` (mlflow-artifacts:/ URIs — no host paths in
+# the DB). This mirrors the local `just run` + `just mlflow` setup.
 #
 # Secrets (OPENAI_API_KEY, CHAT_MODEL, EMBEDDING_MODEL) come from the
 # project's .env file at runtime — they are never baked into the image.
@@ -34,13 +33,8 @@ services:
     volumes:
       # Datasets — code defaults to ../data/<dataset> (i.e. /app/data).
       - ./data:/app/data
-      # Shared MLflow state (backend writes, mlflow service serves).
-      - ./src/mlflow.db:/app/src/mlflow.db
-      - ./src/mlartifacts:/app/src/mlartifacts
-      # MLflow records host-absolute artifact paths in mlflow.db at run-creation
-      # time and never re-resolves them. This second mount makes the host's
-      # artifacts directory reachable inside the container at the same absolute
-      # path, so runs created locally still load in Docker.
+      # Kept for legacy: pre-switch runs store host-absolute artifact
+      # paths in mlflow.db; this mount makes them resolve in-container.
       - ${PWD}/src/mlartifacts:${PWD}/src/mlartifacts
     # Optional GPU: set GPU_COUNT=all on a host with NVIDIA GPU + toolkit.
     # Defaults to 0 — reserves nothing, so it still runs CPU-only anywhere.
@@ -74,8 +68,9 @@ services:
       - server
       - --backend-store-uri
       - sqlite:///mlflow.db
-      - --default-artifact-root
+      - --artifacts-destination
       - ./mlartifacts
+      - --serve-artifacts
       - --host
       - 0.0.0.0
       - --port
@@ -85,10 +80,11 @@ services:
     ports:
       - "5000:5000"
     volumes:
+      # The server owns the SQLite store and the artifacts destination.
       - ./src/mlflow.db:/app/src/mlflow.db
       - ./src/mlartifacts:/app/src/mlartifacts
-      # Same host-absolute mount as the backend — the MLflow UI also serves
-      # artifacts by the absolute path stored in mlflow.db.
+      # Kept for legacy: same mount as the backend — the MLflow UI serves
+      # pre-switch runs by the absolute path stored in mlflow.db.
       - ${PWD}/src/mlartifacts:${PWD}/src/mlartifacts
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
