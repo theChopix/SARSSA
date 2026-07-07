@@ -569,6 +569,46 @@ class TestWorkerFailure:
         assert len(task.completed_steps) == 1
         assert task.completed_steps[0]["category"] == "cat_a"
 
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_persists_partial_context_on_failure(self, mock_engine_cls: MagicMock) -> None:
+        """Verify the partial context is logged via fail_run when a step raises."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "p"
+
+        call_count = {"n": 0}
+
+        def fake_execute(
+            plugin: str, _params: dict[str, Any], ctx: dict[str, Any], **_kwargs: Any
+        ) -> dict[str, Any]:
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("step 2 failed")
+            ctx[plugin.split(".")[0]] = {"run_id": "r1"}
+            return ctx
+
+        mock_engine.execute_step.side_effect = fake_execute
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        mock_engine.fail_run.assert_called_once_with({"cat_a": {"run_id": "r1"}})
+
+    @patch("app.core.pipeline_worker.PipelineEngine")
+    def test_failure_survives_fail_run_error(self, mock_engine_cls: MagicMock) -> None:
+        """Verify a fail_run error doesn't mask the original task error."""
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.start_run.return_value = "p"
+        mock_engine.execute_step.side_effect = RuntimeError("GPU OOM")
+        mock_engine.fail_run.side_effect = RuntimeError("tracking down")
+
+        task = _make_task()
+        run_pipeline_worker(task)
+
+        assert task.status == "error"
+        assert task.error == "GPU OOM"
+
 
 def _make_step_task(
     run_id: str = "parent_run_1",

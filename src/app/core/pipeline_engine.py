@@ -257,7 +257,7 @@ class PipelineEngine:
 
         self._parent_run_id = None
 
-    def fail_run(self, context: dict[str, Any]) -> None:
+    def fail_run(self, context: dict[str, Any], cancelled: bool = False) -> None:
         """Mark the parent pipeline run as FAILED in MLflow.
 
         Logs the partial context (steps completed so far) and sets
@@ -266,6 +266,8 @@ class PipelineEngine:
 
         Args:
             context: The partial pipeline context to persist.
+            cancelled: When ``True``, a ``cancellation`` tag marks the run
+                as cancelled by the user rather than genuinely failed.
 
         Raises:
             RuntimeError: If no parent run is active.
@@ -275,7 +277,8 @@ class PipelineEngine:
 
         with mlflow.start_run(run_id=self._parent_run_id):
             mlflow.log_dict(context, "context.json")
-            mlflow.set_tag("cancellation", "cancelled_by_user")
+            if cancelled:
+                mlflow.set_tag("cancellation", "cancelled_by_user")
 
         client = mlflow.tracking.MlflowClient()
         client.set_terminated(self._parent_run_id, status="FAILED")

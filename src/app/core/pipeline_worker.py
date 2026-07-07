@@ -59,7 +59,7 @@ def run_pipeline_worker(task: TaskState) -> None:
                 logger.info("[WORKER] Cancellation requested before step %d", i)
                 task.status = "cancelled"
                 task.error = "Pipeline cancelled by user."
-                engine.fail_run(context)
+                engine.fail_run(context, cancelled=True)
                 return
             # ──────────────────────────────────────────
 
@@ -91,11 +91,17 @@ def run_pipeline_worker(task: TaskState) -> None:
         logger.info("[WORKER] Pipeline aborted by user (Cancel now)")
         task.status = "cancelled"
         task.error = "Pipeline aborted by user."
-        engine.fail_run(context)
+        engine.fail_run(context, cancelled=True)
     except Exception as exc:
         logger.exception("[WORKER] Pipeline failed: %s", exc)
         task.status = "error"
         task.error = str(exc)
+        # Persist the partial context so the run's completed prefix stays
+        #  loadable
+        try:
+            engine.fail_run(context)
+        except Exception:
+            logger.warning("[WORKER] Could not persist the failed run's context.")
 
 
 def run_step_worker(task: TaskState) -> None:

@@ -654,8 +654,8 @@ class TestFailRun:
         mock_mlflow.log_dict.assert_called_once_with(context, "context.json")
 
     @patch("app.core.pipeline_engine.mlflow")
-    def test_sets_cancellation_tag(self, mock_mlflow: MagicMock) -> None:
-        """Verify cancellation tag is set on the parent run."""
+    def test_sets_cancellation_tag_when_cancelled(self, mock_mlflow: MagicMock) -> None:
+        """Verify cancellation tag is set when the failure is a user cancel."""
         mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
         mock_client = MagicMock()
         mock_mlflow.tracking.MlflowClient.return_value = mock_client
@@ -663,9 +663,27 @@ class TestFailRun:
         engine = PipelineEngine()
         engine.start_run()
 
-        engine.fail_run({})
+        engine.fail_run({}, cancelled=True)
 
         mock_mlflow.set_tag.assert_called_once_with("cancellation", "cancelled_by_user")
+
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_no_cancellation_tag_on_genuine_failure(self, mock_mlflow: MagicMock) -> None:
+        """Verify a genuine failure logs the context without the cancel tag."""
+        mock_mlflow.start_run.return_value = _mock_start_run("parent_id")
+        mock_client = MagicMock()
+        mock_mlflow.tracking.MlflowClient.return_value = mock_client
+
+        engine = PipelineEngine()
+        engine.start_run()
+        run_id = engine._parent_run_id
+
+        context = {"dataset_loading": {"run_id": "abc"}}
+        engine.fail_run(context)
+
+        mock_mlflow.set_tag.assert_not_called()
+        mock_mlflow.log_dict.assert_called_once_with(context, "context.json")
+        mock_client.set_terminated.assert_called_once_with(run_id, status="FAILED")
 
     @patch("app.core.pipeline_engine.mlflow")
     def test_marks_run_as_failed(self, mock_mlflow: MagicMock) -> None:
