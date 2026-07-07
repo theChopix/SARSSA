@@ -613,10 +613,13 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   loadRegistry: async () => {
     const registry = await fetchPluginRegistry();
 
-    // Create a CardState for every category in the registry.
+    // Create a CardState for every category in the registry. Existing card
+    // state is preserved so a HomePage re-mount (e.g. returning from the
+    // guide page) doesn't wipe the user's configuration.
+    const prev = get().cards;
     const cards: Record<string, CardState> = {};
     for (const key of Object.keys(registry)) {
-      cards[key] = defaultCard();
+      cards[key] = prev[key] ?? defaultCard();
     }
 
     set({ registry, cards });
