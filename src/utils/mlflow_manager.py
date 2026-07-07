@@ -6,12 +6,68 @@ from MLflow runs, including support for JSON, NPY, and NPZ file formats.
 """
 
 import json
+import os
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import mlflow
 import mlflow.entities
 import numpy as np
 import scipy.sparse as sp
+from mlflow.exceptions import MlflowException
+
+# downloaded artifacts are reused from here across requests
+_CACHE_ROOT = Path(tempfile.gettempdir()) / "sarssa-artifact-cache"
+# filesystem layout is like this:
+# /tmp/sarssa-artifact-cache/                 <- _CACHE_ROOT
+#    run_id/                                  <- one dir per run
+#       neuron_labels.json/                   <- entry for key "neuron_labels.json"
+#          neuron_labels.json                 <- target (the file itself)
+#       model%2Fconfig.json/                  <- entry for key "model/config.json"
+#          model/config.json                  <- target (key is url-quoted so it
+#                                                stays a single dir name)
+
+
+def _cached_download(run_id: str, artifact_path: str) -> str:
+    """Download an artifact (file or directory) through the reuse cache.
+
+    Each (run, artifact path) pair gets its own cache entry, published
+    with an atomic rename so concurrent requests never observe a
+    half-written copy.
+
+    Args:
+        run_id: MLflow run ID.
+        artifact_path: Artifact path within the run ("" = whole run).
+
+    Returns:
+        Local filesystem path of the cached artifact.
+    """
+    entry = _CACHE_ROOT / run_id / (quote(artifact_path, safe="") or "_run_root_")
+    target = entry / artifact_path
+
+    # cache hit
+    if entry.exists():
+        return str(target)
+
+    _CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(dir=_CACHE_ROOT))
+    try:
+        mlflow.artifacts.download_artifacts(
+            run_id=run_id, artifact_path=artifact_path, dst_path=str(tmp)
+        )
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.replace(tmp, entry)
+        except OSError:
+            # concurrency race - another thread published the entry
+            if not entry.exists():
+                raise
+        return str(target)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 class MLflowRunLoader:
@@ -55,8 +111,8 @@ class MLflowRunLoader:
         """
         Download an artifact and return its local filesystem path.
 
-        Uses ``mlflow.artifacts.download_artifacts`` so the code is
-        independent of the underlying storage backend.
+        Downloads go through a local cache shared across requests;
+        repeated reads of the same artifact hit the cached copy.
 
         Args:
             filename: Name of the artifact file (e.g., "embeddings.npy").
@@ -68,14 +124,14 @@ class MLflowRunLoader:
             Local filesystem path to the downloaded artifact.
         """
         relative = f"{artifact_path}/{filename}" if artifact_path else filename
-        return mlflow.artifacts.download_artifacts(run_id=self.run_id, artifact_path=relative)
+        return _cached_download(self.run_id, relative)
 
     def download_artifact_dir(self, artifact_path: str | None = None) -> str:
         """
         Download an artifact directory and return its local filesystem path.
 
-        Uses ``mlflow.artifacts.download_artifacts`` so the code is
-        independent of the underlying storage backend.
+        Downloads go through a local cache shared across requests;
+        repeated reads of the same directory hit the cached copy.
 
         Args:
             artifact_path: Optional subdirectory within artifacts
@@ -85,9 +141,7 @@ class MLflowRunLoader:
         Returns:
             Local filesystem path to the downloaded artifact directory.
         """
-        return mlflow.artifacts.download_artifacts(
-            run_id=self.run_id, artifact_path=artifact_path or ""
-        )
+        return _cached_download(self.run_id, artifact_path or "")
 
     def get_parameters(self) -> dict[str, str]:
         """
@@ -198,6 +252,8 @@ class MLflowRunLoader:
         """
         Check if an artifact file exists.
 
+        A metadata-only query — the artifact is not downloaded.
+
         Args:
             filename: Name of the artifact file
             artifact_path: Optional subdirectory within artifacts
@@ -205,11 +261,12 @@ class MLflowRunLoader:
         Returns:
             True if the artifact exists, False otherwise
         """
+        relative = f"{artifact_path}/{filename}" if artifact_path else filename
         try:
-            self.download_artifact(filename, artifact_path)
-            return True
-        except (FileNotFoundError, OSError):
+            files = mlflow.tracking.MlflowClient().list_artifacts(self.run_id, artifact_path or "")
+        except MlflowException:
             return False
+        return any(f.path == relative for f in files)
 
 
 def get_run_parameters(run_id: str) -> dict[str, str]:

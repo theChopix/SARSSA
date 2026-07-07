@@ -3,7 +3,7 @@
 All MLflow interactions are mocked to keep tests fast and isolated.
 """
 
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import ANY, MagicMock, mock_open, patch
 
 import pytest
 from mlflow.exceptions import MlflowException
@@ -351,7 +351,7 @@ class TestGetRunContext:
         get_run_context("my_run_id")
 
         mock_mlflow.artifacts.download_artifacts.assert_called_once_with(
-            run_id="my_run_id", artifact_path="context.json"
+            run_id="my_run_id", artifact_path="context.json", dst_path=ANY
         )
 
     @patch("app.core.pipeline_runs.mlflow")

@@ -1,6 +1,7 @@
 """Functions for querying past pipeline runs from MLflow."""
 
 import json
+import tempfile
 from typing import Any, cast
 
 import mlflow
@@ -96,18 +97,19 @@ def get_run_context(run_id: str) -> dict[str, Any]:
         FileNotFoundError: If ``context.json`` is not found in the
             run's artifacts.
     """
-    try:
-        artifact_path = mlflow.artifacts.download_artifacts(
-            run_id=run_id, artifact_path="context.json"
-        )
-    except MlflowException as exc:
-        # MLflow raises MlflowException (not FileNotFoundError) when the artifact
-        # is absent — e.g. an orphaned run with no artifacts. Normalise to the
-        # documented FileNotFoundError that every caller already handles.
-        raise FileNotFoundError(f"context.json not found for run {run_id}") from exc
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            artifact_path = mlflow.artifacts.download_artifacts(
+                run_id=run_id, artifact_path="context.json", dst_path=tmp_dir
+            )
+        except MlflowException as exc:
+            # MLflow raises MlflowException (not FileNotFoundError) when the artifact
+            # is absent — e.g. an orphaned run with no artifacts. Normalise to the
+            # documented FileNotFoundError that every caller already handles.
+            raise FileNotFoundError(f"context.json not found for run {run_id}") from exc
 
-    with open(artifact_path) as f:
-        context: dict[str, Any] = json.load(f)
+        with open(artifact_path) as f:
+            context: dict[str, Any] = json.load(f)
 
     return context
 
