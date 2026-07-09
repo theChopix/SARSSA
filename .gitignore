@@ -108,3 +108,6 @@ docs/_build/
 *.sqlite3
 *.db
 *.bak
+
+# Local compose override (dev-only port publishing etc.)
+docker-compose.override.yml

@@ -129,7 +129,9 @@ Three routers are mounted in `main.py`:
 | `/items` | `api/routes_items.py` | Artifact proxy & item metadata enrichment |
 
 Interactive OpenAPI docs are available at `http://localhost:8000/docs`
-when the server is running.
+when the server runs via `just run`. (In Docker the backend is
+internal-only — reach it through `http://localhost:5173/api/…` or a
+local compose override publishing port 8000.)
 
 ### `/pipelines` — execution & runs
 
