@@ -140,9 +140,10 @@ run id. Later steps read upstream artifacts straight from MLflow
 through those ids — which is exactly what makes runs **reproducible**
 (everything is recorded) and **reusable** (a new pipeline can start
 from a previous run's outputs instead of recomputing earlier stages).
-MLflow serves at `http://localhost:5000`, and its **native UI is fully
-usable on its own** for browsing past runs, their params, metrics and
-artifacts — independently of the SARSSA frontend.
+MLflow's **native UI is fully usable on its own** for browsing past
+runs, their params, metrics and artifacts — independently of the
+SARSSA frontend (locally at `http://localhost:5000/mlflow`, in Docker
+at `http://localhost:5173/mlflow`).
 
 For the deeper mental models see the
 [backend](src/app/README.md), [plugin-system](src/plugins/README.md),
@@ -319,7 +320,7 @@ bash scripts/download_movieLens_all.sh
 bash scripts/download_lastFm1k_all.sh
 
 # 4. Run the stack (three terminals, or use Docker — see below)
-just mlflow                           # MLflow server → http://localhost:5000 (start first)
+just mlflow                           # MLflow server → http://localhost:5000/mlflow (start first)
 just run                              # backend  → http://localhost:8000
 just frontend-dev                     # frontend → http://localhost:5173
 ```
@@ -335,9 +336,9 @@ The whole stack is containerised with Docker Compose:
 
 | Service | Description | URL |
 |---------|-------------|-----|
-| `backend` | FastAPI app (uvicorn) | http://localhost:8000 |
-| `mlflow` | MLflow tracking + UI | http://localhost:5000 |
-| `frontend` | React build served by nginx | http://localhost:5173 |
+| `frontend` | nginx: React build + single entry (`/api/`, `/mlflow/`) | http://localhost:5173 |
+| `backend` | FastAPI app (uvicorn) | internal (http://localhost:5173/api/) |
+| `mlflow` | MLflow tracking + UI | internal (http://localhost:5173/mlflow) |
 
 **Do the host-side setup first.** Docker changes *how* the services
 run, not *what* they need — so credentials, datasets and the
@@ -390,9 +391,10 @@ so to launch a second run alongside a first, open the app in **another
 browser tab** and start it there; a queued run can be cancelled
 instantly from either tab.
 
-Open the UI at **http://localhost:5173** — use this exact port: the
-backend's CORS allow-list and the frontend's hardcoded API URL expect
-frontend on `:5173`, backend on `:8000`.
+Open the UI at **http://localhost:5173** — the only published port.
+The frontend nginx is the single entry point: it serves the app and
+routes `/api/` to the backend and `/mlflow` to MLflow internally, so
+everything is same-origin (no CORS, no baked-in hosts).
 
 Stop the stack:
 

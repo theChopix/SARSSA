@@ -82,7 +82,7 @@ frontend-build:
 
 # Start MLflow server (owns the SQLite store and serves artifacts over HTTP)
 mlflow:
-    cd src && mkdir -p mlflow-data && uv run mlflow server --backend-store-uri sqlite:///mlflow-data/mlflow.db --artifacts-destination ./mlartifacts --serve-artifacts --host 127.0.0.1 --port 5000
+    cd src && mkdir -p mlflow-data && uv run mlflow server --backend-store-uri sqlite:///mlflow-data/mlflow.db --artifacts-destination ./mlartifacts --serve-artifacts --static-prefix /mlflow --host 127.0.0.1 --port 5000
 
 # Download MovieLens dataset
 download-movielens:

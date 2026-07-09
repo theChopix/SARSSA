@@ -57,24 +57,24 @@ just frontend-install      # npm install
 just frontend-dev          # npm run dev  → http://localhost:5173
 ```
 The dev server runs on **:5173** with hot-module reload. It expects
-the backend on **:8000** (see the contract below).
+the backend on **:8000** and MLflow on **:5000** (see below).
 
 **Production / Docker:** the multi-stage `Dockerfile` builds the app
 (`npm run build` → static bundle in `dist/`) and serves it with
-**nginx** (`nginx.conf`): SPA fallback (`try_files … /index.html` so
-client-side routes work on refresh), long-cache for hashed
-`/assets/`, no-cache for the HTML shell. `docker-compose` publishes
-the container on host port 5173 and the backend on 8000.
+**nginx** (`nginx.conf`), which is also the stack's **single entry
+point**: it proxies `/api/` to the backend and `/mlflow/` to MLflow,
+plus SPA fallback (`try_files … /index.html` so client-side routes
+work on refresh), long-cache for hashed `/assets/`, no-cache for the
+HTML shell. `docker-compose` publishes only this container (host
+port 5173).
 
-> **⚠️ The 5173 ↔ 8000 / CORS contract — read this.**
-> `src/constants.ts` **hardcodes** `API_BASE_URL =
-> "http://localhost:8000"`, and the backend's CORS allow-list is
-> **only** `http://localhost:5173`. There is **no Vite proxy** — the
-> browser calls the backend cross-origin directly. So the UI must be
-> served from `:5173` and the backend from `:8000`, or every request
-> is rejected. Changing either side means changing *both* (here and
-> the backend's CORS config). This is the single most common
-> "nothing works" cause.
+> **How the app finds the backend.** `src/constants.ts` sets
+> `API_BASE_URL = "/api"` — an **origin-relative** path, so the same
+> build works on any host/port. Someone must route it, and each mode
+> has its counterpart: the **Vite dev proxy** (`vite.config.ts`)
+> forwards `/api` → `localhost:8000` (stripping the prefix) and
+> `/mlflow` → `localhost:5000`; in Docker the **frontend nginx** does
+> exactly the same inside the compose network.
 
 ---
 
