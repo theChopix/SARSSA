@@ -1,7 +1,5 @@
-import tempfile
 from typing import Annotated
 
-import mlflow
 import plotly.graph_objects as go
 
 from plugins.labeling_evaluation._embedding_map import compute_label_embedding_coords
@@ -42,6 +40,7 @@ class Plugin(BasePlugin):
         ],
         output_artifacts=[
             OutputArtifactSpec("umap_coords", "umap_coords.npy", "npy"),
+            OutputArtifactSpec("embedding_map_html", "embedding_map.html", "text"),
         ],
         output_params=[
             OutputParamSpec("embedding_provider", "embedding_provider_param"),
@@ -186,10 +185,5 @@ class Plugin(BasePlugin):
         self.umap_random_state_param = umap_random_state
         self.num_neurons = len(self.neuron_ids)
 
-    def update_context(self) -> None:
-        """Log standard artifacts via base class, then save interactive HTML."""
-        super().update_context()
-        with tempfile.TemporaryDirectory() as tmp:
-            self._fig.write_html(f"{tmp}/embedding_map.html")
-            mlflow.log_artifacts(tmp)
-        logger.info("Embedding map saved to mlflow artifacts as interactive HTML")
+        # Render the interactive figure.
+        self.embedding_map_html = self._fig.to_html()

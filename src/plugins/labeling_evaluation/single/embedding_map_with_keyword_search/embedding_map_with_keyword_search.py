@@ -12,10 +12,8 @@ Renders an interactive UMAP scatter plot of neuron labels and adds:
 """
 
 import json
-import tempfile
 from typing import Annotated, Any
 
-import mlflow
 import plotly.graph_objects as go
 
 from plugins.labeling_evaluation._embedding_cache import embed_labels
@@ -83,6 +81,11 @@ class Plugin(BasePlugin):
                 "top_k_matches",
                 "top_k_matches.json",
                 "json",
+            ),
+            OutputArtifactSpec(
+                "keyword_search_html",
+                "keyword_search_map.html",
+                "text",
             ),
         ],
         output_params=[
@@ -365,12 +368,7 @@ class Plugin(BasePlugin):
         self.num_top_k_matches_param = len(top_k_records)
         self.num_neurons = len(self.neuron_ids)
 
-    def update_context(self) -> None:
-        """Log standard artifacts via base class, then save the custom HTML page."""
-        super().update_context()
-        html = render_keyword_search_html(self._fig, self._sidebars, self._keyword)
-        with tempfile.TemporaryDirectory() as tmp:
-            with open(f"{tmp}/keyword_search_map.html", "w", encoding="utf-8") as f:
-                f.write(html)
-            mlflow.log_artifacts(tmp)
-        logger.info("Keyword-search embedding map saved to mlflow artifacts as HTML")
+        # Render the custom page.
+        self.keyword_search_html = render_keyword_search_html(
+            self._fig, self._sidebars, self._keyword
+        )

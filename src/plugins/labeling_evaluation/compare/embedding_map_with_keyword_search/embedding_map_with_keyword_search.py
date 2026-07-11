@@ -16,11 +16,9 @@ space), then overlays:
 """
 
 import json
-import tempfile
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
-import mlflow
 import numpy as np
 import plotly.graph_objects as go
 
@@ -101,6 +99,11 @@ class Plugin(BaseComparePlugin):
                 "top_k_matches",
                 "top_k_matches.json",
                 "json",
+            ),
+            OutputArtifactSpec(
+                "keyword_search_html",
+                "keyword_search_map.html",
+                "text",
             ),
         ],
         output_params=[
@@ -438,15 +441,10 @@ class Plugin(BaseComparePlugin):
         self.num_neurons_current_param = n_current
         self.num_neurons_past_param = n_past
 
-    def update_context(self) -> None:
-        """Log standard artifacts via base class, then save the custom HTML page."""
-        super().update_context()
-        html = render_keyword_search_html(self._fig, self._sidebars, self._keyword)
-        with tempfile.TemporaryDirectory() as tmp:
-            with open(f"{tmp}/keyword_search_map.html", "w", encoding="utf-8") as f:
-                f.write(html)
-            mlflow.log_artifacts(tmp)
-        logger.info("Compare keyword-search embedding map saved to mlflow artifacts as HTML")
+        # Render the custom page.
+        self.keyword_search_html = render_keyword_search_html(
+            self._fig, self._sidebars, self._keyword
+        )
 
 
 # ── Helpers ─────────────────────────────────────────────────
