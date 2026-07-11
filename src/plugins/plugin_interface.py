@@ -81,11 +81,18 @@ class OutputArtifactSpec:
             The ``"model"`` saver writes a fixed ``config.json`` +
             ``model.pt`` at the artifact root and ignores ``filename``
             (which must be ``""``); at most one ``"model"`` per plugin.
+        optional: When True and the attribute holds ``None``, the
+            artifact is skipped instead of saved.
+        saver_kwargs: Extra keyword arguments for the saver. Currently
+            honoured by the ``"json"`` saver (e.g. ``{"indent": None}``
+            for compact output).
     """
 
     attr: str
     filename: str
     saver: str
+    optional: bool = False
+    saver_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -96,10 +103,13 @@ class OutputParamSpec:
         key: MLflow parameter key.
         attr: Attribute name on the plugin instance holding the
             value to log.
+        optional: When True and the attribute holds ``None``, the
+            parameter is skipped instead of logged.
     """
 
     key: str
     attr: str
+    optional: bool = False
 
 
 @dataclass
@@ -605,19 +615,33 @@ class BasePlugin(ABC):
                 raise ValueError(f"Unknown loader type: {spec.loader}")
 
     def _log_output_params(self) -> None:
-        """Log all declared output params to MLflow."""
+        """Log all declared output params to MLflow.
+
+        Optional params whose attribute holds ``None`` are skipped.
+        """
         params: dict[str, Any] = {}
         for spec in self.io_spec.output_params:
-            params[spec.key] = getattr(self, spec.attr)
+            value = getattr(self, spec.attr)
+            if spec.optional and value is None:
+                continue
+            params[spec.key] = value
         if params:
             mlflow.log_params(params)
 
     def _log_output_artifacts(self) -> None:
-        """Save all declared output artifacts to MLflow."""
-        if not self.io_spec.output_artifacts:
+        """Save all declared output artifacts to MLflow.
+
+        Optional artifacts whose attribute holds ``None`` are skipped.
+        """
+        specs = [
+            spec
+            for spec in self.io_spec.output_artifacts
+            if not (spec.optional and getattr(self, spec.attr) is None)
+        ]
+        if not specs:
             return
         with tempfile.TemporaryDirectory() as tmp:
-            for spec in self.io_spec.output_artifacts:
+            for spec in specs:
                 self._save_artifact(tmp, spec)
             mlflow.log_artifacts(tmp)
 
@@ -643,7 +667,7 @@ class BasePlugin(ABC):
         match spec.saver:
             case "json":
                 with open(path, "w") as f:
-                    json.dump(value, f, indent=2, default=str)
+                    json.dump(value, f, **{"indent": 2, "default": str, **spec.saver_kwargs})
             case "npz":
                 sp.save_npz(path, value)
             case "npy":

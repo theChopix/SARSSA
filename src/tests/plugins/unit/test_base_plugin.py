@@ -314,6 +314,18 @@ class TestSaveArtifact:
         with open(path) as f:
             assert json.load(f) == {"a": 1, "b": [2, 3]}
 
+    def test_json_saver_kwargs_compact(self, tmp_path: Any) -> None:
+        """Verify saver_kwargs can switch json output to compact form."""
+        plugin = _make_plugin()
+        plugin.my_data = {"a": 1, "b": [2, 3]}
+
+        spec = OutputArtifactSpec("my_data", "out.json", "json", saver_kwargs={"indent": None})
+        plugin._save_artifact(str(tmp_path), spec)
+
+        content = (tmp_path / "out.json").read_text()
+        assert "\n" not in content
+        assert json.loads(content) == {"a": 1, "b": [2, 3]}
+
     def test_npz_saver(self, tmp_path: Any) -> None:
         """Verify npz saver writes a sparse matrix."""
         plugin = _make_plugin()
@@ -648,6 +660,119 @@ class TestUpdateContext:
     ) -> None:
         """Verify mlflow.log_artifacts not called with no specs."""
         plugin = _make_plugin(PluginIOSpec())
+        plugin.update_context()
+
+        mock_mlflow.log_artifacts.assert_not_called()
+
+    @patch("plugins.plugin_interface.mlflow")
+    def test_skips_optional_param_when_none(
+        self,
+        mock_mlflow: MagicMock,
+    ) -> None:
+        """Verify an optional param holding None is not logged."""
+        io_spec = PluginIOSpec(
+            output_params=[
+                OutputParamSpec("dataset_name", "dataset"),
+                OutputParamSpec("num_tags", "num_tags", optional=True),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        plugin.dataset = "MovieLens"
+        plugin.num_tags = None
+
+        plugin.update_context()
+
+        mock_mlflow.log_params.assert_called_once_with({"dataset_name": "MovieLens"})
+
+    @patch("plugins.plugin_interface.mlflow")
+    def test_logs_optional_param_when_set(
+        self,
+        mock_mlflow: MagicMock,
+    ) -> None:
+        """Verify an optional param with a value is logged normally."""
+        io_spec = PluginIOSpec(
+            output_params=[
+                OutputParamSpec("num_tags", "num_tags", optional=True),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        plugin.num_tags = 42
+
+        plugin.update_context()
+
+        mock_mlflow.log_params.assert_called_once_with({"num_tags": 42})
+
+    @patch("plugins.plugin_interface.mlflow")
+    def test_required_param_none_is_still_logged(
+        self,
+        mock_mlflow: MagicMock,
+    ) -> None:
+        """Verify a non-optional param holding None keeps being logged."""
+        io_spec = PluginIOSpec(
+            output_params=[OutputParamSpec("maybe", "maybe")],
+        )
+        plugin = _make_plugin(io_spec)
+        plugin.maybe = None
+
+        plugin.update_context()
+
+        mock_mlflow.log_params.assert_called_once_with({"maybe": None})
+
+    @patch("plugins.plugin_interface.mlflow")
+    def test_skips_optional_artifact_when_none(
+        self,
+        mock_mlflow: MagicMock,
+    ) -> None:
+        """Verify an optional artifact holding None is not saved."""
+        io_spec = PluginIOSpec(
+            output_artifacts=[
+                OutputArtifactSpec("data", "data.json", "json"),
+                OutputArtifactSpec("tags", "tags.json", "json", optional=True),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        plugin.data = {"key": "value"}
+        plugin.tags = None
+
+        with patch.object(plugin, "_save_artifact", wraps=plugin._save_artifact) as save_spy:
+            plugin.update_context()
+
+        saved_attrs = [call.args[1].attr for call in save_spy.call_args_list]
+        assert saved_attrs == ["data"]
+        mock_mlflow.log_artifacts.assert_called_once()
+
+    @patch("plugins.plugin_interface.mlflow")
+    def test_saves_optional_artifact_when_set(
+        self,
+        mock_mlflow: MagicMock,
+    ) -> None:
+        """Verify an optional artifact with a value is saved normally."""
+        io_spec = PluginIOSpec(
+            output_artifacts=[
+                OutputArtifactSpec("tags", "tags.json", "json", optional=True),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        plugin.tags = ["rock", "jazz"]
+
+        plugin.update_context()
+
+        mock_mlflow.log_artifacts.assert_called_once()
+
+    @patch("plugins.plugin_interface.mlflow")
+    def test_skips_log_artifacts_when_all_optional_none(
+        self,
+        mock_mlflow: MagicMock,
+    ) -> None:
+        """Verify no artifact logging happens when every optional is None."""
+        io_spec = PluginIOSpec(
+            output_artifacts=[
+                OutputArtifactSpec("tags", "tags.json", "json", optional=True),
+            ],
+        )
+        plugin = _make_plugin(io_spec)
+        plugin.tags = None
+
         plugin.update_context()
 
         mock_mlflow.log_artifacts.assert_not_called()

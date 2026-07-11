@@ -121,6 +121,19 @@ class TestOutputArtifactSpec:
         assert spec.filename == "train_csr.npz"
         assert spec.saver == "npz"
 
+    def test_optional_and_saver_kwargs_defaults(self) -> None:
+        """Verify optional defaults to False and saver_kwargs to {}."""
+        spec = OutputArtifactSpec("a", "a.json", "json")
+        assert spec.optional is False
+        assert spec.saver_kwargs == {}
+
+    def test_default_saver_kwargs_not_shared(self) -> None:
+        """Verify each instance gets its own saver_kwargs dict."""
+        one = OutputArtifactSpec("a", "a.json", "json")
+        two = OutputArtifactSpec("b", "b.json", "json")
+        one.saver_kwargs["indent"] = None
+        assert two.saver_kwargs == {}
+
 
 # ── OutputParamSpec ──────────────────────────────────────────────────
 
@@ -133,6 +146,10 @@ class TestOutputParamSpec:
         spec = OutputParamSpec(key="dataset_name", attr="dataset")
         assert spec.key == "dataset_name"
         assert spec.attr == "dataset"
+
+    def test_optional_defaults_to_false(self) -> None:
+        """Verify optional defaults to False."""
+        assert OutputParamSpec(key="k", attr="a").optional is False
 
 
 # ── DisplayRowSpec ──────────────────────────────────────────────────

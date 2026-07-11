@@ -153,13 +153,13 @@ item set; only the rows (users) differ. The **params** are plain
 scalars logged to MLflow (ints / floats / strings / the `has_tags`
 bool) and read back downstream via typed `ParamSpec`s.
 
-### ⚠️ The "hidden" tag/metadata artifacts
+### ⚠️ The optional tag/metadata artifacts
 
-MovieLens additionally logs three artifacts that are **not in its
-declarative `io_spec`** — they are written by hand in its
-`update_context()` override:
+MovieLens additionally declares three **optional** artifacts
+(`optional=True` in its `io_spec`) — they are skipped when the
+attribute holds `None`:
 
-| Extra artifact | Produced when | Required by |
+| Optional artifact | Produced when | Required by |
 |----------------|---------------|-------------|
 | `tag_ids.json` | the dataset has tags | **`neuron_labeling/tf_idf`** |
 | `tag_item_matrix.npz` | the dataset has tags | **`neuron_labeling/tf_idf`** |
@@ -183,8 +183,8 @@ This matters enormously for "bring your own dataset":
 `load_ratings()` reads `ratings.csv` (keeps ratings ≥ 4.0 as positive
 implicit feedback); `load_optional_data()` reads `tags.csv` and
 `metadata.json`; it overrides `get_item_metadata()` (renaming
-`genres` → `categories`) and `update_context()` to log the tag +
-metadata extras. **This is the shape you should model your own loader
+`genres` → `categories`) and declares the tag + metadata extras as
+optional `io_spec` outputs. **This is the shape you should model your own loader
 on** — it yields the full, working pipeline.
 
 **`lastFm1k_loader` — the reduced fallback, *not* the recommended
@@ -320,7 +320,7 @@ class MyDatasetLoader(DatasetLoader):
 `prepare()` does the rest — filtering, the CSR matrix, the seeded
 split, and it calls `load_optional_data()` for you. You do **not**
 touch MLflow here. (The two tag-helper methods — `tag_ids()` and
-`tag_item_matrix()` — and the `update_context()` override that turns
+`tag_item_matrix()` — and the optional `io_spec` entries that turn
 `self.df_tags` into the `tag_ids.json` / `tag_item_matrix.npz` /
 `item_metadata.json` artifacts are shown in Step 5.)
 
@@ -328,8 +328,8 @@ touch MLflow here. (The two tag-helper methods — `tag_ids()` and
 
 The `Plugin` declares the output contract (§3) and copies the prepared
 values onto `self`. This `io_spec` is the **same whether or not you
-have tags** — the tag/metadata extras are logged separately in
-`update_context()` (Step 5), not declared here:
+have tags** — the tag/metadata extras are declared as `optional=True`
+entries (Step 5) that are simply skipped when the value is `None`:
 
 ```python
 from typing import Annotated
@@ -407,13 +407,13 @@ for the UI).
 You already did half of this in Step 2: `load_optional_data()`
 populated `self.df_tags` / `self.metadata`, and `get_item_metadata()`
 shapes the per-item dict. What remains is (a) two tag-helper methods
-on the loader and (b) overriding the **`Plugin`**'s `update_context()`
-to actually log the extra artifacts — remember they are **not** in
-`io_spec`, so without this they never get written:
+on the loader and (b) declaring the extras as **optional outputs** in
+the `Plugin`'s `io_spec` — the base `update_context()` skips any
+`optional=True` entry whose attribute holds `None`, so the same spec
+works with and without tags:
 
 ```python
-import json, tempfile
-import mlflow, numpy as np, scipy.sparse as sp
+import numpy as np, scipy.sparse as sp
 
 # --- on MyDatasetLoader (the DatasetLoader subclass) ---
 def tag_ids(self) -> list[str]:
@@ -430,23 +430,20 @@ def tag_item_matrix(self) -> sp.csr_matrix:
         shape=(len(tids), len(self.items)),
     )
 
+# --- on Plugin: add to io_spec (next to the §3 outputs) ---
+#     OutputArtifactSpec("_tag_ids", "tag_ids.json", "json", optional=True),
+#     OutputArtifactSpec("_tag_item_matrix", "tag_item_matrix.npz", "npz", optional=True),
+#     OutputArtifactSpec("_item_metadata", "item_metadata.json", "json",
+#                        optional=True, saver_kwargs={"indent": None}),
+#     ...
+#     OutputParamSpec("num_tags", "num_tags", optional=True),
+
 # --- on Plugin: in run(), after loader.prepare(), stash these ---
+#     (initialise all of them to None first, then fill when available)
 #     self._tag_ids         = loader.tag_ids()
 #     self._tag_item_matrix = loader.tag_item_matrix()
-#     self._item_metadata   = loader.get_item_metadata()
-
-def update_context(self) -> None:
-    super().update_context()                    # logs the §3 io_spec outputs
-    if self._tag_ids and self._tag_item_matrix is not None:
-        with tempfile.TemporaryDirectory() as tmp:
-            json.dump(self._tag_ids, open(f"{tmp}/tag_ids.json", "w"), indent=2)
-            sp.save_npz(f"{tmp}/tag_item_matrix.npz", self._tag_item_matrix)
-            mlflow.log_artifacts(tmp)
-        mlflow.log_param("num_tags", len(self._tag_ids))
-    if self._item_metadata:
-        with tempfile.TemporaryDirectory() as tmp:
-            json.dump(self._item_metadata, open(f"{tmp}/item_metadata.json", "w"))
-            mlflow.log_artifacts(tmp)
+#     self.num_tags         = len(self._tag_ids)
+#     self._item_metadata   = loader.get_item_metadata() or None
 ```
 
 This is exactly what `movieLens_loader` does — copy it and adjust.
@@ -651,10 +648,10 @@ dataset.
   into `self.descriptions` and nothing consumes it — a ~52 MB no-op
   read. `item_descriptions.json` in the same folder is referenced by
   no code at all.
-- **The tag/metadata artifacts are not in `io_spec`.** They are logged
-  manually in MovieLens's `update_context()` override, so the
-  declarative `io_spec` is *not* the full output contract for a
-  tag-bearing loader — grep the `update_context` override too.
+- **The tag/metadata artifacts are `optional=True` in `io_spec`.**
+  They are skipped when the attribute holds `None`, so a run's actual
+  artifact set depends on what the dataset provides — the spec lists
+  the *maximum*, not the guaranteed output.
 - **`data_dir` is relative to the process CWD.** It defaults to
   `../data/<dataset>` and only resolves correctly because the app runs
   from `src/`. Running a loader from another directory needs an
