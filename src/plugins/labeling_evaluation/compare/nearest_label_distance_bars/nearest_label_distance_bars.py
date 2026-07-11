@@ -10,7 +10,6 @@ Hover on a bar reveals the current-run neuron id, its label text,
 and the past-run label that was the nearest neighbour.
 """
 
-import json
 from typing import Annotated, Any
 
 import numpy as np
@@ -199,7 +198,7 @@ class Plugin(BaseComparePlugin):
 
         # Sort descending so the most-drifted labels are leftmost.
         per_label_sorted = sorted(per_label, key=lambda r: r["distance"], reverse=True)
-        self.nearest_distances = json.dumps(per_label_sorted, indent=2)
+        self.nearest_distances = per_label_sorted
 
         bar_x = [r["neuron_id"] for r in per_label_sorted]
         bar_y = [r["distance"] for r in per_label_sorted]

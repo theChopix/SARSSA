@@ -6,7 +6,6 @@ instance directly, mirroring what ``load_context`` would have
 populated.
 """
 
-import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -107,7 +106,7 @@ class TestHistogramRun:
             histogram_bins=12,
         )
 
-        records = json.loads(plugin.nearest_distances)
+        records = plugin.nearest_distances
         # Histogram variant keeps current input order (no sort).
         assert [r["neuron_id"] for r in records] == ["0", "1", "2"]
 

@@ -7,7 +7,6 @@ instance directly, mirroring what ``load_context`` would have
 populated.
 """
 
-import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -112,7 +111,7 @@ class TestBarsRun:
             embedding_model="text-embedding-3-small",
         )
 
-        records = json.loads(plugin.nearest_distances)
+        records = plugin.nearest_distances
         neuron_order = [r["neuron_id"] for r in records]
         assert neuron_order == ["1", "2", "0"]
 
