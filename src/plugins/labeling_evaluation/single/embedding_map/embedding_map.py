@@ -43,12 +43,6 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("embedding_map_html", "embedding_map.html", "text"),
         ],
         output_params=[
-            OutputParamSpec("embedding_provider", "embedding_provider_param"),
-            OutputParamSpec("embedding_model", "embedding_model_param"),
-            OutputParamSpec("umap_n_neighbors", "umap_n_neighbors_param"),
-            OutputParamSpec("umap_min_dist", "umap_min_dist_param"),
-            OutputParamSpec("umap_metric", "umap_metric_param"),
-            OutputParamSpec("umap_random_state", "umap_random_state_param"),
             OutputParamSpec("num_neurons", "num_neurons"),
         ],
         display=ArtifactDisplaySpec(
@@ -177,12 +171,6 @@ class Plugin(BasePlugin):
         )
 
         # output params
-        self.embedding_provider_param = embedding_provider
-        self.embedding_model_param = embedding_model
-        self.umap_n_neighbors_param = umap_n_neighbors
-        self.umap_min_dist_param = umap_min_dist
-        self.umap_metric_param = umap_metric
-        self.umap_random_state_param = umap_random_state
         self.num_neurons = len(self.neuron_ids)
 
         # Render the interactive figure.

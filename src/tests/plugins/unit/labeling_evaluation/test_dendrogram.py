@@ -93,8 +93,9 @@ class TestDendrogramRun:
         plugin = _build_plugin()
         plugin.run(embedding_provider="gemini")
 
-        assert plugin.embedding_provider_param == "gemini"
-        assert plugin.embedding_model_param == "text-embedding-3-small"
+        # run() args are auto-logged by the engine; the only declared
+        # output param left is the derived neuron count.
+        assert plugin.num_neurons == 3
 
     @patch("plugins.labeling_evaluation.single.dendrogram.dendrogram.dendrogram")
     @patch(
@@ -140,10 +141,10 @@ class TestDendrogramRun:
 class TestDendrogramIOSpec:
     """Tests for the plugin's declarative I/O contract."""
 
-    def test_embedding_provider_in_output_params(self) -> None:
-        """Verify the new ``embedding_provider`` shows up in ``output_params``."""
+    def test_run_args_not_mirrored_in_output_params(self) -> None:
+        """Verify run() args are not re-declared as output params."""
         from plugins.labeling_evaluation.single.dendrogram.dendrogram import Plugin
 
         keys = [spec.key for spec in Plugin.io_spec.output_params]
-        assert "embedding_provider" in keys
-        assert keys.index("embedding_provider") < keys.index("embedding_model")
+        assert "embedding_provider" not in keys
+        assert keys == ["num_neurons"]

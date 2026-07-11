@@ -80,9 +80,6 @@ class Plugin(BaseComparePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("embedding_provider", "embedding_provider_param"),
-            OutputParamSpec("embedding_model", "embedding_model_param"),
-            OutputParamSpec("past_run_id", "past_run_id_param"),
             OutputParamSpec("num_neurons_current", "num_neurons_current_param"),
             OutputParamSpec("num_neurons_past", "num_neurons_past_param"),
             OutputParamSpec("mean_distance", "mean_distance_param"),
@@ -127,7 +124,9 @@ class Plugin(BaseComparePlugin):
 
     def run(
         self,
-        past_run_id: Annotated[
+        # Consumed by BaseComparePlugin (loads the past context); kept in
+        # the signature so the registry exposes it as a UI parameter.
+        past_run_id: Annotated[  # noqa: ARG002
             str,
             "A previously completed pipeline run to compare against; its "
             "neuron labels are embedded so each current-run label can be "
@@ -237,10 +236,6 @@ class Plugin(BaseComparePlugin):
             template="plotly_white",
             bargap=0.05,
         )
-
-        self.embedding_provider_param = embedding_provider
-        self.embedding_model_param = embedding_model
-        self.past_run_id_param = past_run_id
         self.num_neurons_current_param = len(self.current_neuron_ids)
         self.num_neurons_past_param = len(past_neuron_ids)
         self.mean_distance_param = float(result.distances.mean())

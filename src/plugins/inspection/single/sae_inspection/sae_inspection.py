@@ -65,9 +65,8 @@ class Plugin(BasePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("neuron_id", "neuron_id_param"),
             OutputParamSpec("label", "label_param"),
-            OutputParamSpec("k", "k_param"),
+            OutputParamSpec("k_used", "k_param"),
         ],
         display=ItemRowsDisplaySpec(
             type="item_rows",
@@ -148,8 +147,6 @@ class Plugin(BasePlugin):
         self.label = result["label"]
         self.top_k_item_ids = result["top_k_item_ids"]
         self.top_k_activations = result["top_k_activations"]
-
-        self.neuron_id_param = neuron_id
         self.label_param = self.label
         self.k_param = result["k"]
 

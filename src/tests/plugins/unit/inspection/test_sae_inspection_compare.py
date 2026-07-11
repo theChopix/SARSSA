@@ -130,11 +130,8 @@ class TestCompareSaeInspectionRun:
         assert plugin.past_top_k_item_ids == ["p_item_2", "p_item_0"]
         assert plugin.past_top_k_activations == pytest.approx([0.9, 0.4])
 
-        assert plugin.neuron_id_param == "0"
         assert plugin.label_param == "current_a"
-        assert plugin.past_neuron_id_param == "1"
         assert plugin.past_label_param == "past_b"
-        assert plugin.past_run_id_param == "parent_xyz"
         assert plugin.k_param == 2
 
         assert plugin.past_context == past_context

@@ -116,10 +116,6 @@ class TestHistogramRun:
         assert traces[0].nbinsx == 12
         np.testing.assert_array_almost_equal(traces[0].x, [0.10, 0.50, 0.30])
 
-        assert plugin.histogram_bins_param == 12
-        assert plugin.past_run_id_param == "parent_xyz"
-        assert plugin.embedding_provider_param == "openai"
-        assert plugin.embedding_model_param == "text-embedding-3-small"
         assert plugin.num_neurons_current_param == 3
         assert plugin.num_neurons_past_param == 2
         assert plugin.mean_distance_param == pytest.approx(0.30)

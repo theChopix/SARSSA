@@ -115,9 +115,6 @@ class TestCompareEmbeddingMapRun:
         assert passed_kwargs["umap_metric"] == "cosine"
         assert passed_kwargs["umap_random_state"] == 7
 
-        assert plugin.past_run_id_param == "parent_xyz"
-        assert plugin.embedding_provider_param == "openai"
-        assert plugin.embedding_model_param == "text-embedding-3-small"
         assert plugin.num_neurons_current_param == 2
         assert plugin.num_neurons_past_param == 3
 

@@ -121,16 +121,10 @@ class Plugin(BaseComparePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("user_id", "user_id_param"),
             OutputParamSpec("user_original_id", "user_original_id_param"),
             OutputParamSpec("past_user_original_id", "past_user_original_id_param"),
-            OutputParamSpec("neuron_id", "neuron_id_param"),
             OutputParamSpec("label", "label_param"),
-            OutputParamSpec("past_neuron_id", "past_neuron_id_param"),
             OutputParamSpec("past_label", "past_label_param"),
-            OutputParamSpec("past_run_id", "past_run_id_param"),
-            OutputParamSpec("alpha", "alpha_param"),
-            OutputParamSpec("k", "k_param"),
         ],
         display=ItemRowsDisplaySpec(
             type="item_rows",
@@ -336,17 +330,10 @@ class Plugin(BaseComparePlugin):
         self.past_original_recommendations = past["original_recommendations"]
         self.current_steered_recommendations = current["steered_recommendations"]
         self.past_steered_recommendations = past["steered_recommendations"]
-
-        self.user_id_param = user_id
         self.user_original_id_param = current["user_original_id"]
         self.past_user_original_id_param = past["user_original_id"]
-        self.neuron_id_param = neuron_id
         self.label_param = current["label"]
-        self.past_neuron_id_param = past_neuron_id
         self.past_label_param = past["label"]
-        self.past_run_id_param = past_run_id
-        self.alpha_param = alpha
-        self.k_param = k
 
         logger.info(
             "Compare: user %s | current neuron %s ('%s') vs past neuron %s ('%s') "

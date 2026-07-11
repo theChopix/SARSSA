@@ -47,9 +47,6 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("dendrogram_pdf", "dendrogram.pdf", "bytes"),
         ],
         output_params=[
-            OutputParamSpec("embedding_provider", "embedding_provider_param"),
-            OutputParamSpec("embedding_model", "embedding_model_param"),
-            OutputParamSpec("linkage_method", "linkage_method_param"),
             OutputParamSpec("num_neurons", "num_neurons"),
         ],
         display=ArtifactDisplaySpec(
@@ -174,9 +171,6 @@ class Plugin(BasePlugin):
         plt.tight_layout()
 
         # output params
-        self.embedding_provider_param = embedding_provider
-        self.embedding_model_param = embedding_model
-        self.linkage_method_param = linkage_method
         self.num_neurons = len(self.neuron_ids)
 
         # Render the figure to memory and free it.

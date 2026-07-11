@@ -77,13 +77,6 @@ class Plugin(BaseComparePlugin):
             OutputArtifactSpec("embedding_map_html", "embedding_map.html", "text"),
         ],
         output_params=[
-            OutputParamSpec("embedding_provider", "embedding_provider_param"),
-            OutputParamSpec("embedding_model", "embedding_model_param"),
-            OutputParamSpec("umap_n_neighbors", "umap_n_neighbors_param"),
-            OutputParamSpec("umap_min_dist", "umap_min_dist_param"),
-            OutputParamSpec("umap_metric", "umap_metric_param"),
-            OutputParamSpec("umap_random_state", "umap_random_state_param"),
-            OutputParamSpec("past_run_id", "past_run_id_param"),
             OutputParamSpec("num_neurons_current", "num_neurons_current_param"),
             OutputParamSpec("num_neurons_past", "num_neurons_past_param"),
         ],
@@ -135,7 +128,9 @@ class Plugin(BaseComparePlugin):
 
     def run(
         self,
-        past_run_id: Annotated[
+        # Consumed by BaseComparePlugin (loads the past context); kept in
+        # the signature so the registry exposes it as a UI parameter.
+        past_run_id: Annotated[  # noqa: ARG002
             str,
             "A previously completed pipeline run to compare against; its "
             "neuron labels are embedded and projected into the same space "
@@ -278,14 +273,6 @@ class Plugin(BaseComparePlugin):
             template="plotly_white",
             legend={"title": {"text": "Run"}},
         )
-
-        self.embedding_provider_param = embedding_provider
-        self.embedding_model_param = embedding_model
-        self.umap_n_neighbors_param = umap_n_neighbors
-        self.umap_min_dist_param = umap_min_dist
-        self.umap_metric_param = umap_metric
-        self.umap_random_state_param = umap_random_state
-        self.past_run_id_param = past_run_id
         self.num_neurons_current_param = len(self.current_neuron_ids)
         self.num_neurons_past_param = len(past_neuron_ids)
 

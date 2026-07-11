@@ -123,9 +123,6 @@ class TestBarsRun:
         assert record_by_id["1"]["nearest_past_neuron_id"] == "9"
         assert record_by_id["1"]["nearest_past_label"] == "past_b"
 
-        assert plugin.past_run_id_param == "parent_xyz"
-        assert plugin.embedding_provider_param == "openai"
-        assert plugin.embedding_model_param == "text-embedding-3-small"
         assert plugin.num_neurons_current_param == 3
         assert plugin.num_neurons_past_param == 2
         assert plugin.mean_distance_param == pytest.approx(0.30)

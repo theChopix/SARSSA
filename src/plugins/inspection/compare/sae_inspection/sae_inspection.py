@@ -86,12 +86,9 @@ class Plugin(BaseComparePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("neuron_id", "neuron_id_param"),
             OutputParamSpec("label", "label_param"),
-            OutputParamSpec("past_neuron_id", "past_neuron_id_param"),
             OutputParamSpec("past_label", "past_label_param"),
-            OutputParamSpec("past_run_id", "past_run_id_param"),
-            OutputParamSpec("k", "k_param"),
+            OutputParamSpec("k_used", "k_param"),
         ],
         display=ItemRowsDisplaySpec(
             type="item_rows",
@@ -217,12 +214,8 @@ class Plugin(BaseComparePlugin):
         self.current_top_k_activations = current["top_k_activations"]
         self.past_top_k_item_ids = past["top_k_item_ids"]
         self.past_top_k_activations = past["top_k_activations"]
-
-        self.neuron_id_param = neuron_id
         self.label_param = current["label"]
-        self.past_neuron_id_param = past_neuron_id
         self.past_label_param = past["label"]
-        self.past_run_id_param = past_run_id
         self.k_param = current["k"]
 
         logger.info(
