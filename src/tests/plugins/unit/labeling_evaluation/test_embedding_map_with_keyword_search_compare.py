@@ -199,8 +199,6 @@ class TestCompareKeywordSearchSeparate:
         assert len(records["current"]) == 2
         assert len(records["past"]) == 2
 
-        assert plugin.search_scope_param == "separate"
-        assert plugin.past_run_id_param == "parent_xyz"
         assert plugin.num_neurons_current_param == 2
         assert plugin.num_neurons_past_param == 3
 

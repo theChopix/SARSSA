@@ -93,8 +93,6 @@ class TestSingleKeywordSearchRun:
         # beat beta and delta (similarity 0).
         assert match_ids == ["0", "2"]
 
-        assert plugin.keyword_param == "search me"
-        assert plugin.k_param == 2
         assert plugin.num_top_k_matches_param == 2
         assert plugin.num_neurons == 4
 

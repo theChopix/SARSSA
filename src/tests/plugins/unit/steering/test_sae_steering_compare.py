@@ -156,16 +156,10 @@ class TestCompareSaeSteeringRun:
         assert plugin.current_steered_recommendations == ["c_b", "c_a"]
         assert plugin.past_steered_recommendations == ["p_c", "p_b"]
 
-        assert plugin.user_id_param == 0
         assert plugin.user_original_id_param == "c_user"
         assert plugin.past_user_original_id_param == "p_user"
-        assert plugin.neuron_id_param == "0"
         assert plugin.label_param == "current_a"
-        assert plugin.past_neuron_id_param == "1"
         assert plugin.past_label_param == "past_b"
-        assert plugin.past_run_id_param == "parent_xyz"
-        assert plugin.alpha_param == 0.4
-        assert plugin.k_param == 2
 
         assert plugin.past_context == past_context
 

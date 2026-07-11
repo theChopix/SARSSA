@@ -93,12 +93,8 @@ class Plugin(BasePlugin):
             ),
         ],
         output_params=[
-            OutputParamSpec("user_id", "user_id_param"),
             OutputParamSpec("user_original_id", "user_original_id"),
-            OutputParamSpec("neuron_id", "neuron_id_param"),
             OutputParamSpec("label", "label_param"),
-            OutputParamSpec("alpha", "alpha_param"),
-            OutputParamSpec("k", "k_param"),
         ],
         display=ItemRowsDisplaySpec(
             type="item_rows",
@@ -217,13 +213,8 @@ class Plugin(BasePlugin):
         self.interacted_items = result["interacted_items"]
         self.original_recommendations = result["original_recommendations"]
         self.steered_recommendations = result["steered_recommendations"]
-
-        self.user_id_param = result["user_id"]
         self.user_original_id = result["user_original_id"]
-        self.neuron_id_param = neuron_id
         self.label_param = result["label"]
-        self.alpha_param = alpha
-        self.k_param = k
 
         logger.info(
             f"User {user_id} | neuron={self.neuron_id} "
