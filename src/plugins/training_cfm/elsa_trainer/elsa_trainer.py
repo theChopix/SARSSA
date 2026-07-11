@@ -10,6 +10,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     OutputArtifactSpec,
+    OutputParamSpec,
     ParamGroup,
     ParamSpec,
     PluginIOSpec,
@@ -37,17 +38,6 @@ def train(
     early_stop: int,
     target_ratio: float,
     seed: int,
-    dataset: str,
-    factors: int,
-    lr: float,
-    val_ratio: float,
-    test_ratio: float,
-    beta1: float,
-    beta2: float,
-    min_user_interactions: int,
-    min_item_interactions: int,
-    num_users: int,
-    num_items: int,
     notifier: PluginNotifier | None = None,
     cancellation: CancellationToken | None = None,
 ):
@@ -73,44 +63,10 @@ def train(
         early_stop: Number of epochs without improvement before stopping (0 to disable).
         target_ratio: Ratio of interactions to use as targets in evaluation (0.0-1.0).
         seed: Random seed for reproducibility.
-        dataset: Name of the dataset being used.
-        factors: Number of latent factors (embedding dimension).
-        lr: Learning rate for optimizer.
-        val_ratio: Validation set ratio used in data splitting.
-        test_ratio: Test set ratio used in data splitting.
-        beta1: Adam optimizer beta1 parameter.
-        beta2: Adam optimizer beta2 parameter.
-        min_user_interactions: Minimum interactions per user (dataset filtering threshold).
-        min_item_interactions: Minimum interactions per item (dataset filtering threshold).
-        num_users: Total number of users in the dataset.
-        num_items: Total number of items in the dataset.
 
     Returns:
         None. The function logs metrics to MLflow and saves the model checkpoint.
     """
-    # Log all hyperparameters and dataset info to MLflow
-    mlflow.log_params(
-        {
-            "dataset": dataset,
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "factors": factors,
-            "lr": lr,
-            "early_stop": early_stop,
-            "seed": seed,
-            "val_ratio": val_ratio,
-            "test_ratio": test_ratio,
-            "target_ratio": target_ratio,
-            "beta1": beta1,
-            "beta2": beta2,
-            "model": "ELSA",
-            "min_user_interactions": min_user_interactions,
-            "min_item_interactions": min_item_interactions,
-            "users": num_users,
-            "items": num_items,
-        }
-    )
-
     # Create data loaders for training and validation
     train_dataloader = DataLoader(train_csr, batch_size, device, shuffle=True, seed=seed)
     valid_dataloader = DataLoader(valid_csr, batch_size, device, shuffle=False)
@@ -254,6 +210,16 @@ class Plugin(BasePlugin):
         output_artifacts=[
             OutputArtifactSpec("trained_model", "", "model"),
         ],
+        output_params=[
+            OutputParamSpec("model", "model_name"),
+            OutputParamSpec("dataset", "dataset"),
+            OutputParamSpec("users", "num_users"),
+            OutputParamSpec("items", "num_items"),
+            OutputParamSpec("val_ratio", "val_ratio"),
+            OutputParamSpec("test_ratio", "test_ratio"),
+            OutputParamSpec("min_user_interactions", "min_user_interactions"),
+            OutputParamSpec("min_item_interactions", "min_item_interactions"),
+        ],
         param_groups=[
             ParamGroup("Architecture", ["factors"]),
             ParamGroup("Training loop", ["epochs", "batch_size", "early_stop", "seed"]),
@@ -333,6 +299,8 @@ class Plugin(BasePlugin):
         Returns:
             dict: Updated context with training status.
         """
+        self.model_name = "ELSA"
+
         # Initialize device and set random seed for reproducibility
         device = set_device()
         logger.info(f"Using device: {device}")
@@ -358,17 +326,6 @@ class Plugin(BasePlugin):
             early_stop=early_stop,
             target_ratio=target_ratio,
             seed=seed,
-            dataset=self.dataset,
-            factors=factors,
-            lr=lr,
-            val_ratio=self.val_ratio,
-            test_ratio=self.test_ratio,
-            beta1=beta1,
-            beta2=beta2,
-            min_user_interactions=self.min_user_interactions,
-            min_item_interactions=self.min_item_interactions,
-            num_users=self.num_users,
-            num_items=self.num_items,
             notifier=self.notifier,
             cancellation=self.cancellation,
         )

@@ -10,6 +10,7 @@ from plugins.plugin_interface import (
     ArtifactSpec,
     BasePlugin,
     OutputArtifactSpec,
+    OutputParamSpec,
     ParamGroup,
     ParamSpec,
     PluginIOSpec,
@@ -343,6 +344,23 @@ class Plugin(BasePlugin):
         output_artifacts=[
             OutputArtifactSpec("trained_model", "", "model"),
         ],
+        output_params=[
+            OutputParamSpec("model", "model_name"),
+            OutputParamSpec("dataset", "dataset"),
+            OutputParamSpec("users", "num_users"),
+            OutputParamSpec("items", "num_items"),
+            OutputParamSpec("val_ratio", "val_ratio"),
+            OutputParamSpec("test_ratio", "test_ratio"),
+            OutputParamSpec("min_user_interactions", "min_user_interactions"),
+            OutputParamSpec("min_item_interactions", "min_item_interactions"),
+            OutputParamSpec("expansion_ratio", "expansion_ratio"),
+            OutputParamSpec("base_model", "base_model_name"),
+            OutputParamSpec("base_factors", "base_factors"),
+            OutputParamSpec("base_users", "base_users"),
+            OutputParamSpec("base_items", "base_items"),
+            OutputParamSpec("base_min_user_interactions", "base_min_user_interactions"),
+            OutputParamSpec("base_min_item_interactions", "base_min_item_interactions"),
+        ],
         param_ui_hints=[
             StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
             ToggleHint("sample_users"),
@@ -532,9 +550,10 @@ class Plugin(BasePlugin):
 
         self.base_model.to(device)
 
-        expansion_ratio = embedding_dim / self.base_factors
+        self.expansion_ratio = embedding_dim / self.base_factors
+        self.model_name = "BasicSAE"
         logger.info(
-            f"Expansion ratio: {expansion_ratio:.1f}x ({self.base_factors} → {embedding_dim})"
+            f"Expansion ratio: {self.expansion_ratio:.1f}x ({self.base_factors} → {embedding_dim})"
         )
 
         # Initialize the Basic SAE model (sparsity via L1; no top_k / contrastive)
@@ -554,44 +573,6 @@ class Plugin(BasePlugin):
 
         # Initialize optimizer
         optimizer = torch.optim.Adam(sae.parameters(), lr=lr, betas=(beta1, beta2))
-
-        # Log all parameters to MLflow
-        mlflow.log_params(
-            {
-                "expansion_ratio": expansion_ratio,
-                "min_item_interactions": self.min_item_interactions,
-                "target_ratio": target_ratio,
-                "beta2": beta2,
-                "beta1": beta1,
-                "seed": seed,
-                "l1_coef": l1_coef,
-                "min_user_interactions": self.min_user_interactions,
-                "epochs": epochs,
-                "reconstruction_loss": reconstruction_loss,
-                "val_ratio": self.val_ratio,
-                "dataset": self.dataset,
-                "batch_size": batch_size,
-                "lr": lr,
-                "base_factors": self.base_factors,
-                "normalize": normalize,
-                "base_model": self.base_model_name,
-                "base_min_item_interactions": self.base_min_item_interactions,
-                "users": self.num_users,
-                "topk_aux": topk_aux,
-                "items": self.num_items,
-                "base_users": self.base_users,
-                "early_stop": early_stop,
-                "evaluate_every": evaluate_every,
-                "embedding_dim": embedding_dim,
-                "base_items": self.base_items,
-                "auxiliary_coef": auxiliary_coef,
-                "n_batches_to_dead": n_batches_to_dead,
-                "test_ratio": self.test_ratio,
-                "model": "BasicSAE",
-                "base_min_user_interactions": self.base_min_user_interactions,
-                "sample_users": sample_users,
-            }
-        )
 
         # Train the model
         self.trained_model = train(
