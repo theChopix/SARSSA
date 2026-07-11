@@ -1,8 +1,6 @@
 import json
-import tempfile
 from typing import Annotated
 
-import mlflow
 import numpy as np
 import polars as pl
 import scipy.sparse as sp
@@ -178,6 +176,16 @@ class Plugin(BasePlugin):
             OutputArtifactSpec("train_users", "train_users.npy", "npy"),
             OutputArtifactSpec("valid_users", "valid_users.npy", "npy"),
             OutputArtifactSpec("test_users", "test_users.npy", "npy"),
+            # Optional outputs — skipped when the dataset lacks them.
+            OutputArtifactSpec("_tag_ids", "tag_ids.json", "json", optional=True),
+            OutputArtifactSpec("_tag_item_matrix", "tag_item_matrix.npz", "npz", optional=True),
+            OutputArtifactSpec(
+                "_item_metadata",
+                "item_metadata.json",
+                "json",
+                optional=True,
+                saver_kwargs={"indent": None},
+            ),
         ],
         output_params=[
             OutputParamSpec("dataset_name", "dataset_name"),
@@ -194,6 +202,7 @@ class Plugin(BasePlugin):
             OutputParamSpec("num_valid_users", "num_valid_users"),
             OutputParamSpec("num_test_users", "num_test_users"),
             OutputParamSpec("has_tags", "has_tags"),
+            OutputParamSpec("num_tags", "num_tags", optional=True),
         ],
         param_groups=[
             ParamGroup("Data split", ["val_ratio", "test_ratio", "seed"]),
@@ -303,18 +312,19 @@ class Plugin(BasePlugin):
         self.valid_users = dataset_loader.valid_users
         self.test_users = dataset_loader.test_users
 
-        # Tag outputs (conditional, handled in update_context)
+        # Optional outputs — None values are skipped by update_context.
         self._tag_ids: list[str] | None = None
         self._tag_item_matrix: sp.csr_matrix | None = None
+        self.num_tags: int | None = None
         if dataset_loader.df_tags is not None:
             self._tag_ids = dataset_loader.tag_ids()
             # Restrict tag co-occurrence counts to the train users.
             self._tag_item_matrix = dataset_loader.tag_item_matrix(
                 user_subset=dataset_loader.train_users
             )
+            self.num_tags = len(self._tag_ids)
 
-        # Item metadata (conditional, handled in update_context)
-        self._item_metadata = dataset_loader.get_item_metadata()
+        self._item_metadata = dataset_loader.get_item_metadata() or None
 
         logger.info("=" * 50)
         logger.info("MovieLens dataset loading completed")
@@ -325,28 +335,3 @@ class Plugin(BasePlugin):
             f"Test: {self.num_test_users}"
         )
         logger.info("=" * 50)
-
-    def update_context(self) -> None:
-        """Log outputs to MLflow, including conditional tag artifacts.
-
-        Calls the base ``update_context()`` for common outputs, then
-        manually logs tag-specific artifacts and parameters if the
-        dataset contains tags.
-        """
-        super().update_context()
-
-        if self._tag_ids is not None and self._tag_item_matrix is not None:
-            logger.info("Saving tag metadata...")
-            with tempfile.TemporaryDirectory() as tmp:
-                with open(f"{tmp}/tag_ids.json", "w") as f:
-                    json.dump(self._tag_ids, f, indent=2)
-                sp.save_npz(f"{tmp}/tag_item_matrix.npz", self._tag_item_matrix)
-                mlflow.log_artifacts(tmp)
-            mlflow.log_param("num_tags", len(self._tag_ids))
-
-        if self._item_metadata:
-            logger.info("Saving item metadata (%d items)...", len(self._item_metadata))
-            with tempfile.TemporaryDirectory() as tmp:
-                with open(f"{tmp}/item_metadata.json", "w") as f:
-                    json.dump(self._item_metadata, f)
-                mlflow.log_artifacts(tmp)
