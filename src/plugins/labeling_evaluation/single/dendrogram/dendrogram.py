@@ -1,8 +1,7 @@
-import tempfile
+import io
 from typing import Annotated
 
 import matplotlib.pyplot as plt
-import mlflow
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import pdist
 
@@ -44,6 +43,8 @@ class Plugin(BasePlugin):
         ],
         output_artifacts=[
             OutputArtifactSpec("linkage_matrix", "linkage_matrix.npy", "npy"),
+            OutputArtifactSpec("dendrogram_svg", "dendrogram.svg", "text"),
+            OutputArtifactSpec("dendrogram_pdf", "dendrogram.pdf", "bytes"),
         ],
         output_params=[
             OutputParamSpec("embedding_provider", "embedding_provider_param"),
@@ -178,12 +179,11 @@ class Plugin(BasePlugin):
         self.linkage_method_param = linkage_method
         self.num_neurons = len(self.neuron_ids)
 
-    def update_context(self) -> None:
-        """Log standard artifacts via base class, then save figure as SVG/PDF."""
-        super().update_context()
-        with tempfile.TemporaryDirectory() as tmp:
-            self._fig.savefig(f"{tmp}/dendrogram.svg")
-            self._fig.savefig(f"{tmp}/dendrogram.pdf")
-            mlflow.log_artifacts(tmp)
+        # Render the figure to memory and free it.
+        svg_buf = io.StringIO()
+        self._fig.savefig(svg_buf, format="svg")
+        self.dendrogram_svg = svg_buf.getvalue()
+        pdf_buf = io.BytesIO()
+        self._fig.savefig(pdf_buf, format="pdf")
+        self.dendrogram_pdf = pdf_buf.getvalue()
         plt.close(self._fig)
-        logger.info("Dendrogram saved to mlflow artifacts as SVG and searchable PDF")

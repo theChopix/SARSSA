@@ -7,10 +7,8 @@ pass (concatenated input) so their 2-D coordinates live in a shared
 space, making the visual comparison meaningful.
 """
 
-import tempfile
 from typing import Annotated, Any
 
-import mlflow
 import plotly.graph_objects as go
 
 from plugins.compare_plugin_interface import BaseComparePlugin
@@ -76,6 +74,7 @@ class Plugin(BaseComparePlugin):
                 "past_umap_coords.npy",
                 "npy",
             ),
+            OutputArtifactSpec("embedding_map_html", "embedding_map.html", "text"),
         ],
         output_params=[
             OutputParamSpec("embedding_provider", "embedding_provider_param"),
@@ -290,10 +289,5 @@ class Plugin(BaseComparePlugin):
         self.num_neurons_current_param = len(self.current_neuron_ids)
         self.num_neurons_past_param = len(past_neuron_ids)
 
-    def update_context(self) -> None:
-        """Log standard artifacts via base class, then save interactive HTML."""
-        super().update_context()
-        with tempfile.TemporaryDirectory() as tmp:
-            self._fig.write_html(f"{tmp}/embedding_map.html")
-            mlflow.log_artifacts(tmp)
-        logger.info("Compare embedding map saved to mlflow artifacts as interactive HTML")
+        # Render the interactive figure.
+        self.embedding_map_html = self._fig.to_html()

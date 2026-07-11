@@ -11,10 +11,8 @@ many* drifted by *how much*.
 """
 
 import json
-import tempfile
 from typing import Annotated, Any
 
-import mlflow
 import numpy as np
 import plotly.graph_objects as go
 
@@ -76,6 +74,11 @@ class Plugin(BaseComparePlugin):
                 "nearest_distances",
                 "nearest_distances.json",
                 "json",
+            ),
+            OutputArtifactSpec(
+                "distance_histogram_html",
+                "nearest_label_distance_histogram.html",
+                "text",
             ),
         ],
         output_params=[
@@ -234,10 +237,5 @@ class Plugin(BaseComparePlugin):
         self.mean_distance_param = float(result.distances.mean())
         self.median_distance_param = float(np.median(result.distances))
 
-    def update_context(self) -> None:
-        """Log standard artifacts via base class, then save interactive HTML."""
-        super().update_context()
-        with tempfile.TemporaryDirectory() as tmp:
-            self._fig.write_html(f"{tmp}/nearest_label_distance_histogram.html")
-            mlflow.log_artifacts(tmp)
-        logger.info("Nearest-label distance histogram saved to mlflow artifacts as HTML")
+        # Render the interactive figure.
+        self.distance_histogram_html = self._fig.to_html()

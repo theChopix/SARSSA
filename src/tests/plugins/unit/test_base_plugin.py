@@ -314,6 +314,26 @@ class TestSaveArtifact:
         with open(path) as f:
             assert json.load(f) == {"a": 1, "b": [2, 3]}
 
+    def test_text_saver(self, tmp_path: Any) -> None:
+        """Verify text saver writes a string verbatim (utf-8)."""
+        plugin = _make_plugin()
+        plugin.page = "<html>čeština &amp; more</html>"
+
+        spec = OutputArtifactSpec("page", "page.html", "text")
+        plugin._save_artifact(str(tmp_path), spec)
+
+        assert (tmp_path / "page.html").read_text(encoding="utf-8") == plugin.page
+
+    def test_bytes_saver(self, tmp_path: Any) -> None:
+        """Verify bytes saver writes raw bytes verbatim."""
+        plugin = _make_plugin()
+        plugin.blob = b"%PDF-1.4 \x00\x01binary"
+
+        spec = OutputArtifactSpec("blob", "doc.pdf", "bytes")
+        plugin._save_artifact(str(tmp_path), spec)
+
+        assert (tmp_path / "doc.pdf").read_bytes() == plugin.blob
+
     def test_json_saver_kwargs_compact(self, tmp_path: Any) -> None:
         """Verify saver_kwargs can switch json output to compact form."""
         plugin = _make_plugin()

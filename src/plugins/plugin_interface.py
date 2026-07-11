@@ -77,7 +77,9 @@ class OutputArtifactSpec:
         filename: Target filename in MLflow
             (e.g. ``"neuron_labels.json"``).
         saver: Saver strategy identifier. Supported values:
-            ``"json"``, ``"npz"``, ``"npy"``, ``"pt"``, ``"model"``.
+            ``"json"``, ``"npz"``, ``"npy"``, ``"pt"``, ``"model"``,
+            ``"text"`` (writes a ``str`` — e.g. pre-rendered HTML/SVG)
+            and ``"bytes"`` (writes raw ``bytes`` — e.g. a rendered PDF).
             The ``"model"`` saver writes a fixed ``config.json`` +
             ``model.pt`` at the artifact root and ignores ``filename``
             (which must be ``""``); at most one ``"model"`` per plugin.
@@ -668,6 +670,12 @@ class BasePlugin(ABC):
             case "json":
                 with open(path, "w") as f:
                     json.dump(value, f, **{"indent": 2, "default": str, **spec.saver_kwargs})
+            case "text":
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(value)
+            case "bytes":
+                with open(path, "wb") as f:
+                    f.write(value)
             case "npz":
                 sp.save_npz(path, value)
             case "npy":
