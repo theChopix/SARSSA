@@ -10,7 +10,6 @@ the bars show *which* labels drifted, this histogram shows *how
 many* drifted by *how much*.
 """
 
-import json
 from typing import Annotated, Any
 
 import numpy as np
@@ -206,7 +205,7 @@ class Plugin(BaseComparePlugin):
                     "nearest_past_label": past_label_texts[past_idx],
                 }
             )
-        self.nearest_distances = json.dumps(per_label, indent=2)
+        self.nearest_distances = per_label
 
         self._fig = go.Figure()
         self._fig.add_trace(
