@@ -199,6 +199,124 @@ class TestExecuteStep:
 
     @patch("app.core.pipeline_engine.PluginManager")
     @patch("app.core.pipeline_engine.mlflow")
+    def test_logs_run_params_before_run(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify run() kwargs are auto-logged onto the step run."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        _arm_execution_order(mock_mlflow)
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step(
+            "training_cfm.t.t",
+            {"epochs": 25, "lr": 0.0003, "note": None},
+            {},
+        )
+
+        mock_mlflow.log_params.assert_called_once_with(
+            {"epochs": 25, "lr": 0.0003, "note": None},
+        )
+        # Logged before the plugin lifecycle starts.
+        plugin = mock_pm.load.return_value
+        assert mock_mlflow.log_params.call_args_list[0] is not None
+        plugin.load_context.assert_called_once()
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_skips_non_scalar_run_params(
+        self,
+        mock_mlflow: MagicMock,
+        _mock_pm: MagicMock,
+    ) -> None:
+        """Verify non-scalar values are excluded from the auto-log."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        _arm_execution_order(mock_mlflow)
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step(
+            "training_cfm.t.t",
+            {"epochs": 5, "layers": [1, 2], "cfg": {"a": 1}},
+            {},
+        )
+
+        mock_mlflow.log_params.assert_called_once_with({"epochs": 5})
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_no_param_log_call_for_empty_params(
+        self,
+        mock_mlflow: MagicMock,
+        _mock_pm: MagicMock,
+    ) -> None:
+        """Verify empty params make no mlflow.log_params call."""
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        _arm_execution_order(mock_mlflow)
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("training_cfm.t.t", {}, {})
+
+        mock_mlflow.log_params.assert_not_called()
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
+    def test_omitted_params_logged_with_signature_defaults(
+        self,
+        mock_mlflow: MagicMock,
+        mock_pm: MagicMock,
+    ) -> None:
+        """Verify defaults of omitted run() args are logged (effective config)."""
+
+        class _Stub:
+            name = "Stub"
+            notifier = None
+            cancellation = None
+
+            def run(self, epochs: int = 25, lr: float = 0.0003, tags: list | None = None):
+                pass
+
+            def load_context(self, context):
+                pass
+
+            def update_context(self):
+                pass
+
+        mock_pm.load.return_value = _Stub()
+        mock_mlflow.start_run.side_effect = [
+            _mock_start_run("parent_id"),
+            _mock_start_run("parent_id"),
+            _mock_start_run("step_id"),
+        ]
+        _arm_execution_order(mock_mlflow)
+
+        engine = PipelineEngine()
+        engine.start_run()
+        engine.execute_step("training_cfm.t.t", {"epochs": 5}, {})
+
+        # epochs = provided value, lr = signature default, tags (None default
+        # of a non-scalar arg) is logged as None.
+        mock_mlflow.log_params.assert_called_once_with(
+            {"epochs": 5, "lr": 0.0003, "tags": None},
+        )
+
+    @patch("app.core.pipeline_engine.PluginManager")
+    @patch("app.core.pipeline_engine.mlflow")
     def test_nested_run_name_uses_execution_order(
         self,
         mock_mlflow: MagicMock,

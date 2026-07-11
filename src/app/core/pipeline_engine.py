@@ -1,6 +1,7 @@
 """Pipeline execution engine with step-by-step and batch modes."""
 
 import datetime
+import inspect
 from typing import Any
 
 import mlflow
@@ -15,6 +16,7 @@ from app.core.plugin_discovery.naming import (
     make_plugin_display_name,
 )
 from app.core.plugin_discovery.plugin_manager import PluginManager
+from plugins.plugin_interface import BasePlugin
 from utils.cancellation import CancellationToken
 from utils.plugin_notifier import PluginNotifier
 
@@ -189,6 +191,7 @@ class PipelineEngine:
             mlflow.start_run(run_id=self._parent_run_id),
             mlflow.start_run(run_name=run_name, nested=True) as step_run,
         ):
+            self._log_run_params(plugin, params)
             plugin.load_context(context)
             plugin.run(**params)
             plugin.update_context()
@@ -200,6 +203,34 @@ class PipelineEngine:
             self._log_dataset_input(plugin_name)
 
         return context
+
+    @staticmethod
+    def _log_run_params(plugin: BasePlugin, params: dict[str, Any]) -> None:
+        """Log the plugin's ``run()`` configuration as MLflow params.
+
+        Merges the caller-provided kwargs over the ``run()`` signature
+        defaults, so omitted parameters are recorded with the value the
+        plugin actually uses. Logged before ``run()`` so the
+        configuration survives a failed step; non-scalar values are
+        skipped.
+
+        Args:
+            plugin: Plugin instance whose ``run()`` signature supplies
+                the defaults.
+            params: Keyword arguments the caller passed for ``run()``.
+        """
+        effective = dict(params)
+        for name, sig_param in inspect.signature(plugin.run).parameters.items():
+            if name in effective or sig_param.default is inspect.Parameter.empty:
+                continue
+            effective[name] = sig_param.default
+        loggable = {
+            k: v
+            for k, v in effective.items()
+            if isinstance(v, (str, int, float, bool)) or v is None
+        }
+        if loggable:
+            mlflow.log_params(loggable)
 
     def _log_dataset_input(self, plugin_name: str) -> None:
         """Record the loaded dataset on the parent run's inputs.
