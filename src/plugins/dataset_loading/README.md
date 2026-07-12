@@ -91,10 +91,16 @@ derivable from `userId`/`itemId` and must be supplied via a
 pipeline, treat tags as **effectively required, not optional** — see
 the 🔴 box in §3.
 
-Two constants the subclass overrides tune step 3:
-`MIN_USER_INTERACTIONS` and `MIN_ITEM_INTERACTIONS` (defaults 20 / 200
-on the base; each loader sets its own — MovieLens 50 / 20, LastFM1k
-5 / 10).
+Two constants tune step 3's interaction filter —
+`MIN_USER_INTERACTIONS` and `MIN_ITEM_INTERACTIONS` (base defaults
+20 / 200; each loader sets its own — MovieLens **5 / 1** (a threshold
+of 1 disables the item filter), LastFM1k 5 / 10). A dataset with tags
+adds a third, `MIN_TAG_INTERACTIONS`, which trims the **tag
+vocabulary** in step 6 (MovieLens 100 — a tag must be applied at least
+that many times, counted over all users, to survive). All three are
+also surfaced as `run()` parameters defaulting to these constants, so
+they are tunable per run from the UI without editing the subclass (see
+§5 Step 3).
 
 ---
 
@@ -118,8 +124,10 @@ declares them in its `io_spec`, so the engine logs them to MLflow.
 **Params (always produced):** `dataset_name`, `seed`, `val_ratio`,
 `test_ratio`, `num_users`, `num_items`, `num_interactions`,
 `num_train_users`, `num_valid_users`, `num_test_users`,
-`min_user_interactions`, `min_item_interactions`, `has_tags`
-(consumed by the trainers).
+`min_user_interactions`, `min_item_interactions`,
+`min_tag_interactions`, `has_tags` (consumed by the trainers). A
+dataset with tags additionally logs the optional param `num_tags` —
+the tag-vocabulary size after the `MIN_TAG_INTERACTIONS` filter.
 
 ### What's actually inside each file
 
@@ -165,6 +173,11 @@ attribute holds `None`:
 | `tag_item_matrix.npz` | the dataset has tags | **`neuron_labeling/tf_idf`** |
 | `item_metadata.json` | item metadata available | backend item enrichment (UI item cards) |
 
+> **`tag_item_matrix.npz` holds counts, not 0/1.** It is a
+> `(num_tags, num_items)` CSR of tag↔item **co-occurrence counts**,
+> **restricted to the train users** (vocabulary trimmed by
+> `MIN_TAG_INTERACTIONS` first) — counts, not mere incidence.
+
 This matters enormously for "bring your own dataset":
 
 > **🔴 `neuron_labeling` (and therefore inspection & steering) needs
@@ -181,7 +194,8 @@ This matters enormously for "bring your own dataset":
 
 **`movieLens_loader` — the template to follow (the default).**
 `load_ratings()` reads `ratings.csv` (keeps ratings ≥ 4.0 as positive
-implicit feedback); `load_optional_data()` reads `tags.csv` and
+implicit feedback); `load_optional_data()` reads `tags.csv` (dropping
+tags applied fewer than `MIN_TAG_INTERACTIONS` times) and
 `metadata.json`; it overrides `get_item_metadata()` (renaming
 `genres` → `categories`) and declares the tag + metadata extras as
 optional `io_spec` outputs. **This is the shape you should model your own loader
@@ -261,6 +275,7 @@ class MyDatasetLoader(DatasetLoader):
     # tune the interaction-count filters for your data
     MIN_USER_INTERACTIONS: int = 5
     MIN_ITEM_INTERACTIONS: int = 10
+    MIN_TAG_INTERACTIONS: int = 100   # min times a tag is applied to be kept
 
     # one literal per input file (model: MovieLens)
     RATINGS_FILE: str = "ratings.csv"
@@ -288,17 +303,20 @@ class MyDatasetLoader(DatasetLoader):
             .collect()
         )
 
-    # REQUIRED for the full pipeline: tags → self.df_tags (itemId, tag)
+    # REQUIRED for the full pipeline: tags → self.df_tags (userId, itemId, tag)
     def load_optional_data(self) -> None:
         if self._file_exists(self.TAGS_FILE):
             self.df_tags = (
                 pl.scan_csv(self._resolve_path(self.TAGS_FILE), has_header=True)
-                .select(["item", "tag"])               # your raw column names
-                .rename({"item": "itemId"})
-                .cast({"itemId": pl.String, "tag": pl.String})
+                .select(["user", "item", "tag"])       # your raw column names
+                .rename({"user": "userId", "item": "itemId"})
+                .cast({"userId": pl.String, "itemId": pl.String, "tag": pl.String})
                 .with_columns(pl.col("tag").str.to_lowercase().str.strip_chars())
+                # drop rare tags (counted over all users, before the item filter)
+                .filter(pl.col("tag").count().over("tag") >= self.MIN_TAG_INTERACTIONS)
                 .filter(pl.col("itemId").is_in(self.items))
-                .unique()
+                # NOT de-duplicated: keeping repeated (user, item, tag) rows is
+                # what makes tag_item_matrix hold co-occurrence counts, not 0/1
                 .collect()
             )
         if self._file_exists(self.METADATA_FILE):
@@ -335,7 +353,7 @@ entries (Step 5) that are simply skipped when the value is `None`:
 from typing import Annotated
 
 from plugins.plugin_interface import (
-    BasePlugin, OutputArtifactSpec, OutputParamSpec, PluginIOSpec,
+    BasePlugin, OutputArtifactSpec, OutputParamSpec, ParamGroup, PluginIOSpec,
 )
 
 
@@ -362,8 +380,16 @@ class Plugin(BasePlugin):
                 "dataset_name", "seed", "val_ratio", "test_ratio",
                 "num_users", "num_items", "num_interactions",
                 "num_train_users", "num_valid_users", "num_test_users",
-                "min_user_interactions", "min_item_interactions", "has_tags",
+                "min_user_interactions", "min_item_interactions",
+                "min_tag_interactions", "has_tags",
             )
+        ],
+        param_groups=[   # optional: lay the params out as collapsible UI sections
+            ParamGroup("Data split", ["val_ratio", "test_ratio", "seed"]),
+            ParamGroup("Filtering thresholds", [
+                "min_user_interactions", "min_item_interactions",
+                "min_tag_interactions",
+            ]),
         ],
     )
 
@@ -372,13 +398,30 @@ class Plugin(BasePlugin):
         seed: Annotated[int, "Seed for the train/val/test split."] = 42,
         val_ratio: Annotated[float, "Per-user validation fraction."] = 0.1,
         test_ratio: Annotated[float, "Per-user test fraction."] = 0.1,
+        min_user_interactions: Annotated[
+            int, "Drop users with fewer interactions than this."
+        ] = MyDatasetLoader.MIN_USER_INTERACTIONS,
+        min_item_interactions: Annotated[
+            int, "Drop items with fewer interactions than this (1 keeps all)."
+        ] = MyDatasetLoader.MIN_ITEM_INTERACTIONS,
+        min_tag_interactions: Annotated[
+            int, "Drop tags applied fewer times than this across all users."
+        ] = MyDatasetLoader.MIN_TAG_INTERACTIONS,
     ) -> None:
         loader = MyDatasetLoader()
+        # Thresholds default to the class constants; the loader reads them
+        # via self.MIN_* during prepare(), so they're tunable per run.
+        loader.MIN_USER_INTERACTIONS = min_user_interactions
+        loader.MIN_ITEM_INTERACTIONS = min_item_interactions
+        loader.MIN_TAG_INTERACTIONS = min_tag_interactions
         loader.prepare(seed=seed, val_ratio=val_ratio, test_ratio=test_ratio)
         # to_artifacts() returns every canonical name → value in one dict;
         # its keys are exactly the io_spec attr names above.
         for attr, value in loader.to_artifacts().items():
             setattr(self, attr, value)
+        # to_artifacts() covers the interaction thresholds but not the
+        # tag-vocabulary one, so log that separately.
+        self.min_tag_interactions = min_tag_interactions
 ```
 
 > The shipped loaders assign each attribute by hand instead of looping
@@ -419,12 +462,19 @@ import numpy as np, scipy.sparse as sp
 def tag_ids(self) -> list[str]:
     return self.df_tags["tag"].unique().sort().to_list()
 
-def tag_item_matrix(self) -> sp.csr_matrix:
+def tag_item_matrix(self, user_subset: np.ndarray | None = None) -> sp.csr_matrix:
+    # Vocabulary spans all users; user_subset restricts the counts to those
+    # users (pass train_users so val/test tags don't leak). Rows aren't
+    # de-duplicated (see load_optional_data), so equal (tag, item) pairs sum
+    # into co-occurrence counts.
     tids = self.tag_ids()
     t_idx = {t: i for i, t in enumerate(tids)}
     i_idx = {i: j for j, i in enumerate(self.items)}
-    rows = [t_idx[r["tag"]] for r in self.df_tags.iter_rows(named=True)]
-    cols = [i_idx[r["itemId"]] for r in self.df_tags.iter_rows(named=True)]
+    df_tags = self.df_tags
+    if user_subset is not None:
+        df_tags = df_tags.filter(pl.col("userId").is_in([str(u) for u in user_subset]))
+    rows = [t_idx[r["tag"]] for r in df_tags.iter_rows(named=True)]
+    cols = [i_idx[r["itemId"]] for r in df_tags.iter_rows(named=True)]
     return sp.csr_matrix(
         (np.ones(len(rows), np.float32), (rows, cols)),
         shape=(len(tids), len(self.items)),
@@ -441,12 +491,13 @@ def tag_item_matrix(self) -> sp.csr_matrix:
 # --- on Plugin: in run(), after loader.prepare(), stash these ---
 #     (initialise all of them to None first, then fill when available)
 #     self._tag_ids         = loader.tag_ids()
-#     self._tag_item_matrix = loader.tag_item_matrix()
+#     # restrict the co-occurrence counts to the train users
+#     self._tag_item_matrix = loader.tag_item_matrix(user_subset=loader.train_users)
 #     self.num_tags         = len(self._tag_ids)
 #     self._item_metadata   = loader.get_item_metadata() or None
 ```
 
-This is exactly what `movieLens_loader` does — copy it and adjust.
+This mirrors what `movieLens_loader` does — copy it and adjust.
 
 ### Step 6 — Checklist
 
