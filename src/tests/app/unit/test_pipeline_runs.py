@@ -263,10 +263,13 @@ class TestGetEligiblePipelineRuns:
                 "start_time": 2,
             },
         ]
-        mock_get_context.side_effect = [
-            {"dataset_loading": {"run_id": "x"}, "neuron_labeling": {"run_id": "y"}},
-            {"dataset_loading": {"run_id": "x"}},
-        ]
+        # Keyed by run_id: contexts are fetched concurrently, so a plain
+        # side_effect list would depend on thread scheduling.
+        contexts = {
+            "r1": {"dataset_loading": {"run_id": "x"}, "neuron_labeling": {"run_id": "y"}},
+            "r2": {"dataset_loading": {"run_id": "x"}},
+        }
+        mock_get_context.side_effect = lambda run_id: contexts[run_id]
 
         result = get_eligible_pipeline_runs(["dataset_loading", "neuron_labeling"])
 
@@ -329,13 +332,20 @@ class TestGetEligiblePipelineRuns:
         assert [r["run_id"] for r in result] == ["newest", "middle", "oldest"]
 
 
+def _mock_listing(client_cls: MagicMock, paths: list[str]) -> None:
+    """Make the mocked MlflowClient list the given artifact paths."""
+    client_cls.return_value.list_artifacts.return_value = [MagicMock(path=p) for p in paths]
+
+
 class TestGetRunContext:
     """Tests for get_run_context."""
 
     @patch("builtins.open", mock_open(read_data='{"dataset_loading": {"run_id": "abc123"}}'))
+    @patch("app.core.pipeline_runs.MlflowClient")
     @patch("app.core.pipeline_runs.mlflow")
-    def test_returns_parsed_context(self, mock_mlflow: MagicMock) -> None:
+    def test_returns_parsed_context(self, mock_mlflow: MagicMock, mock_client: MagicMock) -> None:
         """Verify context.json contents are parsed and returned."""
+        _mock_listing(mock_client, ["context.json"])
         mock_mlflow.artifacts.download_artifacts.return_value = "/tmp/context.json"
 
         context = get_run_context("parent_run_id")
@@ -343,9 +353,13 @@ class TestGetRunContext:
         assert context == {"dataset_loading": {"run_id": "abc123"}}
 
     @patch("builtins.open", mock_open(read_data='{"dataset_loading": {"run_id": "abc123"}}'))
+    @patch("app.core.pipeline_runs.MlflowClient")
     @patch("app.core.pipeline_runs.mlflow")
-    def test_calls_download_artifacts_correctly(self, mock_mlflow: MagicMock) -> None:
+    def test_calls_download_artifacts_correctly(
+        self, mock_mlflow: MagicMock, mock_client: MagicMock
+    ) -> None:
         """Verify download_artifacts is called with correct args."""
+        _mock_listing(mock_client, ["context.json"])
         mock_mlflow.artifacts.download_artifacts.return_value = "/tmp/context.json"
 
         get_run_context("my_run_id")
@@ -354,9 +368,26 @@ class TestGetRunContext:
             run_id="my_run_id", artifact_path="context.json", dst_path=ANY
         )
 
+    @patch("app.core.pipeline_runs.MlflowClient")
     @patch("app.core.pipeline_runs.mlflow")
-    def test_raises_on_missing_artifact(self, mock_mlflow: MagicMock) -> None:
-        """Verify FileNotFoundError propagates when artifact is missing."""
+    def test_raises_without_download_when_context_not_listed(
+        self, mock_mlflow: MagicMock, mock_client: MagicMock
+    ) -> None:
+        """Verify a run without context.json fails fast, skipping the download."""
+        _mock_listing(mock_client, ["other_artifact.txt"])
+
+        with pytest.raises(FileNotFoundError):
+            get_run_context("bad_run_id")
+
+        mock_mlflow.artifacts.download_artifacts.assert_not_called()
+
+    @patch("app.core.pipeline_runs.MlflowClient")
+    @patch("app.core.pipeline_runs.mlflow")
+    def test_raises_on_missing_artifact(
+        self, mock_mlflow: MagicMock, mock_client: MagicMock
+    ) -> None:
+        """Verify FileNotFoundError propagates when the download fails."""
+        _mock_listing(mock_client, ["context.json"])
         mock_mlflow.artifacts.download_artifacts.side_effect = FileNotFoundError(
             "context.json not found"
         )
@@ -365,9 +396,13 @@ class TestGetRunContext:
             get_run_context("bad_run_id")
 
     @patch("builtins.open", mock_open(read_data="{}"))
+    @patch("app.core.pipeline_runs.MlflowClient")
     @patch("app.core.pipeline_runs.mlflow")
-    def test_returns_empty_dict_for_empty_context(self, mock_mlflow: MagicMock) -> None:
+    def test_returns_empty_dict_for_empty_context(
+        self, mock_mlflow: MagicMock, mock_client: MagicMock
+    ) -> None:
         """Verify empty context.json returns empty dict."""
+        _mock_listing(mock_client, ["context.json"])
         mock_mlflow.artifacts.download_artifacts.return_value = "/tmp/context.json"
 
         context = get_run_context("run_id")
