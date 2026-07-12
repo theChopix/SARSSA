@@ -79,6 +79,7 @@ JSON document called the **context** (see §6).
 | `core/tasks/task_queue.py` | FIFO queue + dispatcher thread — compute tasks run one at a time |
 | `core/tasks/task_store.py` | In‑memory registry of background tasks |
 | `core/pipeline_runs.py` | Querying past pipeline runs & their context |
+| `core/run_recovery.py` | Sweep `RUNNING` runs stranded by a killed backend to `FAILED` |
 | `core/plugin_discovery/` | Walk `src/plugins`, import plugins, build the registry |
 | `core/item_enrichment/` | Join item IDs with dataset metadata for the UI |
 | `models/pipeline.py` | `StepDefinition`, `PipelineRequest`, `TaskState`, `TaskStatusResponse` |
@@ -187,23 +188,29 @@ execute_step(...)      → run ONE plugin as a nested run (repeat per step)
 finalize_run(context)  → write context.json to the parent run, close it
 ```
 
-- **`start_run(tags, description)`** creates the parent run
-  named `pipeline_run_<timestamp>`, applies user tags (each key prefixed
-  with `sarssa.`, `_TAG_PREFIX`) and a description, then immediately
-  calls `mlflow.end_run()`. The parent run is therefore an empty
-  shell that each step **re‑opens**.
+- **`start_run(tags, description)`** creates the parent run (named
+  `Pipeline Run [ dd/mm/yyyy | HH:MM ]` in the configured timezone,
+  optionally `| <name>` from a user pipeline name and a trailing
+  `( inherited )` for derived runs — `format_pipeline_run_name`),
+  applies user tags (each key prefixed with `sarssa.`, `_TAG_PREFIX`)
+  and a description, then immediately calls `mlflow.end_run()`. The
+  parent run is therefore an empty shell that each step **re‑opens**.
 - **`execute_step(plugin_name, params, context, notifier)`**:
   loads the plugin via `PluginManager.load`, optionally injects the
-  `notifier`, opens the parent run *and* a **nested** run named after
-  the plugin, then drives the plugin lifecycle
+  `notifier`, opens the parent run *and* a **nested** run named
+  `[<order>] <Category> / <Plugin>` (`format_step_run_name`),
+  auto‑logs the step's effective `run()` params (caller kwargs merged
+  over signature defaults — so config is recorded even if the step
+  fails), then drives the plugin lifecycle
   `load_context → run → update_context` (§7) and records the nested
   run id under the plugin's category key:
   `context[category] = {"run_id": step_run.info.run_id}`.
 - **`finalize_run(context)`** re‑opens the parent run and logs
   the full `context` as `context.json`.
-- **`fail_run(context)`** logs the partial context, tags the
-  run `cancellation=cancelled_by_user`, and sets MLflow status
-  `FAILED`. Used on cancellation/fatal error.
+- **`fail_run(context, cancelled=False)`** logs the partial context and
+  sets MLflow status `FAILED`; when `cancelled=True` it also tags the
+  run `cancellation=cancelled_by_user`. Used on user cancellation
+  (tagged) and on a fatal step error (untagged).
 - **`resume_run(run_id)`** re‑attaches to an existing parent
   run so additional (phase‑2 / multi‑run) steps can be appended.
 
@@ -242,11 +249,16 @@ GET /tasks/{task_id}  (polled ~every 2s) ──reads── TaskState
   messages immediately), then loops the requested steps. Before each
   step it checks `task.cancel_event`; if set, it marks the task
   `cancelled`, calls `engine.fail_run`, and returns.
-- `cancel_task` (`task_store.py`) sets that event. A still-queued task
-  is resolved to `cancelled` immediately (the dispatcher skips it); for
-  a running one the cancel is **not immediate** — the currently
-  executing step always runs to completion (it cannot be interrupted
-  mid‑plugin) and the cancel takes effect at the next step boundary.
+- `cancel_task(task_id, hard=…)` (`task_store.py`) sets the graceful
+  `cancel_event`; **Cancel now** (`hard=True`) additionally sets
+  `abort_event`. A still-queued task is resolved to `cancelled`
+  immediately (the dispatcher skips it). For a running task, graceful
+  cancel takes effect at the next step boundary (the current step
+  finishes), while **Cancel now** reaches the plugin as a
+  `CancellationToken` (wrapping `abort_event`) that a *cooperating*
+  plugin checks mid-step and aborts by raising `StepAborted` — the
+  trainers do this, so a long training step can stop partway. A plugin
+  that never checks the token falls back to graceful.
 - On success the worker sets `task.status="completed"` and
   `task.context`; on exception, `task.status="error"` and `task.error`.
 
@@ -294,6 +306,12 @@ dict:
   "load from a previous run" UI: a new pipeline can start with an
   `initial_context` borrowed from an older run and skip stages that are
   already done.
+- A run that borrows an `initial_context` is a **derived run**: the
+  worker records where each inherited step came from as a Markdown
+  provenance note in the run description (`build_provenance_note`,
+  `pipeline_runs.py`), passes `order_offset=len(inherited)` so its own
+  steps are numbered *after* the inherited ones, and the parent run name
+  gets an `( inherited )` marker.
 - Parent vs nested runs are distinguished by the
   `mlflow.parentRunId` tag — `get_pipeline_runs` lists only runs
   *without* it (`pipeline_runs.py`).
@@ -309,21 +327,26 @@ order:
 1. `plugin = PluginManager.load(plugin_name)` — `importlib` imports
    `plugins.<dotted path>` and instantiates its `Plugin` class
    (`plugin_manager.py`).
-2. `plugin.notifier = notifier` — inject the live notifier (skipped in
-   batch mode).
-3. `plugin.load_context(context)` — validate `io_spec.required_steps`
+2. `plugin.notifier = notifier` and `plugin.cancellation = cancellation`
+   — inject the live notifier and cancellation token (both skipped in
+   batch mode, where the plugin keeps its `Null*` defaults).
+3. `_log_run_params(plugin, params)` — auto‑log the effective `run()`
+   config (caller kwargs merged over signature defaults) to the nested
+   run **before** the plugin runs, so it survives a failed step
+   (`pipeline_engine.py`).
+4. `plugin.load_context(context)` — validate `io_spec.required_steps`
    and hydrate declared inputs from upstream MLflow runs onto `self.*`.
    Missing prerequisites raise `MissingContextError`
    (`plugin_interface.py`).
-4. `plugin.run(**params)` — the plugin's *pure* business logic; `params`
+5. `plugin.run(**params)` — the plugin's *pure* business logic; `params`
    come straight from the `StepDefinition` (`plugin_interface.py`,
    abstract).
-5. `plugin.update_context()` — log the plugin's declared outputs
+6. `plugin.update_context()` — log the plugin's declared outputs
    (params + artifacts) to the active nested run
    (`plugin_interface.py`).
 
 The engine only knows these three lifecycle methods plus the
-`name`, `io_spec`, and `notifier` attributes
+`name`, `io_spec`, `notifier`, and `cancellation` attributes
 (`plugin_interface.py`). **Everything about how a plugin
 declares inputs/outputs, the `PluginIOSpec`, single vs compare
 plugins, and how to author one is documented in
@@ -352,10 +375,20 @@ manual registration** — plugins are found by directory convention.
   `self` becomes a `ParameterInfo` with type name, default,
   required‑ness, and a description parsed from a `typing.Annotated`
   string on the signature (`_parse_annotation`).
-- **Widgets** (`_resolve_widget`): a parameter's UI hint
-  (`DynamicDropdownHint` / `PastRunsDropdownHint` / `SliderHint`) maps
-  to a widget type + `WidgetConfig`; otherwise it's a plain `"text"`
-  input.
+- **Widgets** (`_resolve_widget`): a parameter's UI hint maps to a
+  widget type + `WidgetConfig` — `StaticDropdownHint` (fixed choices),
+  `DynamicDropdownHint` (choices loaded from an artifact),
+  `DependentDropdownHint` (choices cascading off a sibling param),
+  `PastRunsDropdownHint` (eligible past runs), `SliderHint`, and
+  `ToggleHint` (boolean switch); otherwise it's a plain `"text"` input.
+- **Parameter groups** (`_build_param_groups`): a plugin's
+  `io_spec.param_groups` become labelled, collapsible form sections
+  (with optional nested subgroups); params in no group fall into a
+  trailing "Other" section.
+- **Failure isolation** (`_discover_implementations`): a plugin that
+  fails to import doesn't sink the registry — its error is captured as a
+  `PluginLoadError` and returned in the category's `load_errors`, so the
+  rest of the catalogue still loads.
 - **Display** (`_convert_display_spec`): the plugin's
   `io_spec.display` becomes either an `ItemRowsDisplayModel` or an
   `ArtifactDisplayModel` so the UI knows whether to render item cards or
@@ -410,15 +443,17 @@ How that maps onto SARSSA:
 
 ### `config/config.yaml`
 
-Two sections, loaded and typed in `config/config.py`:
+A top‑level `timezone` key (→ `TIMEZONE`, used for run‑name timestamps)
+plus two sections, loaded and typed in `config/config.py`:
 
 - **`mlflow`** → `EXPERIMENT_NAME`, `TRACKING_URI`
   (`sqlite:///mlflow-data/mlflow.db` — a fallback for tests/scripts; `just run`
   and Docker override it with `MLFLOW_TRACKING_URI` so tracking goes
   through the MLflow server), `ARTIFACT_ROOT` (`./mlartifacts`, used
-  only with that fallback), `MLFLOW_UI_BASE_URL` (`config.py`).
+  only with that fallback), `MLFLOW_UI_BASE_URL` (now origin‑relative
+  `/mlflow` for the single‑entry deployment) (`config.py`).
 - **`plugin_categories`** → an ordered map of category →
-  `CategoryInfo` (`order`, `type`, `display_name`,
+  `CategoryInfo` (`order`, `type`, `display_name`, `description`,
   `has_visual_results`) parsed into typed models
   (`config.py`). The current categories, in pipeline order:
   `dataset_loading` (0) → `training_cfm` (1) → `training_sae` (2) →
@@ -463,19 +498,22 @@ use it under the hood of `load_context`.
 | Model | Kind | Role |
 |-------|------|------|
 | `StepDefinition` | Pydantic | One step: `plugin` (dotted path) + `params` |
-| `PipelineRequest` | Pydantic | Request body: `steps`, `context`, `tags`, `description` |
-| `TaskState` | dataclass | **Mutable** in‑memory state of a background task; mutated by the worker, read by the poll endpoint. Holds status, `run_id`, progress, `cancel_event`, and the shared `messages` list |
+| `PipelineRequest` | Pydantic | Request body: `steps`, `context`, `tags`, `description`, `pipeline_name` |
+| `TaskState` | dataclass | **Mutable** in‑memory state of a background task; mutated by the worker, read by the poll endpoint. Holds status, `run_id`, `pipeline_name`, progress, `cancel_event` + `abort_event`, and the shared `messages` list |
+| `TaskSummary` | Pydantic | Compact task row for the running-tasks menu (`GET /tasks`) |
 | `TaskStatusResponse` | Pydantic | Read‑only serialisation of `TaskState` + computed `total_steps` |
 
 ### `models/plugin.py`
 
 `CategoryType` (`one_time`/`multi_run`), `CategoryInfo`,
-`WidgetConfig` (dropdown/cascading/past‑runs/slider/text — the
+`WidgetConfig` (dropdown/cascading/past‑runs/slider/toggle/text — the
 docstring at `plugin.py` enumerates the exact field
-combinations), `ParameterInfo`, the display models
-(`DisplayRowSpec`, `ItemRowsDisplayModel`, `ArtifactFileModel`,
-`ArtifactDisplayModel`, discriminated `DisplaySpec`),
-`ImplementationInfo`, and `CategoryRegistryEntry`. These are the exact
+combinations), `ParameterInfo`, `ParamGroup` (labelled, nestable
+parameter sections), the display models (`DisplayRowSpec`,
+`ItemRowsDisplayModel`, `ArtifactFileModel`, `ArtifactDisplayModel`,
+discriminated `DisplaySpec`), `ImplementationInfo` (carrying
+`description`, `kind`, and `param_groups`), `PluginLoadError`, and
+`CategoryRegistryEntry` (with its `load_errors`). These are the exact
 shapes the frontend consumes from `/plugins/registry`, so the
 [frontend types](../../frontend/README.md) mirror them.
 
@@ -486,11 +524,18 @@ shapes the frontend consumes from `/plugins/registry`, so the
 - **Tasks are in‑memory only.** `_tasks` is a module‑level dict
   (`task_store.py`). Restarting the backend loses all task state;
   the underlying MLflow runs survive, but their `task_id`s do not.
+- **Stranded `RUNNING` runs are swept to `FAILED`.** A SIGKILL / OOM /
+  `docker kill` mid‑step leaves MLflow runs stuck `RUNNING`;
+  `fail_orphaned_runs` (`run_recovery.py`), wired into the FastAPI
+  `lifespan`, fails them (tagged `sarssa.recovery`) at startup and
+  shutdown.
 - **CORS is hard‑pinned** to `http://localhost:5173`
   (`main.py`). Serving the UI from any other origin breaks it.
-- **Cancellation is cooperative**, never mid‑step
-  (`pipeline_worker.py`). A long training step will finish before a
-  cancel is honoured.
+- **Cancellation has two modes** (`pipeline_worker.py`). Graceful
+  cancel stops at the next step boundary (the current step finishes);
+  **Cancel now** sets `abort_event`, and a cooperating plugin (e.g. the
+  trainers) aborts the current step by raising `StepAborted`. A plugin
+  that ignores the token falls back to graceful.
 - **The parent run is created empty** and re‑opened by every step
   (`start_run` ends the run at `pipeline_engine.py`). Don't expect
   parent‑run artifacts before `finalize_run`.

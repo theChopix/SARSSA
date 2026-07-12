@@ -92,6 +92,8 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `api/plugins.ts` | `GET /plugins/registry` + dynamic dropdown choices |
 | `api/pipelines.ts` | runs, context, run-async, task polling, cancel, execute-step(-async), mlflow-info |
 | `api/items.ts` | item enrichment + artifact proxy/raw-URL helpers |
+| `api/errors.ts` | shared `ApiError` type + fetch error handling |
+| `utils/paramValidation.ts` | `collectParams` — client-side param validation that blocks a launch on missing-required / invalid values |
 | `store/pipelineStore.ts` | **The heart** — the single Zustand store: all state + the run/poll orchestration |
 | `store/runPersistence.ts` | Persists an in-progress run to **sessionStorage** so a page refresh restores the running layout (see §6) |
 | `types/plugin.ts` · `pipeline.ts` · `items.ts` | TypeScript mirrors of the backend models/response shapes |
@@ -100,7 +102,8 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `components/Header.tsx` | Top bar + MLflow deep link |
 | `components/RunningTasksMenu.tsx` | Header pill listing in-flight runs (polls `GET /pipelines/tasks`); click loads a run |
 | `components/PipelineCard.tsx` | **The main workhorse** — one data-driven card per category |
-| `components/LaunchModal.tsx` | Pre-run dialog: tags + description → MLflow run tags |
+| `components/LaunchModal.tsx` | Pre-run dialog: pipeline name + tags + description |
+| `components/InfoTooltip.tsx` | The ⓘ hover tooltip for param / plugin / category descriptions |
 | `components/ArtifactPanel.tsx` | Renders image/HTML artifacts (`<img>`/`<iframe>`) |
 | `components/VisualResultsPanel.tsx` + `ItemCard.tsx` | Enriched item-card rows (recommendations etc.) |
 
@@ -214,8 +217,8 @@ display kind), or for pure UI/UX work.
   only the full `runPipeline` flow is persisted (**`runSingleStep` /
   `multi_run` steps are not** recovered across a refresh), and if the
   backend restarted in the meantime the `task_id` 404s → the UI resets to
-  idle with a notice. Snapshots are keyed by `task_id` (deliberate
-  groundwork for a future "running tasks" list).
+  idle with a notice. Snapshots are keyed by `task_id` — the same key the
+  running-tasks menu (§4) uses to reattach to a run.
 
 ---
 

@@ -171,10 +171,12 @@ const SECTIONS: GuideSection[] = [
           Parameter widgets are not hand-coded in the UI. The backend
           describes each parameter (name, type, default, description,
           widget kind) and the frontend renders the appropriate input —
-          a text box, a slider, a dropdown of dynamic choices, or a
-          "past runs" picker. Hover the ⓘ icon next to a parameter
-          name to read its description. The same ⓘ appears next to
-          each card title with a one-line summary of what that
+          a text box, a slider, an on/off toggle, a fixed-choice or
+          dynamic dropdown, or a "past runs" picker. Related parameters
+          may be grouped into collapsible sections (which can nest), so a
+          card with many options stays tidy. Hover the ⓘ icon next to a
+          parameter name to read its description. The same ⓘ appears
+          next to each card title with a one-line summary of what that
           category does, and next to each plugin's name with a short
           description of what that plugin does.
         </p>
@@ -221,14 +223,29 @@ const SECTIONS: GuideSection[] = [
           Filtering happens at <em>selection time</em>: when you pick a
           run, only the steps{" "}
           <strong>at or before the card whose dropdown you opened</strong>{" "}
-          get loaded into the corresponding cards (marked <em>done</em>{" "}
-          + in <em>Load</em> mode). Any downstream top-row cards are
-          reset so you can configure and run them fresh.
+          — <em>and</em> only those the run actually contains — get loaded
+          into the corresponding cards (marked <em>done</em> + in{" "}
+          <em>Load</em> mode). So a partial run (one that stopped early,
+          e.g. after CFM) fills just its completed steps; any other
+          top-row cards are reset so you can configure and run them fresh.
         </p>
-        <p className="text-sm text-gray-700 leading-relaxed">
+        <p className="text-sm text-gray-700 leading-relaxed mb-3">
           Think of it as picking a <strong>prefix</strong> of a past
           pipeline to keep, then continuing from there with whatever
           combination of new and loaded steps you want.
+        </p>
+        <p className="text-sm text-gray-700 leading-relaxed">
+          <strong>Choosing where the prefix ends.</strong> Because the
+          dropdown loads up to the card you opened it on, the simplest way
+          to keep a shorter prefix is to click{" "}
+          <strong>Load from previous run</strong> directly on the card
+          whose upstream steps you care about — it loads only those steps
+          and leaves the rest fresh. (Alternatively, load a longer prefix
+          and then switch any loaded card back to <strong>Set up new</strong>,
+          which resets that card and every step after it.) Either way you
+          can re-run a step the past run already has, but{" "}
+          <em>differently</em> — a new parameter or a different plugin —
+          while still inheriting the untouched earlier steps.
         </p>
       </>
     ),
@@ -373,6 +390,72 @@ const SECTIONS: GuideSection[] = [
             straight to those runs in MLflow.
           </li>
         </ul>
+        <p className="text-sm text-gray-700 leading-relaxed mt-3 mb-3">
+          <strong>Inspecting a past run.</strong> A link opens the{" "}
+          <strong>parent</strong> pipeline run; from there click through
+          the run tree to any step's <strong>child</strong> run. On a
+          child run:
+        </p>
+        <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700 leading-relaxed">
+          <li>
+            the default <strong>Overview</strong> tab lists its{" "}
+            <strong>parameters</strong> (the exact configuration the step
+            ran with) and <strong>metrics</strong> — e.g. a trainer's
+            hyperparameters, or a labeling run's{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+              mean_confidence
+            </code>
+            ;
+          </li>
+          <li>
+            the <strong>Artifacts</strong> tab holds its output files —
+            trained models, neuron labels, interaction matrices, generated
+            charts;
+          </li>
+          <li>
+            <strong>Model metrics</strong> plots any metric logged over
+            training steps.
+          </li>
+        </ul>
+        <p className="text-sm text-gray-700 leading-relaxed mt-3 mb-3">
+          This is how you audit exactly what a previous run produced and
+          with which configuration, even for runs you never opened in the
+          SARSSAe UI.
+        </p>
+        <p className="text-sm text-gray-700 leading-relaxed mb-3">
+          <strong>Building on a past run — extending vs. deriving.</strong>{" "}
+          What happens in MLflow when you reuse a past run depends on{" "}
+          <em>what</em> you then run (everything stays inside SARSSAe's
+          single experiment; only the parent run differs):
+        </p>
+        <ul className="list-disc pl-5 space-y-2 text-sm text-gray-700 leading-relaxed">
+          <li>
+            <strong>Only bottom-row steps</strong> (an evaluation,
+            inspection, or steering) against a <em>fully</em> loaded past
+            pipeline — these are <strong>appended to that same past run</strong>{" "}
+            as new child runs. You keep extending the existing run; no new
+            run is created and nothing is marked inherited.
+          </li>
+          <li>
+            <strong>New top-row steps on top of a loaded prefix</strong>{" "}
+            (you loaded, say, only the dataset + CFM and now train a fresh
+            SAE) — this starts a <strong>new "derived" parent run</strong>.
+            The steps you didn't run are inherited from the source run
+            (not recomputed), and this derived run is marked{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+              ( inherited )
+            </code>{" "}
+            in its name, carries an <strong>"Inherited upstream from"</strong>{" "}
+            note linking back to the source run(s), and has child runs
+            only for the steps it actually ran — numbered after the
+            inherited ones (inherit a dataset + CFM and your first new
+            step is{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+              [3]
+            </code>
+            ).
+          </li>
+        </ul>
       </>
     ),
   },
@@ -391,6 +474,16 @@ const SECTIONS: GuideSection[] = [
         </p>
         <ul className="list-disc pl-5 space-y-1 mb-3 text-sm text-gray-700 leading-relaxed">
           <li>
+            <strong>An optional pipeline name</strong> — a human label
+            woven into the parent run's name (e.g.{" "}
+            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+              Pipeline Run | my-experiment [ … ]
+            </code>
+            ), so it stands out in the <em>Load from previous run</em>{" "}
+            dropdown and in MLflow. Leave it blank for an auto-generated
+            timestamped name.
+          </li>
+          <li>
             <strong>Key-value tags</strong> — short labels for the run.
             Pre-filled with the plugin names you selected (e.g.{" "}
             <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
@@ -405,14 +498,15 @@ const SECTIONS: GuideSection[] = [
           </li>
         </ul>
         <p className="text-sm text-gray-700 leading-relaxed">
-          Both are stored as{" "}
+          The tags and description are stored as{" "}
           <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
             sarssa.*
           </code>{" "}
-          tags on the MLflow parent run. They don't change what the
-          pipeline does, but they make past runs much easier to find
-          later — both in the <em>Load from previous run</em> dropdown
-          and in MLflow's own search and filter UI. Press{" "}
+          metadata on the MLflow parent run (the name becomes the run's
+          title). They don't change what the pipeline does, but they make
+          past runs much easier to find later — both in the{" "}
+          <em>Load from previous run</em> dropdown and in MLflow's own
+          search and filter UI. Press{" "}
           <em>Launch</em> to start the run,{" "}
           <em>Cancel</em> or{" "}
           <kbd className="px-1.5 py-0.5 rounded border border-gray-300 bg-gray-50 text-xs font-mono text-gray-700">

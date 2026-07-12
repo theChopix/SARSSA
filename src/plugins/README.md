@@ -81,8 +81,10 @@ below yourself — the engine calls them, in order (§4). You only
 | Attr | Default | Role |
 |------|---------|------|
 | `name` | `None` | Human label for the UI. When `None`, the registry derives one from the directory name (`make_plugin_display_name`, `plugin_discovery/naming.py`). |
+| `description` | `None` | Optional one‑line explanation surfaced as the plugin's tooltip in the registry. |
 | `io_spec` | shared `PluginIOSpec()` | The I/O contract. **Always declare your own** (see §8). |
 | `notifier` | `NullNotifier()` | Progress channel. The engine swaps in a real `PluginNotifier` before `run()`; outside a pipeline it stays a silent no‑op, so the same code runs in tests unchanged. |
+| `cancellation` | `NullCancellationToken()` | Cooperative "Cancel now" token. The engine injects a live token before `run()`; a long‑running plugin can poll it and abort mid‑step (outside a pipeline it's a silent no‑op). |
 
 **Lifecycle methods:**
 
@@ -97,16 +99,19 @@ below yourself — the engine calls them, in order (§4). You only
   `self.*`.
 - `update_context()` — logs `output_params` via
   `mlflow.log_params` (`_log_output_params`) and `output_artifacts`
-  via `mlflow.log_artifacts` (`_log_output_artifacts`). Override
-  only for conditional/extra logging, calling `super()` first (the
-  `MovieLens Loader` does this for optional tag artifacts).
+  via `mlflow.log_artifacts` (`_log_output_artifacts`). You never
+  override it: conditional outputs are declared with `optional=True`
+  on the spec (skipped when the attribute is `None`), so no plugin in
+  the repo overrides `update_context` anymore.
 
 **Private strategy tables** (you reference these by string in the
 spec, you don't call them):
 
 - `_load_artifact`: `npz`, `npy`, `json`, `base_model`,
   `sae_model`, `pt`.
-- `_save_artifact`: `json`, `npz`, `npy`, `pt`, `model`.
+- `_save_artifact`: `json`, `npz`, `npy`, `pt`, `model`, `text`
+  (writes a `str` — e.g. pre‑rendered HTML/SVG), `bytes` (writes raw
+  `bytes` — e.g. a rendered PDF).
 
 Unknown strategy names raise `ValueError` immediately — fail‑fast.
 Note the **loader/saver asymmetry** (§8): a model is *saved* with
@@ -178,7 +183,8 @@ default empty.
 | `output_artifacts` | `OutputArtifactSpec` | Files to save from `self.*` after `run()`. |
 | `output_params` | `OutputParamSpec` | Params to log from `self.*` after `run()`. |
 | `display` | `ItemRowsDisplaySpec` or `ArtifactDisplaySpec` | How the UI renders results. `None` = no visual output. |
-| `param_ui_hints` | `DynamicDropdownHint` / `PastRunsDropdownHint` / `SliderHint` | How a `run()` parameter is rendered (default: plain text input). |
+| `param_ui_hints` | `Static`/`Dynamic`/`Dependent`/`PastRuns` `DropdownHint`, `SliderHint`, `ToggleHint` | How a `run()` parameter is rendered (default: plain text input). |
+| `param_groups` | `ParamGroup` | Optional labelled, nestable sections for the parameter form (default: one flat list). |
 
 ### Inputs - loaded onto `self` before `run()`
 
@@ -201,11 +207,15 @@ set as `self.<attr>`. `loader_kwargs` is forwarded to the loader (e.g.
 Declared via `output_artifacts`, `output_params`; the base class reads
 each from `self.*` and logs it to the active MLflow run.
 
-**`OutputArtifactSpec(attr, filename, saver)`** — save `self.<attr>`
-to `filename` with strategy `saver`.
+**`OutputArtifactSpec(attr, filename, saver, optional=False,
+saver_kwargs={})`** — save `self.<attr>` to `filename` with strategy
+`saver`. `optional=True` skips the artifact when the attribute holds
+`None`; `saver_kwargs` are forwarded to the saver (e.g.
+`{"indent": None}` for the `json` saver).
 
-**`OutputParamSpec(key, attr)`** — log `self.<attr>` to MLflow under
-`key`.
+**`OutputParamSpec(key, attr, optional=False)`** — log `self.<attr>`
+to MLflow under `key`. `optional=True` skips it when the attribute
+holds `None`.
 
 ### Display - how results are rendered
 
@@ -234,6 +244,9 @@ A hint in `param_ui_hints` upgrades one parameter — matched by
 a widget type) so the user picks a valid value instead of typing a raw
 string. In short: *display* governs how **outputs** are shown, UI
 hints govern how **inputs** are collected.
+- `StaticDropdownHint(choices)` — a menu of a small, fixed set of
+  values known at build time (label == value), baked into the registry
+  response; no runtime fetch.
 - `DynamicDropdownHint(artifact_step, artifact_file, artifact_loader,
   formatter, source_run_param=None)` — populate a dropdown by loading
   an artifact and passing it through the plugin's `formatter`
@@ -242,11 +255,26 @@ hints govern how **inputs** are collected.
   (e.g. a `past_run_id`) — the backend then treats that param's value
   as a parent run, resolves `artifact_step` through its `context.json`,
   and the frontend refetches choices when the watched param changes.
+- `DependentDropdownHint(depends_on_param, resolver)` — a menu whose
+  options narrow based on another param's **value** (not run id), e.g.
+  the model list depends on the chosen provider; the backend maps the
+  controlling value to options via the `resolver` key.
 - `PastRunsDropdownHint(required_steps)` — dropdown of past pipeline
   runs whose `context.json` contains all `required_steps`. For compare
   plugins this is **auto‑injected** (§2); declare it manually only for
   a non‑compare plugin.
 - `SliderHint(min_value, max_value, step)` — a range slider.
+- `ToggleHint()` — an on/off switch for a `bool` parameter (needs no
+  extra config; the param name is enough).
+
+### Parameter groups — laying out the form
+
+By default the parameter form is one flat list. `param_groups` lays it
+out as titled, collapsible sections instead:
+`ParamGroup(title, params=[...], subgroups=[...])`. A group may carry
+both its own `params` and nested `subgroups` (rendered as sections
+within the section); any `run()` parameter named in no group falls into
+a trailing "Other" section.
 
 ---
 
@@ -272,6 +300,12 @@ context = { "dataset_loading": {"run_id": "a1b2…"},
    └─ _log_output_artifacts      tmpdir → _save_artifact(saver) per spec
                                  → mlflow.log_artifacts(tmpdir)
 ```
+
+Separately, the **engine** auto‑logs the step's effective `run()`
+params (caller kwargs merged over signature defaults) to the nested run
+*before* `load_context`, so the configuration is recorded even if the
+step fails — this is why a plugin must not re‑log its own `run()`
+arguments as `output_params` (only *derived* outputs belong there).
 
 A failed input load is wrapped as `MissingContextError` with the
 offending step/filename/run id (`plugin_interface.py`), so a
@@ -347,7 +381,9 @@ class Plugin(BasePlugin):                       # MUST be named `Plugin`
         output_artifacts=[
             OutputArtifactSpec("recs", "recommendations.json", "json"),
         ],
-        output_params=[OutputParamSpec("alpha", "alpha_param")],
+        # Declare only *derived* outputs. The engine already auto-logs
+        # every run() parameter (e.g. alpha), so never mirror those here.
+        output_params=[OutputParamSpec("num_recs", "num_recs")],
     )
 
     def run(
@@ -356,7 +392,7 @@ class Plugin(BasePlugin):                       # MUST be named `Plugin`
     ) -> None:
         # self.sae is already loaded (from io_spec.input_artifacts)
         self.recs = my_logic(self.sae, alpha)   # assign declared outputs
-        self.alpha_param = alpha
+        self.num_recs = len(self.recs)          # a computed output param
         self.notifier.info(f"Steered with alpha={alpha}")
 ```
 
@@ -423,8 +459,8 @@ results):
 |---|----------|-------|------------------------|
 | 0 | `dataset_loading` | `one_time` | Load an interaction dataset; split into train/val/test matrices + item metadata |
 | 1 | `training_cfm` | `one_time` | Train the base collaborative‑filtering recommender (ELSA) |
-| 2 | `training_sae` | `one_time` | Train a sparse autoencoder on the base model's embeddings |
-| 3 | `neuron_labeling` | `one_time` | Assign human‑readable concept labels to the SAE neurons |
+| 2 | `training_sae` | `one_time` | Train a sparse autoencoder on the base model's embeddings (ships TopK / BatchTopK / Basic trainers) |
+| 3 | `neuron_labeling` | `one_time` | Assign human‑readable concept labels to the SAE neurons (ships TF‑IDF and tag‑correlation methods) |
 | 4 | `labeling_evaluation` | `multi_run` · visual | Judge label quality — embedding maps, dendrograms, nearest‑label distances |
 | 5 | `inspection` | `multi_run` · visual | Explore which items a concept neuron activates on most |
 | 6 | `steering` | `multi_run` · visual | Steer recommendations by amplifying/suppressing concepts |
