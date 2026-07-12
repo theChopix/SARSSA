@@ -391,6 +391,19 @@ const SECTIONS: GuideSection[] = [
           </li>
         </ul>
         <p className="text-sm text-gray-700 leading-relaxed mt-3 mb-3">
+          <strong>Tip: set up the run table's columns.</strong> On the
+          experiment page the <em>Columns</em> menu picks which columns the
+          run list shows — by default it tells you little. It pays to
+          enable the <strong>Dataset</strong> attribute and the{" "}
+          <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+            sarssa.plugin.*
+          </code>{" "}
+          tags (the ones the Launch modal pre-fills), so you can see at a
+          glance which dataset and which plugins each run used instead of
+          opening them one by one. The same menu also exposes every logged
+          param and metric as a sortable column.
+        </p>
+        <p className="text-sm text-gray-700 leading-relaxed mb-3">
           <strong>Inspecting a past run.</strong> A link opens the{" "}
           <strong>parent</strong> pipeline run; from there click through
           the run tree to any step's <strong>child</strong> run. On a
