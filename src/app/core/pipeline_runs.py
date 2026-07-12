@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import mlflow
@@ -72,15 +73,17 @@ def get_eligible_pipeline_runs(
     if not required_steps:
         return all_runs
 
-    eligible: list[dict[str, Any]] = []
-    for run in all_runs:
+    def has_required_steps(run: dict[str, Any]) -> bool:
         try:
             context = get_run_context(run["run_id"])
         except FileNotFoundError:
-            continue
-        if all(step in context for step in required_steps):
-            eligible.append(run)
-    return eligible
+            return False
+        return all(step in context for step in required_steps)
+
+    # fetch concurrently, pool.map preserves ordering
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        keep = list(pool.map(has_required_steps, all_runs))
+    return [run for run, ok in zip(all_runs, keep, strict=True) if ok]
 
 
 def get_run_context(run_id: str) -> dict[str, Any]:
@@ -97,6 +100,14 @@ def get_run_context(run_id: str) -> dict[str, Any]:
         FileNotFoundError: If ``context.json`` is not found in the
             run's artifacts.
     """
+    # Existence check via the cheap metadata listing first
+    try:
+        files = MlflowClient().list_artifacts(run_id)
+    except MlflowException as exc:
+        raise FileNotFoundError(f"context.json not found for run {run_id}") from exc
+    if all(f.path != "context.json" for f in files):
+        raise FileNotFoundError(f"context.json not found for run {run_id}")
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         try:
             artifact_path = mlflow.artifacts.download_artifacts(
