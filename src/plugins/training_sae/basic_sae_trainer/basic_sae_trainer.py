@@ -29,7 +29,7 @@ from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
 
-# anchor augmentation (sample_users) - interaction-dropout keep probability
+# anchor augmentation (sample_interactions) - interaction-dropout keep probability
 _ANCHOR_KEEP_PROB = 0.8
 
 
@@ -45,7 +45,7 @@ def train(
     batch_size: int,
     early_stop: int,
     evaluate_every: int,
-    sample_users: bool,
+    sample_interactions: bool,
     target_ratio: float,
     seed: int,
     notifier: PluginNotifier | None = None,
@@ -55,8 +55,8 @@ def train(
 
     The training process learns sparse representations of dense base model embeddings
     while maintaining recommendation quality. Sparsity is driven by the L1 penalty in the
-    model's loss; the auxiliary loss revives dead neurons. Supports optional ``sample_users``
-    data augmentation (which forces on-the-fly encoding).
+    model's loss; the auxiliary loss revives dead neurons. Supports optional
+    ``sample_interactions`` data augmentation (which forces on-the-fly encoding).
 
     Args:
         model: BasicSAE model to train.
@@ -70,7 +70,8 @@ def train(
         batch_size: Batch size for training.
         early_stop: Number of evaluations without improvement before stopping (0 disables).
         evaluate_every: Evaluate every N epochs.
-        sample_users: Whether to randomly sample user interactions during training.
+        sample_interactions: Whether to randomly drop part of each user's interactions
+            each epoch (input-dropout augmentation).
         target_ratio: Fraction of interactions to use as targets for evaluation.
         seed: Random seed for reproducibility.
 
@@ -97,8 +98,8 @@ def train(
         loaders["train_interaction_dataloader"] = train_interaction_dataloader
 
         # Train embeddings feed ONLY the no-augmentation fast path, so skip this
-        # expensive full-train encode when sample_users is enabled.
-        if not sample_users:
+        # expensive full-train encode when sample_interactions is enabled.
+        if not sample_interactions:
             train_user_embeddings = np.vstack(
                 [
                     base_model.encode(batch).detach().cpu().numpy()
@@ -131,8 +132,8 @@ def train(
 
         Two strategies share one per-batch step:
 
-        - ``sample_users`` off → iterate the precomputed embeddings;
-        - ``sample_users`` on → iterate interactions, encoding an augmented anchor
+        - ``sample_interactions`` off → iterate the precomputed embeddings;
+        - ``sample_interactions`` on → iterate interactions, encoding an augmented anchor
           on the fly each epoch.
         """
         model.train()
@@ -145,7 +146,7 @@ def train(
             for key in train_losses:
                 train_losses[key].append(losses[key].item())
 
-        if sample_users:
+        if sample_interactions:
             pbar = tqdm(d["train_interaction_dataloader"], desc=f"Epoch {epoch}/{epochs}")
             for batched_interactions in pbar:
                 if cancellation is not None:
@@ -368,14 +369,14 @@ class Plugin(BasePlugin):
         ],
         param_ui_hints=[
             StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
-            ToggleHint("sample_users"),
+            ToggleHint("sample_interactions"),
             ToggleHint("normalize"),
         ],
         param_groups=[
             ParamGroup("Architecture", ["embedding_dim", "normalize"]),
             ParamGroup(
                 "Training Loop",
-                ["epochs", "batch_size", "early_stop", "sample_users", "seed"],
+                ["epochs", "batch_size", "early_stop", "sample_interactions", "seed"],
                 subgroups=[
                     ParamGroup(
                         "Loss",
@@ -445,7 +446,7 @@ class Plugin(BasePlugin):
             "is slower; usually a multiple of the base model's factor count "
             "(the expansion ratio). Default 8192 (= 8 x ELSA factors 1024).",
         ] = 8192,
-        sample_users: Annotated[
+        sample_interactions: Annotated[
             bool,
             "If true, randomly mask part of each user's interactions every "
             "epoch as data augmentation. Improves robustness but slows "
@@ -527,7 +528,8 @@ class Plugin(BasePlugin):
             early_stop: Number of epochs without improvement before stopping.
             batch_size: Batch size for training.
             embedding_dim: Dimension of sparse embeddings.
-            sample_users: Whether to randomly sample user interactions.
+            sample_interactions: Whether to randomly drop part of each user's interactions
+                (input-dropout augmentation).
             target_ratio: Fraction of interactions to use as targets for evaluation.
             normalize: Whether to L2-normalize sparse embeddings.
             seed: Random seed for reproducibility.
@@ -592,7 +594,7 @@ class Plugin(BasePlugin):
             batch_size=batch_size,
             early_stop=early_stop,
             evaluate_every=evaluate_every,
-            sample_users=sample_users,
+            sample_interactions=sample_interactions,
             target_ratio=target_ratio,
             seed=seed,
             notifier=self.notifier,

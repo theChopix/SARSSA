@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 # contrastive positive view - interaction-dropout keep probability (train + valid)
 _POSITIVE_KEEP_PROB = 0.8
 
-# anchor augmentation (sample_users) - interaction-dropout keep probability
+# anchor augmentation (sample_interactions) - interaction-dropout keep probability
 _ANCHOR_KEEP_PROB = 0.8
 
 
@@ -49,7 +49,7 @@ def train(
     early_stop: int,
     evaluate_every: int,
     contrastive_coef: float,
-    sample_users: bool,
+    sample_interactions: bool,
     target_ratio: float,
     seed: int,
     notifier: PluginNotifier | None = None,
@@ -75,7 +75,8 @@ def train(
         early_stop: Number of evaluations without improvement before stopping (0 disables).
         evaluate_every: Evaluate every N epochs.
         contrastive_coef: Coefficient for contrastive loss.
-        sample_users: Whether to randomly sample user interactions during training.
+        sample_interactions: Whether to randomly drop part of each user's interactions
+            each epoch (input-dropout augmentation).
         target_ratio: Fraction of interactions to use as targets for evaluation.
         seed: Random seed for reproducibility.
 
@@ -104,7 +105,7 @@ def train(
 
         # Train embeddings feed ONLY the no-augmentation fast path, so skip this
         # expensive full-train encode when augmentation/contrastive is enabled.
-        if not (sample_users or contrastive_coef > 0):
+        if not (sample_interactions or contrastive_coef > 0):
             train_user_embeddings = np.vstack(
                 [
                     base_model.encode(batch).detach().cpu().numpy()
@@ -162,7 +163,7 @@ def train(
         """
         model.train()
         train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
-        are_interactions_needed = sample_users or contrastive_coef > 0
+        are_interactions_needed = sample_interactions or contrastive_coef > 0
 
         def step(anchor, positive, pbar):
             """Shared per-batch update + loss accumulation."""
@@ -188,7 +189,7 @@ def train(
                     positive_batch = None
 
                 # Optional anchor augmentation: keep ~80% of interactions.
-                if sample_users:
+                if sample_interactions:
                     batched_interactions = batched_interactions * (
                         torch.rand_like(batched_interactions) < _ANCHOR_KEEP_PROB
                     )
@@ -415,14 +416,14 @@ class Plugin(BasePlugin):
         ],
         param_ui_hints=[
             StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
-            ToggleHint("sample_users"),
+            ToggleHint("sample_interactions"),
             ToggleHint("normalize"),
         ],
         param_groups=[
             ParamGroup("Architecture", ["embedding_dim", "top_k", "normalize"]),
             ParamGroup(
                 "Training Loop",
-                ["epochs", "batch_size", "early_stop", "sample_users", "seed"],
+                ["epochs", "batch_size", "early_stop", "sample_interactions", "seed"],
                 subgroups=[
                     ParamGroup(
                         "Loss",
@@ -499,7 +500,7 @@ class Plugin(BasePlugin):
             "top_k features stay active per user. Lower is sparser and more "
             "interpretable but reconstructs worse. Default 32.",
         ] = 32,
-        sample_users: Annotated[
+        sample_interactions: Annotated[
             bool,
             "If true, randomly mask part of each user's interactions every "
             "epoch as data augmentation. Improves robustness but slows "
@@ -589,7 +590,8 @@ class Plugin(BasePlugin):
             batch_size: Batch size for training.
             embedding_dim: Dimension of sparse embeddings.
             top_k: Number of active features per input.
-            sample_users: Whether to randomly sample user interactions.
+            sample_interactions: Whether to randomly drop part of each user's interactions
+                (input-dropout augmentation).
             target_ratio: Fraction of interactions to use as targets for evaluation.
             normalize: Whether to L2-normalize sparse embeddings.
             seed: Random seed for reproducibility.
@@ -671,7 +673,7 @@ class Plugin(BasePlugin):
             early_stop=early_stop,
             evaluate_every=evaluate_every,
             contrastive_coef=contrastive_coef,
-            sample_users=sample_users,
+            sample_interactions=sample_interactions,
             target_ratio=target_ratio,
             seed=seed,
             notifier=self.notifier,
