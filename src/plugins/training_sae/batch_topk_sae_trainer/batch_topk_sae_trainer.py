@@ -29,6 +29,12 @@ from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
 
+# contrastive positive view - interaction-dropout keep probability (train + valid)
+_POSITIVE_KEEP_PROB = 0.8
+
+# anchor augmentation (sample_users) - interaction-dropout keep probability
+_ANCHOR_KEEP_PROB = 0.8
+
 
 def train(
     model: SAE,
@@ -123,11 +129,14 @@ def train(
         )
 
         # Augmented validation view feeds ONLY the contrastive term, so skip it
-        # (keep ~80% of interactions, then encode) unless contrastive is enabled.
+        #  unless contrastive is enabled.
         if contrastive_coef > 0:
             val_positive_user_embeddings = np.vstack(
                 [
-                    base_model.encode(batch * (torch.rand_like(batch) < 0.8)).detach().cpu().numpy()
+                    base_model.encode(batch * (torch.rand_like(batch) < _POSITIVE_KEEP_PROB))
+                    .detach()
+                    .cpu()
+                    .numpy()
                     for batch in tqdm(
                         valid_interaction_dataloader,
                         desc="Computing augmented validation embeddings",
@@ -167,12 +176,11 @@ def train(
                     cancellation.raise_if_cancelled()
 
                 # Contrastive positive view (freshly sampled each epoch):
-                # keep ~50% of interactions + ~10% noise, then encode.
+                # keep ~80% of interactions, then encode.
                 if contrastive_coef > 0:
                     positive_batch = batched_interactions * (
-                        torch.rand_like(batched_interactions) < 0.5
+                        torch.rand_like(batched_interactions) < _POSITIVE_KEEP_PROB
                     )
-                    positive_batch += (torch.rand_like(positive_batch) < 0.1).float()  # add noise
                     positive_batch = base_model.encode(positive_batch).detach()
                 else:
                     positive_batch = None
@@ -180,7 +188,7 @@ def train(
                 # Optional anchor augmentation: keep ~80% of interactions.
                 if sample_users:
                     batched_interactions = batched_interactions * (
-                        torch.rand_like(batched_interactions) < 0.8
+                        torch.rand_like(batched_interactions) < _ANCHOR_KEEP_PROB
                     )
 
                 anchor_batch = base_model.encode(batched_interactions).detach()

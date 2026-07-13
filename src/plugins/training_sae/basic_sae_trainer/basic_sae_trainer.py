@@ -29,6 +29,9 @@ from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
 
+# anchor augmentation (sample_users) - interaction-dropout keep probability
+_ANCHOR_KEEP_PROB = 0.8
+
 
 def train(
     model: SAE,
@@ -147,7 +150,7 @@ def train(
                     cancellation.raise_if_cancelled()
                 # Anchor augmentation: keep ~80% of interactions, then encode.
                 batched_interactions = batched_interactions * (
-                    torch.rand_like(batched_interactions) < 0.8
+                    torch.rand_like(batched_interactions) < _ANCHOR_KEEP_PROB
                 )
                 anchor_batch = base_model.encode(batched_interactions).detach()
                 step(anchor_batch, pbar)
