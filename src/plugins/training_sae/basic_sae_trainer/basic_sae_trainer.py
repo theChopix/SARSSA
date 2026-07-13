@@ -91,7 +91,9 @@ def train(
         """
         loaders = {}
 
-        train_interaction_dataloader = DataLoader(train_csr, batch_size, device, shuffle=False)
+        train_interaction_dataloader = DataLoader(
+            train_csr, batch_size, device, shuffle=True, seed=seed
+        )
         loaders["train_interaction_dataloader"] = train_interaction_dataloader
 
         # Train embeddings feed ONLY the no-augmentation fast path, so skip this
