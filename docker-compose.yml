@@ -11,6 +11,11 @@
 # reads and writes into `./mlartifacts` (mlflow-artifacts:/ URIs — no host
 # paths in the DB). This mirrors the local `just run` + `just mlflow` setup.
 #
+# This file is CPU-only, so it starts on any host. For an NVIDIA GPU, add
+# the overlay — it needs the driver and the NVIDIA Container Toolkit:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
 # For direct host access to backend/mlflow during development, create a
 # local docker-compose.override.yml publishing ports 8000/5000.
 #
@@ -39,15 +44,6 @@ services:
     volumes:
       # Datasets — code defaults to ../data/<dataset> (i.e. /app/data).
       - ./data:/app/data
-    # Optional GPU: set GPU_COUNT=all on a host with NVIDIA GPU + toolkit.
-    # Defaults to 0 — reserves nothing, so it still runs CPU-only anywhere.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: ${GPU_COUNT:-0}
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
       interval: 30s

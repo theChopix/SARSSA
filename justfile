@@ -134,6 +134,10 @@ docker-build:
 docker-up:
     docker compose up --build -d
 
+# Same, but reserve the host's NVIDIA GPU(s) for the backend
+docker-up-gpu:
+    docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+
 # Stop and remove the stack containers
 docker-down:
     docker compose down

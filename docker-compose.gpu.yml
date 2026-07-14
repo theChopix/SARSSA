@@ -1,0 +1,23 @@
+# GPU overlay — apply on top of docker-compose.yml on a host that has an
+# NVIDIA driver and the NVIDIA Container Toolkit:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+#   just docker-up-gpu
+#
+# It is a separate file rather than a `count: ${GPU_COUNT:-0}` knob in the
+# base file because a `driver: nvidia` device reservation makes the daemon
+# resolve that driver before it ever looks at the count — so `count: 0` still
+# fails with "could not select device driver nvidia" on a host without the
+# toolkit. The reservation has to be absent, not zero.
+#
+# GPU_COUNT selects how many GPUs to reserve (default: all).
+
+services:
+  backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-all}
+              capabilities: [gpu]
