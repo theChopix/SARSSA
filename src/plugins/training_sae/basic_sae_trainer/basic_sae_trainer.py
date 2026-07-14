@@ -137,7 +137,14 @@ def train(
           on the fly each epoch.
         """
         model.train()
-        train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
+        train_losses = {
+            "Loss": [],
+            "L2": [],
+            "L1": [],
+            "L0": [],
+            "Cosine": [],
+            "Auxiliary": [],
+        }
 
         def step(anchor, pbar):
             """Shared per-batch update + loss accumulation."""

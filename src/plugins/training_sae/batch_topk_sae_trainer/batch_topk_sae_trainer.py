@@ -162,7 +162,15 @@ def train(
           positive and the (optionally augmented) anchor on the fly.
         """
         model.train()
-        train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
+        train_losses = {
+            "Loss": [],
+            "L2": [],
+            "L1": [],
+            "L0": [],
+            "Cosine": [],
+            "Auxiliary": [],
+            "Contrastive": [],
+        }
         are_interactions_needed = sample_interactions or contrastive_coef > 0
 
         def step(anchor, positive, pbar):
