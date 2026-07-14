@@ -358,18 +358,18 @@ Then build and start the stack:
 docker compose up --build -d          # or: just docker-up
 ```
 
-**GPU acceleration (optional).** The backend trains models on a GPU when
-one is available. By default the stack runs **CPU-only** (`GPU_COUNT=0`),
-so it starts on any host. To use an NVIDIA GPU you need the **NVIDIA
-driver** and the **NVIDIA Container Toolkit** installed on the host, then
-start the stack with `GPU_COUNT` set:
+**GPU acceleration (optional).** The command above is **CPU-only** and
+starts on any host. The backend trains models on a GPU when one is
+available; to hand it the host's NVIDIA GPU, install the **NVIDIA driver**
+and the **NVIDIA Container Toolkit**, then add the GPU overlay:
 
 ```bash
-GPU_COUNT=all docker compose up --build -d     # all GPUs (or e.g. GPU_COUNT=1)
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+# or: just docker-up-gpu
 ```
 
-Alternatively, add `GPU_COUNT=all` to your `.env` file (Compose reads it
-automatically).
+The overlay reserves all GPUs by default; set `GPU_COUNT` (in the
+environment or in `.env`) to reserve a specific number instead.
 
 Verify the container sees it:
 
@@ -377,8 +377,7 @@ Verify the container sees it:
 docker exec sarssa-backend-1 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-Without a GPU (or with `GPU_COUNT=0`) training still runs — just much
-slower on CPU.
+Without a GPU training still runs — just much slower on CPU.
 
 **Launching several pipelines.** Compute tasks run **one at a time**:
 each launch is accepted immediately, but waits in a FIFO queue until the
