@@ -49,6 +49,7 @@ class TopKSAE(SAE):
                 "normalize": self.normalize,
                 "auxiliary_coef": self.cfg.get("auxiliary_coef", 0),
                 "contrastive_coef": self.cfg.get("contrastive_coef", 0),
+                "temperature": self.temperature,
                 "l1_coef": self.l1_coef,
                 "reconstruction_coef": self.reconstruction_coef,
                 "n_batches_to_dead": self.n_batches_to_dead,

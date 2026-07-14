@@ -433,7 +433,7 @@ class Plugin(BasePlugin):
                                 "Dead Neurons Auxiliary",
                                 ["auxiliary_coef", "topk_aux", "n_batches_to_dead"],
                             ),
-                            ParamGroup("Contrastive", ["contrastive_coef"]),
+                            ParamGroup("Contrastive", ["contrastive_coef", "temperature"]),
                         ],
                     ),
                 ],
@@ -543,6 +543,14 @@ class Plugin(BasePlugin):
             "encoding); higher favors view-invariant features. Disabled by "
             "default (0.0).",
         ] = 0.0,
+        temperature: Annotated[
+            float,
+            "Softmax temperature of the contrastive loss. Sparse codes are "
+            "non-negative, so their cosine similarities are squeezed into "
+            "[0, 1]; dividing by a low temperature restores the contrast "
+            "between the true pair and the in-batch negatives. Typical "
+            "range 0.07-0.2. Default 0.2.",
+        ] = 0.2,
         lr: Annotated[
             float,
             "Adam step size for the SAE. SAEs are sensitive: too high "
@@ -598,6 +606,7 @@ class Plugin(BasePlugin):
             reconstruction_loss: Loss function ('L2' or 'Cosine').
             auxiliary_coef: Coefficient for auxiliary loss (dead neuron reactivation).
             contrastive_coef: Coefficient for contrastive loss.
+            temperature: Softmax temperature for the contrastive loss.
             lr: Learning rate.
             beta1: Adam optimizer beta1 parameter.
             beta2: Adam optimizer beta2 parameter.
@@ -651,6 +660,7 @@ class Plugin(BasePlugin):
             normalize=normalize,
             auxiliary_coef=auxiliary_coef,
             contrastive_coef=contrastive_coef,
+            temperature=temperature,
             reconstruction_coef=reconstruction_coef,
         ).to(device)
 

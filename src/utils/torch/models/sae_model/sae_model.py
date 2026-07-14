@@ -21,6 +21,7 @@ class SAE(nn.Module):
         self.n_batches_to_dead = kwargs.get("n_batches_to_dead", 5)
         self.topk_aux = kwargs.get("topk_aux", 512)
         self.normalize = kwargs.get("normalize", False)
+        self.temperature = kwargs.get("temperature", 0.2)
 
         self.encoder_w = nn.Parameter(
             nn.init.kaiming_uniform_(torch.empty([input_dim, embedding_dim]))
@@ -107,8 +108,8 @@ class SAE(nn.Module):
         e = F.normalize(e, dim=-1)
         e_positive = F.normalize(e_positive, dim=-1)
 
-        logits_1 = torch.matmul(e, e_positive.T)
-        logits_2 = torch.matmul(e_positive, e.T)
+        logits_1 = torch.matmul(e, e_positive.T) / self.temperature
+        logits_2 = torch.matmul(e_positive, e.T) / self.temperature
 
         targets = torch.arange(e.shape[0], device=e.device)
         loss_1 = F.cross_entropy(logits_1, targets)
