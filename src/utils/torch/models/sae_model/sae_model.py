@@ -71,7 +71,11 @@ class SAE(nn.Module):
         self, batch: torch.Tensor, positive_batch: torch.Tensor | None
     ) -> dict[str, torch.Tensor]:
         out, e, e_pre, batch_mean, batch_std, standardized_batch = self(batch)
-        e_positive = self.encode(positive_batch)[0] if positive_batch is not None else None
+        e_positive = (
+            self.encode(positive_batch, update_dead=False)[0]
+            if positive_batch is not None
+            else None
+        )
         return self._compute_loss_dict(batch, e_pre, e, out, standardized_batch, e_positive)
 
     def _auxiliary_loss(
@@ -113,14 +117,14 @@ class SAE(nn.Module):
         return (loss_1 + loss_2) / 2
 
     def encode(
-        self, x: torch.Tensor
+        self, x: torch.Tensor, update_dead: bool = True
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         x, x_mean, x_std = self.standardize_input(x)
         e_pre = F.relu((x - self.decoder_b) @ self.encoder_w + self.encoder_b)
         e = self.post_process_embedding(e_pre)
         if self.normalize:
             e = l2_normalize(e)
-        if self.training:
+        if self.training and update_dead:
             self._update_inactive_neurons(e)
         return e, e_pre, x_mean, x_std, x
 
