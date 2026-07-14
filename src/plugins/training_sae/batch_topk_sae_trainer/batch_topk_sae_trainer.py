@@ -29,6 +29,12 @@ from utils.torch.runtime import set_device, set_seed
 
 logger = get_logger(__name__)
 
+# contrastive positive view - interaction-dropout keep probability (train + valid)
+_POSITIVE_KEEP_PROB = 0.8
+
+# anchor augmentation (sample_interactions) - interaction-dropout keep probability
+_ANCHOR_KEEP_PROB = 0.8
+
 
 def train(
     model: SAE,
@@ -43,7 +49,7 @@ def train(
     early_stop: int,
     evaluate_every: int,
     contrastive_coef: float,
-    sample_users: bool,
+    sample_interactions: bool,
     target_ratio: float,
     seed: int,
     notifier: PluginNotifier | None = None,
@@ -69,7 +75,8 @@ def train(
         early_stop: Number of evaluations without improvement before stopping (0 disables).
         evaluate_every: Evaluate every N epochs.
         contrastive_coef: Coefficient for contrastive loss.
-        sample_users: Whether to randomly sample user interactions during training.
+        sample_interactions: Whether to randomly drop part of each user's interactions
+            each epoch (input-dropout augmentation).
         target_ratio: Fraction of interactions to use as targets for evaluation.
         seed: Random seed for reproducibility.
 
@@ -91,12 +98,14 @@ def train(
         """
         loaders = {}
 
-        train_interaction_dataloader = DataLoader(train_csr, batch_size, device, shuffle=False)
+        train_interaction_dataloader = DataLoader(
+            train_csr, batch_size, device, shuffle=True, seed=seed
+        )
         loaders["train_interaction_dataloader"] = train_interaction_dataloader
 
         # Train embeddings feed ONLY the no-augmentation fast path, so skip this
         # expensive full-train encode when augmentation/contrastive is enabled.
-        if not (sample_users or contrastive_coef > 0):
+        if not (sample_interactions or contrastive_coef > 0):
             train_user_embeddings = np.vstack(
                 [
                     base_model.encode(batch).detach().cpu().numpy()
@@ -123,11 +132,14 @@ def train(
         )
 
         # Augmented validation view feeds ONLY the contrastive term, so skip it
-        # (keep ~80% of interactions, then encode) unless contrastive is enabled.
+        #  unless contrastive is enabled.
         if contrastive_coef > 0:
             val_positive_user_embeddings = np.vstack(
                 [
-                    base_model.encode(batch * (torch.rand_like(batch) < 0.8)).detach().cpu().numpy()
+                    base_model.encode(batch * (torch.rand_like(batch) < _POSITIVE_KEEP_PROB))
+                    .detach()
+                    .cpu()
+                    .numpy()
                     for batch in tqdm(
                         valid_interaction_dataloader,
                         desc="Computing augmented validation embeddings",
@@ -150,8 +162,16 @@ def train(
           positive and the (optionally augmented) anchor on the fly.
         """
         model.train()
-        train_losses = {"Loss": [], "L2": [], "L1": [], "L0": [], "Cosine": []}
-        are_interactions_needed = sample_users or contrastive_coef > 0
+        train_losses = {
+            "Loss": [],
+            "L2": [],
+            "L1": [],
+            "L0": [],
+            "Cosine": [],
+            "Auxiliary": [],
+            "Contrastive": [],
+        }
+        are_interactions_needed = sample_interactions or contrastive_coef > 0
 
         def step(anchor, positive, pbar):
             """Shared per-batch update + loss accumulation."""
@@ -167,20 +187,19 @@ def train(
                     cancellation.raise_if_cancelled()
 
                 # Contrastive positive view (freshly sampled each epoch):
-                # keep ~50% of interactions + ~10% noise, then encode.
+                # keep ~80% of interactions, then encode.
                 if contrastive_coef > 0:
                     positive_batch = batched_interactions * (
-                        torch.rand_like(batched_interactions) < 0.5
+                        torch.rand_like(batched_interactions) < _POSITIVE_KEEP_PROB
                     )
-                    positive_batch += (torch.rand_like(positive_batch) < 0.1).float()  # add noise
                     positive_batch = base_model.encode(positive_batch).detach()
                 else:
                     positive_batch = None
 
                 # Optional anchor augmentation: keep ~80% of interactions.
-                if sample_users:
+                if sample_interactions:
                     batched_interactions = batched_interactions * (
-                        torch.rand_like(batched_interactions) < 0.8
+                        torch.rand_like(batched_interactions) < _ANCHOR_KEEP_PROB
                     )
 
                 anchor_batch = base_model.encode(batched_interactions).detach()
@@ -405,14 +424,14 @@ class Plugin(BasePlugin):
         ],
         param_ui_hints=[
             StaticDropdownHint("reconstruction_loss", choices=["Cosine", "L2"]),
-            ToggleHint("sample_users"),
+            ToggleHint("sample_interactions"),
             ToggleHint("normalize"),
         ],
         param_groups=[
             ParamGroup("Architecture", ["embedding_dim", "top_k", "normalize"]),
             ParamGroup(
                 "Training Loop",
-                ["epochs", "batch_size", "early_stop", "sample_users", "seed"],
+                ["epochs", "batch_size", "early_stop", "sample_interactions", "seed"],
                 subgroups=[
                     ParamGroup(
                         "Loss",
@@ -422,7 +441,7 @@ class Plugin(BasePlugin):
                                 "Dead Neurons Auxiliary",
                                 ["auxiliary_coef", "topk_aux", "n_batches_to_dead"],
                             ),
-                            ParamGroup("Contrastive", ["contrastive_coef"]),
+                            ParamGroup("Contrastive", ["contrastive_coef", "temperature"]),
                         ],
                     ),
                 ],
@@ -489,7 +508,7 @@ class Plugin(BasePlugin):
             "total), so the count per user flexes around top_k. Lower is "
             "sparser and more interpretable but reconstructs worse. Default 32.",
         ] = 32,
-        sample_users: Annotated[
+        sample_interactions: Annotated[
             bool,
             "If true, randomly mask part of each user's interactions every "
             "epoch as data augmentation. Improves robustness but slows "
@@ -532,6 +551,14 @@ class Plugin(BasePlugin):
             "encoding); higher favors view-invariant features. Disabled by "
             "default (0.0).",
         ] = 0.0,
+        temperature: Annotated[
+            float,
+            "Softmax temperature of the contrastive loss. Sparse codes are "
+            "non-negative, so their cosine similarities are squeezed into "
+            "[0, 1]; dividing by a low temperature restores the contrast "
+            "between the true pair and the in-batch negatives. Typical "
+            "range 0.07-0.2. Default 0.2.",
+        ] = 0.2,
         lr: Annotated[
             float,
             "Adam step size for the SAE. SAEs are sensitive: too high "
@@ -579,13 +606,15 @@ class Plugin(BasePlugin):
             batch_size: Batch size for training.
             embedding_dim: Dimension of sparse embeddings.
             top_k: Per-batch active-feature budget (k x batch_size total).
-            sample_users: Whether to randomly sample user interactions.
+            sample_interactions: Whether to randomly drop part of each user's interactions
+                (input-dropout augmentation).
             target_ratio: Fraction of interactions to use as targets for evaluation.
             normalize: Whether to L2-normalize sparse embeddings.
             seed: Random seed for reproducibility.
             reconstruction_loss: Loss function ('L2' or 'Cosine').
             auxiliary_coef: Coefficient for auxiliary loss (dead neuron reactivation).
             contrastive_coef: Coefficient for contrastive loss.
+            temperature: Softmax temperature for the contrastive loss.
             lr: Learning rate.
             beta1: Adam optimizer beta1 parameter.
             beta2: Adam optimizer beta2 parameter.
@@ -639,6 +668,7 @@ class Plugin(BasePlugin):
             normalize=normalize,
             auxiliary_coef=auxiliary_coef,
             contrastive_coef=contrastive_coef,
+            temperature=temperature,
             reconstruction_coef=reconstruction_coef,
         ).to(device)
 
@@ -661,7 +691,7 @@ class Plugin(BasePlugin):
             early_stop=early_stop,
             evaluate_every=evaluate_every,
             contrastive_coef=contrastive_coef,
-            sample_users=sample_users,
+            sample_interactions=sample_interactions,
             target_ratio=target_ratio,
             seed=seed,
             notifier=self.notifier,
