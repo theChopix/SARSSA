@@ -82,8 +82,10 @@ are reproducible and reusable across experiments.
 
 Key capabilities: plugin-based multi-step pipelines; MLflow experiment
 tracking & reproducibility; a web UI for composing, running, and
-inspecting pipelines; and reuse of intermediate results from previous
-runs (start a new pipeline from an old run's outputs).
+inspecting pipelines; reuse of intermediate results from previous
+runs (start a new pipeline from an old run's outputs); and separate
+MLflow experiment spaces on top of a shared base experiment (handy
+e.g. for multi-user deployments).
 
 ---
 
@@ -144,6 +146,18 @@ MLflow's **native UI is fully usable on its own** for browsing past
 runs, their params, metrics and artifacts — independently of the
 SARSSA frontend (locally at `http://localhost:5000/mlflow`, in Docker
 at `http://localhost:5173/mlflow`).
+
+**Experiment spaces.** Runs are grouped into MLflow **experiments**
+— separate spaces for separate lines of work. SARSSA keeps one
+**shared base experiment** (`pipeline_experiments`) — the default
+space runs go to, and a natural starting point to build from — and
+further experiments can be created straight from the UI (the header's
+experiment picker) to keep lines of work apart; among other things,
+this gives each user a clean space of their own when several people
+share one deployment. Load dropdowns always offer the base
+experiment's runs (marked `(shared)`) alongside the selected
+experiment's own; building on a shared prefix creates the derived run
+in the selected experiment, leaving the base one untouched.
 
 For the deeper mental models see the
 [backend](src/app/README.md), [plugin-system](src/plugins/README.md),

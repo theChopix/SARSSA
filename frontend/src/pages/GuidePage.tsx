@@ -380,9 +380,12 @@ const SECTIONS: GuideSection[] = [
           <li>
             <strong>Header (top-right)</strong> — the{" "}
             <em>Pipeline Experiments Results</em> link opens the MLflow
-            experiment page in a new tab. Use it to browse the full
-            history, filter by tags, or grab artifacts you don't see in
-            the SARSSAe UI.
+            page of the currently selected experiment (see{" "}
+            <a href="#experiments" className="text-blue-500 hover:text-blue-700">
+              Experiments
+            </a>
+            ) in a new tab. Use it to browse the full history, filter by
+            tags, or grab artifacts you don't see in the SARSSAe UI.
           </li>
           <li>
             <strong>Per-card</strong> — completed cards expose{" "}
@@ -438,8 +441,7 @@ const SECTIONS: GuideSection[] = [
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
           <strong>Building on a past run — extending vs. deriving.</strong>{" "}
           What happens in MLflow when you reuse a past run depends on{" "}
-          <em>what</em> you then run (everything stays inside SARSSAe's
-          single experiment; only the parent run differs):
+          <em>what</em> you then run (only the parent run differs):
         </p>
         <ul className="list-disc pl-5 space-y-2 text-sm text-gray-700 leading-relaxed">
           <li>
@@ -469,6 +471,63 @@ const SECTIONS: GuideSection[] = [
             ).
           </li>
         </ul>
+      </>
+    ),
+  },
+
+  // ── Experiments ────────────────────────────────────────
+  {
+    id: "experiments",
+    title: "Experiments",
+    body: (
+      <>
+        <p className="text-sm text-gray-700 leading-relaxed mb-3">
+          MLflow groups runs into <strong>experiments</strong> — separate
+          spaces for separate lines of work. SARSSAe works with two kinds
+          of them:
+        </p>
+        <ul className="list-disc pl-5 space-y-1 mb-3 text-sm text-gray-700 leading-relaxed">
+          <li>
+            <strong>The shared experiment</strong> (
+            <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+              pipeline_experiments
+            </code>
+            ) — the base, default experiment space. It is where runs go
+            unless you choose otherwise, and a natural foundation for
+            further experiments to start from.
+          </li>
+          <li>
+            <strong>Additional experiments</strong> — created freely from
+            the UI to keep separate lines of work apart: a topic, a
+            hypothesis, or — one handy use case — a per-user space when
+            several people share one deployment.
+          </li>
+        </ul>
+        <p className="text-sm text-gray-700 leading-relaxed mb-3">
+          <strong>The experiment picker.</strong> The dropdown in
+          the header chooses which experiment <em>new</em> pipeline runs
+          are logged into. It also drives what the UI shows: the{" "}
+          <em>Load from previous run</em> dropdowns and the header's
+          results link follow the selection. Pick{" "}
+          <em>Create new experiment…</em> at the bottom of the dropdown
+          to add your own. The choice is remembered per browser, is
+          locked while a pipeline is running, and switches automatically
+          when you adopt a run from the <em>Running</em> menu.
+        </p>
+        <p className="text-sm text-gray-700 leading-relaxed">
+          <strong>Shared runs are always at hand.</strong> Whichever
+          experiment is selected, the load dropdowns also list the
+          shared experiment's runs, marked{" "}
+          <code className="px-1 py-0.5 rounded bg-gray-100 text-gray-800 text-xs">
+            (shared)
+          </code>
+          . Loading a shared prefix and running new top-row steps on top
+          creates the derived run <strong>in the selected experiment</strong>{" "}
+          — the base experiment itself is left untouched. (The one
+          exception mirrors <em>extending vs. deriving</em> above:
+          bottom-row steps executed against a fully loaded run are
+          appended to that run, wherever it lives.)
+        </p>
       </>
     ),
   },

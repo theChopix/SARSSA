@@ -138,10 +138,12 @@ local compose override publishing port 8000.)
 
 | Method & path | Purpose | Body → Response | Code |
 |---------------|---------|-----------------|------|
-| `GET /pipelines/mlflow-info` | Resolve experiment name → ID + UI base URL for deep links | → `{ui_base_url, experiment_id}` | `get_mlflow_info` |
-| `GET /pipelines/runs` | List parent pipeline runs, newest first. `?required_steps=a&required_steps=b` filters to runs whose context has all listed steps | → `[{run_id, run_name, status, start_time}]` | `list_runs` |
+| `GET /pipelines/mlflow-info` | Resolve experiment name → ID + UI base URL for deep links. `?experiment=` targets a user experiment (default: shared); 404 if unknown | → `{ui_base_url, experiment_id}` | `get_mlflow_info` |
+| `GET /pipelines/experiments` | List active experiments selectable in the UI (shared first, `Default` excluded) | → `[{name, experiment_id, shared}]` | `list_experiments` |
+| `POST /pipelines/experiments` | Create a user experiment (idempotent — an existing name is returned as-is) | `{name}` → `{name, experiment_id, shared}` | `create_experiment` |
+| `GET /pipelines/runs` | List parent pipeline runs, newest first — from the shared experiment plus `?experiment=` when given. `?required_steps=a&required_steps=b` filters to runs whose context has all listed steps | → `[{run_id, run_name, status, start_time, shared}]` | `list_runs` |
 | `GET /pipelines/runs/{run_id}/context` | Fetch a run's `context.json` artifact | → context dict | `get_context` |
-| `POST /pipelines/run-async` | Queue a full pipeline for execution (compute tasks run one at a time, FIFO) | `PipelineRequest` → `{task_id}` | `run_pipeline_async` |
+| `POST /pipelines/run-async` | Queue a full pipeline for execution (compute tasks run one at a time, FIFO). `PipelineRequest.experiment_name` picks the target experiment (`""` = shared) | `PipelineRequest` → `{task_id}` | `run_pipeline_async` |
 | `GET /pipelines/tasks` | List queued + running tasks, newest first (backs the running-tasks menu) | → `[TaskSummary]` | `list_running_tasks` |
 | `GET /pipelines/tasks/{task_id}` | Poll status/progress of a background task | → `TaskStatusResponse` | `get_task_status` |
 | `POST /pipelines/tasks/{task_id}/cancel` | Cancel a queued or running task. A queued task is removed from the queue immediately; for a running one `?mode=graceful` (default) stops before the next step, `?mode=now` also aborts the current step in a cooperating plugin | → `{message}` (409 if not cancellable) | `cancel_task_endpoint` |
@@ -409,8 +411,16 @@ manual registration** — plugins are found by directory convention.
 tool. SARSSA uses *only* its tracking + artifact‑storage features (not
 its model registry or model serving). The vocabulary you need:
 
-- **Experiment** — a named bucket of runs. SARSSA keeps everything in
-  one experiment (`EXPERIMENT_NAME`).
+- **Experiment** — a named bucket of runs; a separate space for a
+  separate line of work. SARSSA keeps one **shared base experiment**
+  (`SHARED_EXPERIMENT_NAME`, `pipeline_experiments`) — the default
+  space runs go to and a common foundation to build on — and
+  **additional experiments** can be created through the API (the
+  frontend's header picker) to keep lines of work apart (per topic,
+  per user, …). A pipeline launch says which experiment its parent
+  run goes to; run listings always search the shared experiment
+  alongside the selected one, so its runs can be inherited from
+  anywhere.
 - **Run** — one tracked execution. A run records **params** (inputs),
   **metrics** (numbers), **artifacts** (arbitrary output files), and
   **tags** (metadata). Runs can be **nested**: a parent run with child
@@ -446,7 +456,7 @@ How that maps onto SARSSA:
 A top‑level `timezone` key (→ `TIMEZONE`, used for run‑name timestamps)
 plus two sections, loaded and typed in `config/config.py`:
 
-- **`mlflow`** → `EXPERIMENT_NAME`, `TRACKING_URI`
+- **`mlflow`** → `SHARED_EXPERIMENT_NAME`, `TRACKING_URI`
   (`sqlite:///mlflow-data/mlflow.db` — a fallback for tests/scripts; `just run`
   and Docker override it with `MLFLOW_TRACKING_URI` so tracking goes
   through the MLflow server), `ARTIFACT_ROOT` (`./mlartifacts`, used
@@ -468,12 +478,14 @@ endpoints).
 
 ### Experiment bootstrap
 
-`main.py` ensures the experiment exists *before* anything calls
-`mlflow.set_experiment`. Created through the MLflow server with **no
-explicit `artifact_location`**, the experiment gets a portable
-`mlflow-artifacts:/<id>` root — the server resolves the physical
-location at read/write time, so the tracking DB stays free of
-machine-specific paths. The direct-SQLite fallback still pins
+`main.py` ensures the **shared** experiment exists *before* anything
+calls `mlflow.set_experiment`; user experiments are created on demand
+via `POST /pipelines/experiments` (idempotent — creating an existing
+name just returns it). Both paths create through the MLflow server
+with **no explicit `artifact_location`**, so each experiment gets a
+portable `mlflow-artifacts:/<id>` root — the server resolves the
+physical location at read/write time, and the tracking DB stays free
+of machine-specific paths. The direct-SQLite fallback still pins
 `ARTIFACT_ROOT` explicitly; otherwise MLflow would lazily auto‑create
 the experiment under the default `./mlruns/<id>`.
 
