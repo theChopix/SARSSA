@@ -90,7 +90,7 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `App.tsx` | Router + the **HomePage** (the pipeline-config screen) |
 | `constants.ts` | `API_BASE_URL` — the **one** place the backend URL lives |
 | `api/plugins.ts` | `GET /plugins/registry` + dynamic dropdown choices |
-| `api/pipelines.ts` | runs, context, run-async, task polling, cancel, execute-step(-async), mlflow-info |
+| `api/pipelines.ts` | runs, context, run-async, task polling, cancel, execute-step(-async), mlflow-info, experiments list/create |
 | `api/items.ts` | item enrichment + artifact proxy/raw-URL helpers |
 | `api/errors.ts` | shared `ApiError` type + fetch error handling |
 | `utils/paramValidation.ts` | `collectParams` — client-side param validation that blocks a launch on missing-required / invalid values |
@@ -99,7 +99,8 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `types/plugin.ts` · `pipeline.ts` · `items.ts` | TypeScript mirrors of the backend models/response shapes |
 | `pages/ResultsPage.tsx` | Standalone results view (opens in a new tab for multi-run results) |
 | `components/Layout.tsx` | Page shell (header + routed `<Outlet/>`) |
-| `components/Header.tsx` | Top bar + MLflow deep link |
+| `components/Header.tsx` | Top bar + experiment picker + MLflow deep link |
+| `components/ExperimentMenu.tsx` | Header dropdown choosing the MLflow experiment new runs log into (the shared base experiment + ones created from the UI; selection persists in localStorage) |
 | `components/RunningTasksMenu.tsx` | Header pill listing in-flight runs (polls `GET /pipelines/tasks`); click loads a run |
 | `components/PipelineCard.tsx` | **The main workhorse** — one data-driven card per category |
 | `components/LaunchModal.tsx` | Pre-run dialog: pipeline name + tags + description |
