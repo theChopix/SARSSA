@@ -907,6 +907,7 @@ export default function PipelineCard({
   const toggleConfig = usePipelineStore((s) => s.toggleConfig);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
   const activeRunCategories = usePipelineStore((s) => s.activeRunCategories);
+  const selectedExperiment = usePipelineStore((s) => s.selectedExperiment);
   const setCardMode = usePipelineStore((s) => s.setCardMode);
   const pastRuns = usePipelineStore((s) => s.pastRuns);
   const loadPastRuns = usePipelineStore((s) => s.loadPastRuns);
@@ -1147,6 +1148,7 @@ export default function PipelineCard({
           {pastRuns.map((run) => (
             <option key={run.run_id} value={run.run_id}>
               {run.run_name} ({run.status})
+              {selectedExperiment && run.shared ? " (shared)" : ""}
             </option>
           ))}
         </select>

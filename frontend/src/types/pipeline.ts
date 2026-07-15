@@ -14,12 +14,29 @@
  * - `run_name`  – Human-readable name (e.g. "pipeline_run_2025-04-07_20-30-00").
  * - `status`    – MLflow run status: "FINISHED", "RUNNING", "FAILED", etc.
  * - `start_time`– Unix timestamp (milliseconds) when the run started.
+ * - `shared`    – True when the run lives in the shared experiment.
  */
 export interface PipelineRun {
   run_id: string;
   run_name: string;
   status: string;
   start_time: number;
+  shared: boolean;
+}
+
+// ── MLflow experiments (from GET /pipelines/experiments) ──
+
+/**
+ * An MLflow experiment selectable in the header picker.
+ *
+ * - `name`          – Experiment name (used as the selection key).
+ * - `experiment_id` – Numeric MLflow experiment ID.
+ * - `shared`        – True for the shared baseline experiment.
+ */
+export interface ExperimentInfo {
+  name: string;
+  experiment_id: string;
+  shared: boolean;
 }
 
 // ── Pipeline context (from GET /pipelines/runs/{id}/context) ──
@@ -97,6 +114,8 @@ export interface TaskSummary {
   task_id: string;
   run_id: string | null;
   pipeline_name: string;
+  /** MLflow experiment the task logs to ("" = shared experiment). */
+  experiment_name: string;
   status: "queued" | "running" | "completed" | "error" | "cancelled";
   current_step: string | null;
   current_step_index: number;
