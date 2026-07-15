@@ -4,7 +4,7 @@
 timezone: "Europe/Prague"
 
 mlflow:
-  experiment_name: "pipeline_experiments_02"
+  experiment_name: "pipeline_experiments"
   # Fallback for tests/scripts; `just run` and Docker override it with
   # MLFLOW_TRACKING_URI so all tracking goes through the MLflow server.
   tracking_uri: "sqlite:///mlflow-data/mlflow.db"

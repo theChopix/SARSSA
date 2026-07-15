@@ -18,6 +18,7 @@ def create_task(
     tags: dict[str, str] | None = None,
     description: str = "",
     pipeline_name: str = "",
+    experiment_name: str = "",
     run_id: str | None = None,
 ) -> TaskState:
     """Create a new task, store it, and return it.
@@ -29,6 +30,8 @@ def create_task(
         description: User-provided free-text description.
         pipeline_name: Optional user-provided label woven into the
             parent run name.
+        experiment_name: MLflow experiment the run logs to (empty =
+            shared experiment).
         run_id: Optional pre-existing MLflow parent run ID.  When provided,
             ``task.run_id`` is set immediately so the worker can resume an
             existing run rather than starting a fresh one.
@@ -45,6 +48,7 @@ def create_task(
         tags=tags or {},
         description=description,
         pipeline_name=pipeline_name,
+        experiment_name=experiment_name,
     )
     if run_id is not None:
         task.run_id = run_id
@@ -119,6 +123,7 @@ def task_to_summary(task: TaskState) -> TaskSummary:
         task_id=task.task_id,
         run_id=task.run_id,
         pipeline_name=task.pipeline_name,
+        experiment_name=task.experiment_name,
         status=task.status,
         current_step=task.current_step,
         current_step_index=task.current_step_index,

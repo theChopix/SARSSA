@@ -213,6 +213,7 @@ class TestWorkerTags:
             description="",
             pipeline_name="",
             order_offset=0,
+            experiment_name="",
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -235,7 +236,11 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="Baseline run", pipeline_name="", order_offset=0
+            tags={},
+            description="Baseline run",
+            pipeline_name="",
+            order_offset=0,
+            experiment_name="",
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -258,7 +263,11 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="", pipeline_name="Baseline ELSA", order_offset=0
+            tags={},
+            description="",
+            pipeline_name="Baseline ELSA",
+            order_offset=0,
+            experiment_name="",
         )
 
     @patch("app.core.pipeline_worker.PipelineEngine")
@@ -280,7 +289,7 @@ class TestWorkerTags:
         run_pipeline_worker(task)
 
         mock_engine.start_run.assert_called_once_with(
-            tags={}, description="", pipeline_name="", order_offset=0
+            tags={}, description="", pipeline_name="", order_offset=0, experiment_name=""
         )
 
     @patch("app.core.pipeline_worker.build_provenance_note")

@@ -10,28 +10,41 @@ from mlflow.entities import Run
 from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
-from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL, PLUGIN_CATEGORIES
+from app.config.config import MLFLOW_UI_BASE_URL, PLUGIN_CATEGORIES, SHARED_EXPERIMENT_NAME
 
 
-def get_pipeline_runs() -> list[dict[str, Any]]:
-    """List all top-level pipeline runs from the tracking experiment.
+def get_pipeline_runs(experiment_name: str = "") -> list[dict[str, Any]]:
+    """List top-level pipeline runs from the shared + selected experiment.
+
+    Args:
+        experiment_name: Optional user-selected experiment searched in
+            addition to the shared one. Empty means shared only.
 
     Returns:
         list[dict[str, Any]]: Each dict contains ``run_id``,
-            ``run_name``, ``status``, and ``start_time`` (ISO string).
-            Results are ordered newest-first.
+            ``run_name``, ``status``, ``start_time`` (ISO string) and
+            ``shared`` (True when the run lives in the shared
+            experiment). Results are ordered newest-first.
 
     Raises:
-        ValueError: If the MLflow experiment does not exist.
+        ValueError: If a requested MLflow experiment does not exist.
     """
-    experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
-    if experiment is None:
-        raise ValueError(f"MLflow experiment '{EXPERIMENT_NAME}' not found.")
+    names = [SHARED_EXPERIMENT_NAME]
+    if experiment_name and experiment_name != SHARED_EXPERIMENT_NAME:
+        names.append(experiment_name)
+
+    experiment_ids: list[str] = []
+    for name in names:
+        experiment = mlflow.get_experiment_by_name(name)
+        if experiment is None:
+            raise ValueError(f"MLflow experiment '{name}' not found.")
+        experiment_ids.append(experiment.experiment_id)
+    shared_experiment_id = experiment_ids[0]
 
     all_runs = cast(
         list[Run],
         mlflow.search_runs(
-            experiment_ids=[experiment.experiment_id],
+            experiment_ids=experiment_ids,
             output_format="list",
             order_by=["start_time DESC"],
         ),
@@ -43,6 +56,7 @@ def get_pipeline_runs() -> list[dict[str, Any]]:
             "run_name": run.info.run_name,
             "status": run.info.status,
             "start_time": run.info.start_time,
+            "shared": run.info.experiment_id == shared_experiment_id,
         }
         for run in all_runs
         if "mlflow.parentRunId" not in run.data.tags
@@ -51,6 +65,7 @@ def get_pipeline_runs() -> list[dict[str, Any]]:
 
 def get_eligible_pipeline_runs(
     required_steps: list[str],
+    experiment_name: str = "",
 ) -> list[dict[str, Any]]:
     """List past pipeline runs that contain all *required_steps*.
 
@@ -63,13 +78,15 @@ def get_eligible_pipeline_runs(
         required_steps: Step keys that must be present in the
             past run's ``context.json``.  An empty list returns
             every top-level pipeline run.
+        experiment_name: Optional user-selected experiment searched in
+            addition to the shared one.
 
     Returns:
         list[dict[str, Any]]: Subset of :func:`get_pipeline_runs`
             whose context contains all *required_steps*, preserving
             the newest-first ordering.
     """
-    all_runs = get_pipeline_runs()
+    all_runs = get_pipeline_runs(experiment_name)
     if not required_steps:
         return all_runs
 

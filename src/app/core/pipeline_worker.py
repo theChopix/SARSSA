@@ -48,6 +48,7 @@ def run_pipeline_worker(task: TaskState) -> None:
             description=description,
             pipeline_name=task.pipeline_name,
             order_offset=len(inherited),
+            experiment_name=task.experiment_name,
         )
         task.run_id = run_id
         logger.info("[WORKER] Pipeline run started: %s", run_id)

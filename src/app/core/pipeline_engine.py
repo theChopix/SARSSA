@@ -8,7 +8,7 @@ import mlflow
 from mlflow.data.code_dataset_source import CodeDatasetSource
 from mlflow.data.meta_dataset import MetaDataset
 
-from app.config.config import EXPERIMENT_NAME, TIMEZONE
+from app.config.config import SHARED_EXPERIMENT_NAME, TIMEZONE
 from app.core.plugin_discovery.naming import (
     format_pipeline_run_name,
     format_step_run_name,
@@ -52,6 +52,7 @@ class PipelineEngine:
         description: str = "",
         pipeline_name: str = "",
         order_offset: int = 0,
+        experiment_name: str = "",
     ) -> str:
         """Create a new parent pipeline run in MLflow.
 
@@ -68,6 +69,8 @@ class PipelineEngine:
             order_offset: Number of inherited upstream steps. Offsets nested
                 step numbering so a derived run continues past them, and when
                 > 0 adds an ``( inherited )`` marker to the run name.
+            experiment_name: MLflow experiment to create the run in.
+                Empty means the shared experiment.
 
         Returns:
             str: The parent run ID.
@@ -81,7 +84,7 @@ class PipelineEngine:
                 "Call finalize_run() before starting a new one."
             )
 
-        mlflow.set_experiment(EXPERIMENT_NAME)
+        mlflow.set_experiment(experiment_name or SHARED_EXPERIMENT_NAME)
 
         mlflow_tags: dict[str, str] = {}
         if tags:
@@ -334,12 +337,15 @@ class PipelineEngine:
                 "Call finalize_run() before resuming another."
             )
 
-        mlflow.set_experiment(EXPERIMENT_NAME)
+        # Bind to the parent run's own experiment so later fluent calls
+        # (and any nested runs) stay with the parent wherever it lives.
+        client = mlflow.tracking.MlflowClient()
+        run = client.get_run(run_id)
+        mlflow.set_experiment(experiment_id=run.info.experiment_id)
         self._parent_run_id = run_id
         # Remember the run's terminal status so restore_resumed_status() can
         # put it back if a failing step flips the reopened parent to FAILED.
-        client = mlflow.tracking.MlflowClient()
-        self._resumed_status = client.get_run(run_id).info.status
+        self._resumed_status = run.info.status
 
     def restore_resumed_status(self) -> None:
         """Restore a resumed parent run's original terminal status and detach.

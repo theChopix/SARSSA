@@ -8,7 +8,7 @@ from unittest.mock import ANY, MagicMock, mock_open, patch
 import pytest
 from mlflow.exceptions import MlflowException
 
-from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL, PLUGIN_CATEGORIES
+from app.config.config import MLFLOW_UI_BASE_URL, PLUGIN_CATEGORIES, SHARED_EXPERIMENT_NAME
 from app.core.pipeline_runs import (
     build_provenance_note,
     get_eligible_pipeline_runs,
@@ -195,7 +195,7 @@ class TestGetPipelineRuns:
         """Verify ValueError when the experiment does not exist."""
         mock_mlflow.get_experiment_by_name.return_value = None
 
-        with pytest.raises(ValueError, match=EXPERIMENT_NAME):
+        with pytest.raises(ValueError, match=SHARED_EXPERIMENT_NAME):
             get_pipeline_runs()
 
     @patch("app.core.pipeline_runs.mlflow")
@@ -407,3 +407,41 @@ class TestGetRunContext:
 
         context = get_run_context("run_id")
         assert context == {}
+
+
+class TestSelectedExperimentScope:
+    """Tests for the shared + user-selected experiment scoping."""
+
+    @patch("app.core.pipeline_runs.mlflow")
+    def test_selected_experiment_searched_with_shared(self, mock_mlflow: MagicMock) -> None:
+        """Both experiment ids are searched; runs get the ``shared`` flag."""
+        shared, selected = MagicMock(experiment_id="1"), MagicMock(experiment_id="7")
+        mock_mlflow.get_experiment_by_name.side_effect = [shared, selected]
+        shared_run = _make_mock_run("r1", "shared_run")
+        shared_run.info.experiment_id = "1"
+        own_run = _make_mock_run("r2", "own_run")
+        own_run.info.experiment_id = "7"
+        mock_mlflow.search_runs.return_value = [shared_run, own_run]
+
+        runs = get_pipeline_runs("oponent")
+
+        assert mock_mlflow.search_runs.call_args.kwargs["experiment_ids"] == ["1", "7"]
+        assert [(r["run_id"], r["shared"]) for r in runs] == [("r1", True), ("r2", False)]
+
+    @patch("app.core.pipeline_runs.mlflow")
+    def test_selected_equal_to_shared_searched_once(self, mock_mlflow: MagicMock) -> None:
+        """Selecting the shared experiment does not duplicate the scope."""
+        mock_mlflow.get_experiment_by_name.return_value = MagicMock(experiment_id="1")
+        mock_mlflow.search_runs.return_value = []
+
+        get_pipeline_runs(SHARED_EXPERIMENT_NAME)
+
+        assert mock_mlflow.search_runs.call_args.kwargs["experiment_ids"] == ["1"]
+
+    @patch("app.core.pipeline_runs.mlflow")
+    def test_unknown_selected_experiment_raises(self, mock_mlflow: MagicMock) -> None:
+        """An unknown selected experiment raises ValueError with its name."""
+        mock_mlflow.get_experiment_by_name.side_effect = [MagicMock(experiment_id="1"), None]
+
+        with pytest.raises(ValueError, match="ghost"):
+            get_pipeline_runs("ghost")
