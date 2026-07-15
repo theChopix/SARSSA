@@ -51,7 +51,9 @@ import {
   AlertTriangle,
   Eye,
   ChevronDown,
+  Copy,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
 import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
@@ -742,13 +744,18 @@ function PluginRow({
   onSelect,
   onToggleConfig,
   disabled,
+  inRun,
 }: {
   impl: ImplementationInfo;
   isSelected: boolean;
   onSelect: () => void;
   onToggleConfig: () => void;
   disabled?: boolean;
+  inRun?: boolean;
 }) {
+  // While busy, the selected plugin of a card taking part in the run keeps
+  // its Configure clickable as a read-only "View params".
+  const canView = Boolean(disabled && isSelected && inRun);
   return (
     <div className="flex items-center justify-between py-1">
       {/* Radio button + name + optional description tooltip.
@@ -777,13 +784,17 @@ function PluginRow({
       {impl.params.length > 0 && (
         <button
           onClick={onToggleConfig}
-          disabled={disabled}
+          disabled={disabled && !canView}
           className="flex items-center gap-1 text-xs text-blue-500
                      hover:text-blue-700 disabled:opacity-50
                      disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
-          <Settings className="h-3.5 w-3.5" />
-          Configure
+          {canView ? (
+            <Eye className="h-3.5 w-3.5" />
+          ) : (
+            <Settings className="h-3.5 w-3.5" />
+          )}
+          {canView ? "View params" : "Configure"}
         </button>
       )}
     </div>
@@ -816,10 +827,28 @@ function RunInfoBlock({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {/* Locked run name label */}
-      <div className="w-full px-3 py-2 text-sm border border-gray-200
-                      rounded-md bg-gray-50 text-gray-600 font-mono truncate">
-        {pipelineRunName}
+      {/* Locked run name label + copy-to-clipboard button */}
+      <div className="flex w-full items-center gap-2 px-3 py-2 text-sm border
+                      border-gray-200 rounded-md bg-gray-50 text-gray-600">
+        <span className="min-w-0 flex-1 font-mono truncate" title={pipelineRunName}>
+          {pipelineRunName}
+        </span>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(pipelineRunName);
+              toast.success("Run name copied");
+            } catch {
+              toast.error("Could not copy to clipboard");
+            }
+          }}
+          title="Copy run name"
+          className="shrink-0 text-gray-400 hover:text-gray-600
+                     transition-colors cursor-pointer"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Deep links */}
@@ -1167,6 +1196,7 @@ export default function PipelineCard({
                   toggleConfig(categoryKey);
                 }}
                 disabled={busy}
+                inRun={card.status === "running" || card.status === "done"}
               />
               {card.configOpen &&
                 card.selectedPlugin === impl.plugin_name &&
