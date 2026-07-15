@@ -27,6 +27,8 @@ export interface RunSnapshot {
   currentStepIndex: number;
   /** Total number of steps in the run. */
   totalSteps: number;
+  /** Categories whose steps take part in the run (for read-only param view). */
+  activeRunCategories: string[];
   /** Epoch ms when the snapshot was written (used to pick the latest). */
   savedAt: number;
 }

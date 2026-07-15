@@ -189,6 +189,12 @@ interface PipelineStore {
   /** Active (running) tasks backing the header "running tasks" menu. */
   runningTasks: TaskSummary[];
 
+  /**
+   * Categories whose steps take part in the active run. Drives the
+   * read-only "View params" toggle on cards while the run is in flight.
+   */
+  activeRunCategories: string[];
+
   // ── Actions ─────────────────────────────────────────
 
   /**
@@ -520,6 +526,7 @@ function pollTaskUntilDone(
           currentRunId: get().currentRunId,
           currentStepIndex: status.current_step_index,
           totalSteps: status.total_steps,
+          activeRunCategories: get().activeRunCategories,
           savedAt: Date.now(),
         });
 
@@ -602,6 +609,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   // ── Initial state ───────────────────────────────────
   registry: null,
   cards: {},
+  activeRunCategories: [],
   pipelineRunning: false,
   pipelineQueued: false,
   currentRunId: null,
@@ -822,6 +830,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     }
     set({
       cards,
+      activeRunCategories: steps.map((s) => s.plugin.split(".")[0]),
       pipelineRunning: true,
       pipelineQueued: false,
       currentRunId: null,
@@ -850,6 +859,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         currentRunId: get().currentRunId,
         currentStepIndex: 0,
         totalSteps: steps.length,
+        activeRunCategories: get().activeRunCategories,
         savedAt: Date.now(),
       });
 
@@ -871,8 +881,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     if (!snapshot) return;
 
     // Restore the running layout over the registry-initialised card skeleton.
+    // (`?? []` guards snapshots written before activeRunCategories existed.)
     set({
       cards: { ...get().cards, ...snapshot.cards },
+      activeRunCategories: snapshot.activeRunCategories ?? [],
       pipelineRunning: true,
       currentTaskId: snapshot.taskId,
       currentRunId: snapshot.currentRunId,
@@ -918,6 +930,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
             cardsFromSteps(get().cards, summary.steps_requested),
             summary.initial_context
           ),
+      activeRunCategories: summary.steps_requested.map(
+        (s) => s.plugin.split(".")[0]
+      ),
       pipelineRunning: true,
       pipelineQueued: summary.status === "queued",
       currentTaskId: summary.task_id,
@@ -948,7 +963,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     const cards = { ...get().cards };
     if (cards[category]) {
       cards[category] = { ...cards[category], status: "running" };
-      set({ cards, errorMessage: null });
+      set({ cards, activeRunCategories: [category], errorMessage: null });
     }
 
     try {

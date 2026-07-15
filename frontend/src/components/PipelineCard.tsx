@@ -906,6 +906,7 @@ export default function PipelineCard({
   const setParam = usePipelineStore((s) => s.setParam);
   const toggleConfig = usePipelineStore((s) => s.toggleConfig);
   const pipelineRunning = usePipelineStore((s) => s.pipelineRunning);
+  const activeRunCategories = usePipelineStore((s) => s.activeRunCategories);
   const setCardMode = usePipelineStore((s) => s.setCardMode);
   const pastRuns = usePipelineStore((s) => s.pastRuns);
   const loadPastRuns = usePipelineStore((s) => s.loadPastRuns);
@@ -1196,7 +1197,7 @@ export default function PipelineCard({
                   toggleConfig(categoryKey);
                 }}
                 disabled={busy}
-                inRun={card.status === "running" || card.status === "done"}
+                inRun={activeRunCategories.includes(categoryKey)}
               />
               {card.configOpen &&
                 card.selectedPlugin === impl.plugin_name &&

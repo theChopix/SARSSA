@@ -125,8 +125,9 @@ function HomePage() {
     for (const key of chain) {
       const card = cards[key];
 
-      // Loaded cards are inherited via context, not re-executed.
-      if (card?.mode === "load" && context?.[key]) continue;
+      // Cards with a context entry (loaded or completed this session)
+      // are inherited, not re-executed.
+      if (card?.status === "done" && context?.[key]) continue;
 
       // Any other card in the chain must be configured, otherwise the
       // pipeline would have a hole and fail mid-run.
@@ -156,6 +157,8 @@ function HomePage() {
 
     if (steps.length > 0) {
       setPendingSteps(steps);
+    } else {
+      toast.info("Nothing to run — all steps up to here are already completed.");
     }
   };
 
