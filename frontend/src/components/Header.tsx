@@ -26,12 +26,14 @@ export function Header() {
     <header className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <h1>
-          <Link
-            to="/"
+          {/* Plain anchor (not a router Link) so clicking the logo
+              does a full page reload, not client-side navigation. */}
+          <a
+            href="/"
             className="text-lg font-bold tracking-wide text-gray-900 hover:text-gray-700"
           >
             SARSSAe
-          </Link>
+          </a>
         </h1>
         <RunningTasksMenu />
       </div>

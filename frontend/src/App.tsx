@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { Loader2, X, Ban, OctagonX } from "lucide-react";
 import { toast } from "sonner";
 
@@ -229,10 +229,22 @@ function HomePage() {
       )}
 
       {/* ── Page title ─────────────────────────────── */}
-      <div className="px-8 pt-8 pb-4">
+      <div className="px-8 pt-8 pb-8">
         <h2 className="text-xl font-bold text-gray-900 text-center">
           Run new pipeline experiment
         </h2>
+        <p className="max-w-6xl mx-auto mt-2 text-sm text-gray-500 text-center leading-relaxed">
+          Compose an experiment from the cards below - each card is one
+          pipeline stage with a choice of configurable plugins, set up fresh
+          or loaded from a previous run. The header bar holds a{" "}
+          <em>Running</em> menu (shown while tasks execute), the MLflow{" "}
+          <em>experiment picker</em>, and a link to the tracked{" "}
+          <em>results</em>; the{" "}
+          <Link to="/guide" className="text-blue-500 hover:text-blue-700">
+            guide
+          </Link>{" "}
+          explains it all in detail.
+        </p>
       </div>
 
       {/* ── Row 1: one_time cards ──────────────────── */}
