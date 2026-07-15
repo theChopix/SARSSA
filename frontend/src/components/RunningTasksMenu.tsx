@@ -16,7 +16,7 @@ import { usePipelineStore } from "../store/pipelineStore";
 import type { TaskSummary } from "../types/pipeline";
 
 /** How often to refresh the running-tasks list, in milliseconds. */
-const POLL_INTERVAL_MS = 6000;
+const POLL_INTERVAL_MS = 3000;
 
 /** Row label: the user's pipeline name, else a short run id, else generic. */
 function taskLabel(task: TaskSummary): string {
@@ -81,7 +81,7 @@ export function RunningTasksMenu() {
       </button>
 
       {open && (
-        <div className="absolute left-0 z-20 mt-2 w-72 rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="absolute left-0 z-20 mt-2 w-96 rounded-lg border border-gray-200 bg-white shadow-lg">
           <p className="border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
             Running tasks
           </p>
@@ -100,7 +100,10 @@ export function RunningTasksMenu() {
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-gray-800">
+                      <span
+                        className="truncate text-sm font-medium text-gray-800"
+                        title={taskLabel(task)}
+                      >
                         {taskLabel(task)}
                         {task.task_id === currentTaskId && (
                           <span className="ml-1.5 text-xs font-normal text-blue-500">
