@@ -5,7 +5,7 @@ from typing import Any, Literal
 import mlflow
 from fastapi import APIRouter, HTTPException, Query
 
-from app.config.config import EXPERIMENT_NAME, MLFLOW_UI_BASE_URL
+from app.config.config import MLFLOW_UI_BASE_URL, SHARED_EXPERIMENT_NAME
 from app.core.pipeline_engine import PipelineEngine
 from app.core.pipeline_runs import (
     get_eligible_pipeline_runs,
@@ -23,6 +23,7 @@ from app.core.tasks.task_store import (
     task_to_summary,
 )
 from app.models.pipeline import (
+    ExperimentCreateRequest,
     PipelineRequest,
     StepDefinition,
     TaskStatusResponse,
@@ -33,27 +34,81 @@ router = APIRouter()
 
 
 @router.get("/mlflow-info")
-def get_mlflow_info() -> dict[str, str]:
+def get_mlflow_info(experiment: str = "") -> dict[str, str]:
     """Return MLflow UI connection info for frontend deep links.
 
-    Resolves the configured experiment name to its numeric MLflow ID
-    and pairs it with the UI base URL from config.
+    Resolves the selected (or shared) experiment name to its numeric
+    MLflow ID and pairs it with the UI base URL from config.
+
+    Args:
+        experiment: Optional user-selected experiment name; empty
+            means the shared experiment.
 
     Returns:
         dict[str, str]: Contains ``ui_base_url`` and ``experiment_id``.
 
     Raises:
-        HTTPException: 500 if the configured experiment is not found.
+        HTTPException: 404 if the requested experiment is not found.
     """
-    experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
-    if experiment is None:
+    name = experiment or SHARED_EXPERIMENT_NAME
+    mlflow_experiment = mlflow.get_experiment_by_name(name)
+    if mlflow_experiment is None:
         raise HTTPException(
-            status_code=500,
-            detail=f"Experiment '{EXPERIMENT_NAME}' not found.",
+            status_code=404,
+            detail=f"Experiment '{name}' not found.",
         )
     return {
         "ui_base_url": MLFLOW_UI_BASE_URL,
-        "experiment_id": experiment.experiment_id,
+        "experiment_id": mlflow_experiment.experiment_id,
+    }
+
+
+@router.get("/experiments")
+def list_experiments() -> list[dict[str, Any]]:
+    """Return active MLflow experiments selectable in the UI.
+
+    MLflow's catch-all ``Default`` experiment is excluded; the shared
+    experiment is flagged and listed first, the rest alphabetically.
+
+    Returns:
+        list[dict[str, Any]]: Each dict has ``name``,
+            ``experiment_id`` and ``shared``.
+    """
+    experiments = [
+        {
+            "name": experiment.name,
+            "experiment_id": experiment.experiment_id,
+            "shared": experiment.name == SHARED_EXPERIMENT_NAME,
+        }
+        for experiment in mlflow.search_experiments()
+        if experiment.name != "Default"
+    ]
+    return sorted(experiments, key=lambda e: (not e["shared"], e["name"]))
+
+
+@router.post("/experiments")
+def create_experiment(request: ExperimentCreateRequest) -> dict[str, Any]:
+    """Create an MLflow experiment and return it.
+
+    Args:
+        request: Contains the experiment ``name``.
+
+    Returns:
+        dict[str, Any]: ``name``, ``experiment_id`` and ``shared``
+            of the (possibly pre-existing) experiment.
+
+    Raises:
+        HTTPException: 422 if the name is empty or ``Default``.
+    """
+    name = request.name.strip()
+    if not name or name == "Default":
+        raise HTTPException(status_code=422, detail="Invalid experiment name.")
+    experiment = mlflow.get_experiment_by_name(name)
+    experiment_id = experiment.experiment_id if experiment else mlflow.create_experiment(name)
+    return {
+        "name": name,
+        "experiment_id": experiment_id,
+        "shared": name == SHARED_EXPERIMENT_NAME,
     }
 
 
@@ -66,6 +121,7 @@ def list_runs(
             "Pass repeated query params (?required_steps=a&required_steps=b)."
         ),
     ),
+    experiment: str = "",
 ) -> list[dict[str, Any]]:
     """Return top-level pipeline runs, newest first.
 
@@ -77,14 +133,22 @@ def list_runs(
     Args:
         required_steps: Optional list of step keys that must be
             present in each returned run's context.
+        experiment: Optional user-selected experiment searched in
+            addition to the shared one.
 
     Returns:
         list[dict[str, Any]]: Each dict has ``run_id``,
-            ``run_name``, ``status``, ``start_time``.
+            ``run_name``, ``status``, ``start_time``, ``shared``.
+
+    Raises:
+        HTTPException: 404 if the requested experiment is not found.
     """
-    if required_steps:
-        return get_eligible_pipeline_runs(required_steps)
-    return get_pipeline_runs()
+    try:
+        if required_steps:
+            return get_eligible_pipeline_runs(required_steps, experiment)
+        return get_pipeline_runs(experiment)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/runs/{run_id}/context")
@@ -127,6 +191,7 @@ def run_pipeline_async(pipeline_request: PipelineRequest) -> dict[str, str]:
         tags=pipeline_request.tags,
         description=pipeline_request.description,
         pipeline_name=pipeline_request.pipeline_name,
+        experiment_name=pipeline_request.experiment_name,
     )
 
     submit(task, run_pipeline_worker)

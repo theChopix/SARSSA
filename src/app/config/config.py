@@ -39,7 +39,7 @@ def _load_plugin_categories(
 
 _config = _load_config()
 
-EXPERIMENT_NAME: str = _config["mlflow"]["experiment_name"]
+SHARED_EXPERIMENT_NAME: str = _config["mlflow"]["experiment_name"]
 # Env override (Docker/cluster) routes logging through the MLflow server to
 # avoid SQLite lock contention; falls back to config.yaml locally.
 TRACKING_URI: str = os.environ.get("MLFLOW_TRACKING_URI") or _config["mlflow"]["tracking_uri"]

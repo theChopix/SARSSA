@@ -12,7 +12,7 @@ from mlflow.exceptions import MlflowException
 from app.api.routes_items import router as items_router
 from app.api.routes_pipelines import router as pipelines_router
 from app.api.routes_plugins import router as plugins_router
-from app.config.config import ARTIFACT_ROOT, EXPERIMENT_NAME, TRACKING_URI
+from app.config.config import ARTIFACT_ROOT, SHARED_EXPERIMENT_NAME, TRACKING_URI
 from app.core.run_recovery import fail_orphaned_runs
 
 mlflow.set_tracking_uri(TRACKING_URI)
@@ -27,11 +27,11 @@ if TRACKING_URI.startswith("sqlite:///"):
 #    (proxied by the server); the direct-SQLite
 #  fallback keeps the configured local path.
 try:
-    if mlflow.get_experiment_by_name(EXPERIMENT_NAME) is None:
+    if mlflow.get_experiment_by_name(SHARED_EXPERIMENT_NAME) is None:
         if TRACKING_URI.startswith("http"):
-            mlflow.create_experiment(EXPERIMENT_NAME)
+            mlflow.create_experiment(SHARED_EXPERIMENT_NAME)
         else:
-            mlflow.create_experiment(EXPERIMENT_NAME, artifact_location=ARTIFACT_ROOT)
+            mlflow.create_experiment(SHARED_EXPERIMENT_NAME, artifact_location=ARTIFACT_ROOT)
 except MlflowException as exc:
     raise RuntimeError(
         f"MLflow at {TRACKING_URI} is unreachable ({exc}). "

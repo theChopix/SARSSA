@@ -23,12 +23,23 @@ def _run(run_id: str) -> MagicMock:
     return run
 
 
+def _experiment(experiment_id: str, name: str) -> MagicMock:
+    """Create a mock experiment (``name`` set post-hoc — it's reserved
+    in the MagicMock constructor)."""
+    experiment = MagicMock(experiment_id=experiment_id)
+    experiment.name = name
+    return experiment
+
+
 def _arm(mock_mlflow: MagicMock, pages: list[_Page]) -> MagicMock:
-    """Wire ``mlflow`` so the experiment resolves and search returns *pages*.
+    """Wire ``mlflow`` so the experiments resolve and search returns *pages*.
 
     Returns the mock ``MlflowClient`` instance for assertions.
     """
-    mock_mlflow.get_experiment_by_name.return_value = MagicMock(experiment_id="1")
+    mock_mlflow.search_experiments.return_value = [
+        _experiment("0", "Default"),
+        _experiment("1", "pipeline_experiments"),
+    ]
     client = mock_mlflow.tracking.MlflowClient.return_value
     client.search_runs.side_effect = pages
     return client
@@ -57,8 +68,8 @@ class TestFailOrphanedRuns:
 
     @patch("app.core.run_recovery.mlflow")
     def test_no_experiment_returns_empty(self, mock_mlflow: MagicMock) -> None:
-        """A missing experiment is a no-op, not an error."""
-        mock_mlflow.get_experiment_by_name.return_value = None
+        """Only Default (excluded) existing is a no-op, not an error."""
+        mock_mlflow.search_experiments.return_value = [_experiment("0", "Default")]
 
         assert fail_orphaned_runs("terminated_at_shutdown") == []
         mock_mlflow.tracking.MlflowClient.assert_not_called()

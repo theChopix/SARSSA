@@ -22,6 +22,13 @@ class PipelineRequest(BaseModel):
     tags: dict[str, str] = {}
     description: str = ""
     pipeline_name: str = Field(default="", max_length=60)
+    experiment_name: str = ""
+
+
+class ExperimentCreateRequest(BaseModel):
+    """Request body for creating an MLflow experiment."""
+
+    name: str = Field(max_length=100)
 
 
 # ── Task state (in-memory, mutated by background worker) ──
@@ -47,6 +54,8 @@ class TaskState:
         description: User-provided free-text description.
         pipeline_name: Optional user-provided label woven into the
             parent run name.
+        experiment_name: MLflow experiment the run logs to (empty =
+            shared experiment).
         current_step: Category key of the step currently executing.
         current_step_index: 0-based index into *steps_requested*.
         completed_steps: Steps that have finished so far.
@@ -73,6 +82,7 @@ class TaskState:
     tags: dict[str, str] = field(default_factory=dict)
     description: str = ""
     pipeline_name: str = ""
+    experiment_name: str = ""
     current_step: str | None = None
     current_step_index: int = 0
     completed_steps: list[dict[str, Any]] = field(default_factory=list)
@@ -116,6 +126,7 @@ class TaskSummary(BaseModel):
     task_id: str
     run_id: str | None = None
     pipeline_name: str = ""
+    experiment_name: str = ""
     status: str
     current_step: str | None = None
     current_step_index: int = 0

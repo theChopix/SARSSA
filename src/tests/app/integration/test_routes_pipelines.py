@@ -92,6 +92,7 @@ class TestListRuns:
         assert response.json() == eligible_payload
         mock_eligible.assert_called_once_with(
             ["dataset_loading", "neuron_labeling"],
+            "",
         )
         mock_all.assert_not_called()
 
@@ -112,7 +113,7 @@ class TestListRuns:
             response = client.get("/pipelines/runs")
 
         assert response.status_code == 200
-        mock_all.assert_called_once_with()
+        mock_all.assert_called_once_with("")
         mock_eligible.assert_not_called()
 
 
