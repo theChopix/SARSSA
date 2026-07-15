@@ -15,6 +15,7 @@ import { Info } from "lucide-react";
 
 import { usePipelineStore, mlflowExperimentUrl } from "../store/pipelineStore";
 import { RunningTasksMenu } from "./RunningTasksMenu";
+import { ExperimentMenu } from "./ExperimentMenu";
 
 const REPO_URL = "https://github.com/theChopix/SARSSA";
 
@@ -63,6 +64,11 @@ export function Header() {
           </svg>
           github
         </a>
+        <span
+          className="h-5 w-px bg-gray-300"
+          aria-hidden="true"
+        />
+        <ExperimentMenu />
         <span
           className="h-5 w-px bg-gray-300"
           aria-hidden="true"

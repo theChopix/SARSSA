@@ -29,6 +29,7 @@ import { ApiError } from "./errors";
 import type {
   ExecuteStepAsyncResponse,
   ExecuteStepResponse,
+  ExperimentInfo,
   MlflowInfo,
   PipelineContext,
   PipelineRun,
@@ -50,8 +51,11 @@ import type {
  * runs.forEach((r) => console.log(r.run_name, r.status));
  * ```
  */
-export async function fetchPipelineRuns(): Promise<PipelineRun[]> {
-  const response = await fetch(`${API_BASE_URL}/pipelines/runs`);
+export async function fetchPipelineRuns(experiment = ""): Promise<PipelineRun[]> {
+  const query = experiment
+    ? `?experiment=${encodeURIComponent(experiment)}`
+    : "";
+  const response = await fetch(`${API_BASE_URL}/pipelines/runs${query}`);
 
   if (!response.ok) {
     throw await ApiError.fromResponse(response, "Failed to fetch pipeline runs");
@@ -76,11 +80,15 @@ export async function fetchPipelineRuns(): Promise<PipelineRun[]> {
  * @throws {Error} If the HTTP request fails (non-2xx status).
  */
 export async function fetchEligiblePipelineRuns(
-  requiredSteps: string[]
+  requiredSteps: string[],
+  experiment = ""
 ): Promise<PipelineRun[]> {
   const params = new URLSearchParams();
   for (const step of requiredSteps) {
     params.append("required_steps", step);
+  }
+  if (experiment) {
+    params.set("experiment", experiment);
   }
   const query = params.toString();
   const url = query
@@ -239,7 +247,8 @@ export async function startPipelineTask(
   context: Record<string, unknown> = {},
   tags: Record<string, string> = {},
   description: string = "",
-  pipelineName: string = ""
+  pipelineName: string = "",
+  experimentName: string = ""
 ): Promise<{ task_id: string }> {
   const response = await fetch(`${API_BASE_URL}/pipelines/run-async`, {
     method: "POST",
@@ -250,6 +259,7 @@ export async function startPipelineTask(
       tags,
       description,
       pipeline_name: pipelineName,
+      experiment_name: experimentName,
     }),
   });
 
@@ -373,12 +383,51 @@ export async function cancelTask(
  * console.log(info.experiment_id);  // "1"
  * ```
  */
-export async function fetchMlflowInfo(): Promise<MlflowInfo> {
-  const response = await fetch(`${API_BASE_URL}/pipelines/mlflow-info`);
+export async function fetchMlflowInfo(experiment = ""): Promise<MlflowInfo> {
+  const query = experiment
+    ? `?experiment=${encodeURIComponent(experiment)}`
+    : "";
+  const response = await fetch(`${API_BASE_URL}/pipelines/mlflow-info${query}`);
 
   if (!response.ok) {
     throw await ApiError.fromResponse(response, "Failed to fetch MLflow info");
   }
 
   return (await response.json()) as MlflowInfo;
+}
+
+// ── GET/POST /pipelines/experiments ─────────────────────
+
+/**
+ * Fetch the MLflow experiments selectable in the header picker.
+ *
+ * The shared experiment comes first, the rest alphabetically.
+ */
+export async function fetchExperiments(): Promise<ExperimentInfo[]> {
+  const response = await fetch(`${API_BASE_URL}/pipelines/experiments`);
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(response, "Failed to fetch experiments");
+  }
+
+  return (await response.json()) as ExperimentInfo[];
+}
+
+/**
+ * Create an MLflow experiment (idempotent) and return it.
+ *
+ * @param name - Experiment name; must be non-empty and not "Default".
+ */
+export async function createExperiment(name: string): Promise<ExperimentInfo> {
+  const response = await fetch(`${API_BASE_URL}/pipelines/experiments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(response, "Failed to create experiment");
+  }
+
+  return (await response.json()) as ExperimentInfo;
 }

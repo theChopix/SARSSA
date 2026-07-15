@@ -33,6 +33,8 @@ import {
   fetchPipelineRuns,
   fetchRunContext,
   fetchMlflowInfo,
+  fetchExperiments,
+  createExperiment,
   startPipelineTask,
   getTaskStatus,
   executeStepAsync,
@@ -48,12 +50,36 @@ import {
 } from "./runPersistence";
 import type { PluginRegistry } from "../types/plugin";
 import type {
+  ExperimentInfo,
   MlflowInfo,
   PipelineContext,
   PipelineRun,
   StepDefinition,
   TaskSummary,
 } from "../types/pipeline";
+
+// ── Experiment selection persistence ─────────────────────
+
+/** localStorage key holding the user's selected MLflow experiment. */
+const SELECTED_EXPERIMENT_KEY = "sarssa.selectedExperiment";
+
+/** Read the persisted experiment selection ("" = shared experiment). */
+function loadSelectedExperiment(): string {
+  try {
+    return localStorage.getItem(SELECTED_EXPERIMENT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Persist the experiment selection (best-effort). */
+function saveSelectedExperiment(name: string): void {
+  try {
+    localStorage.setItem(SELECTED_EXPERIMENT_KEY, name);
+  } catch {
+    // Storage unavailable — selection just won't survive a reload.
+  }
+}
 
 // ── MLflow URL helpers ───────────────────────────────────
 
@@ -164,6 +190,15 @@ interface PipelineStore {
   /** MLflow UI connection info for constructing deep links. */
   mlflowInfo: MlflowInfo | null;
 
+  /** Experiments selectable in the header picker. */
+  experiments: ExperimentInfo[];
+
+  /**
+   * Name of the user-selected MLflow experiment new runs log to.
+   * Empty string means the shared experiment.
+   */
+  selectedExperiment: string;
+
   /** 0-based index of the step currently executing. */
   currentStepIndex: number;
 
@@ -208,6 +243,18 @@ interface PipelineStore {
 
   /** Fetch MLflow UI base URL and experiment ID from the backend. */
   loadMlflowInfo: () => Promise<void>;
+
+  /** Fetch the experiments selectable in the header picker. */
+  loadExperiments: () => Promise<void>;
+
+  /**
+   * Switch the experiment new runs log to and refresh the
+   * experiment-scoped data (MLflow links, past runs).
+   */
+  selectExperiment: (name: string) => Promise<void>;
+
+  /** Create an MLflow experiment (idempotent) and select it. */
+  addExperiment: (name: string) => Promise<void>;
 
   /**
    * Load context from a past run and populate card states
@@ -618,6 +665,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   targetRunId: null,
   errorMessage: null,
   mlflowInfo: null,
+  experiments: [],
+  selectedExperiment: loadSelectedExperiment(),
   currentStepIndex: 0,
   totalSteps: 0,
   currentTaskId: null,
@@ -643,13 +692,48 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   },
 
   loadPastRuns: async () => {
-    const pastRuns = await fetchPipelineRuns();
+    const pastRuns = await fetchPipelineRuns(get().selectedExperiment);
     set({ pastRuns });
   },
 
   loadMlflowInfo: async () => {
-    const mlflowInfo = await fetchMlflowInfo();
+    const mlflowInfo = await fetchMlflowInfo(get().selectedExperiment);
     set({ mlflowInfo });
+  },
+
+  loadExperiments: async () => {
+    try {
+      const experiments = await fetchExperiments();
+      set({ experiments });
+      // A selection deleted on the server falls back to shared.
+      const { selectedExperiment } = get();
+      if (
+        selectedExperiment &&
+        !experiments.some((e) => e.name === selectedExperiment)
+      ) {
+        await get().selectExperiment("");
+      }
+    } catch (error) {
+      console.error("Failed to load experiments:", error);
+    }
+  },
+
+  selectExperiment: async (name: string) => {
+    saveSelectedExperiment(name);
+    set({ selectedExperiment: name });
+    // Both are experiment-scoped; refresh so links and the load-from-
+    // previous-run dropdown match the new selection.
+    await Promise.all([get().loadMlflowInfo(), get().loadPastRuns()]);
+  },
+
+  addExperiment: async (name: string) => {
+    const created = await createExperiment(name);
+    const experiments = get().experiments.some((e) => e.name === created.name)
+      ? get().experiments
+      : [...get().experiments, created];
+    set({ experiments });
+    await get().selectExperiment(created.name);
+    toast.success(`Experiment "${created.name}" ready`);
   },
 
   loadFromPreviousRun: async (runId: string, upToCategory: string) => {
@@ -847,7 +931,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         existingContext,
         tags,
         description,
-        pipelineName
+        pipelineName,
+        get().selectedExperiment
       );
       set({ currentTaskId: task_id });
 
@@ -942,6 +1027,16 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       context: snapshot ? null : summary.initial_context,
       errorMessage: null,
     });
+
+    // Align the experiment picker with the adopted task
+    const experimentName = summary.experiment_name || "";
+    if (experimentName !== get().selectedExperiment) {
+      saveSelectedExperiment(experimentName);
+      set({ selectedExperiment: experimentName });
+    }
+    Promise.all([get().loadMlflowInfo(), get().loadPastRuns()]).catch(
+      (error) => console.error("Failed to refresh experiment data:", error)
+    );
 
     try {
       await pollTaskUntilDone(summary.task_id, set, get, {
