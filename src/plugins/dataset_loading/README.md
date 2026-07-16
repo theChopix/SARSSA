@@ -61,9 +61,10 @@ MLflow artifacts:  users.npy  items.npy  full_csr.npz
 training_cfm · training_sae · neuron_labeling · inspection · steering
 ```
 
-Two loaders ship today: **`movieLens_loader`** (the full-featured
-reference: ratings + tags + item metadata) and **`lastFm1k_loader`**
-(the minimal reference: ratings only).
+Two loaders ship today: **`movieLens_loader`** (the reference:
+explicit ratings thresholded into implicit feedback + user-applied
+tags + item metadata) and **`steamGames_loader`** (implicit ownership
+interactions + curated item-level tags + item metadata).
 
 ---
 
@@ -94,10 +95,11 @@ the 🔴 box in §3.
 Two constants tune step 3's interaction filter —
 `MIN_USER_INTERACTIONS` and `MIN_ITEM_INTERACTIONS` (base defaults
 20 / 200; each loader sets its own — MovieLens **5 / 1** (a threshold
-of 1 disables the item filter), LastFM1k 5 / 10). A dataset with tags
+of 1 disables the item filter), SteamGames 5 / 5). A dataset with tags
 adds a third, `MIN_TAG_INTERACTIONS`, which trims the **tag
 vocabulary** in step 6 (MovieLens 100 — a tag must be applied at least
-that many times, counted over all users, to survive). All three are
+that many times, counted over all users, to survive; SteamGames 20 —
+a tag must mark at least that many distinct items). All three are
 also surfaced as `run()` parameters defaulting to these constants, so
 they are tunable per run from the UI without editing the subclass (see
 §5 Step 3).
@@ -201,13 +203,16 @@ tags applied fewer than `MIN_TAG_INTERACTIONS` times) and
 optional `io_spec` outputs. **This is the shape you should model your own loader
 on** — it yields the full, working pipeline.
 
-**`lastFm1k_loader` — the reduced fallback, *not* the recommended
-shape.** `load_ratings()` reads a tab-separated `ratings.tsv`, skips a
-handful of known-corrupt rows, treats every listening event as
-positive feedback, and provides **no tags, no metadata**. Only model
-on this if you *deliberately* want trained models and nothing more —
-it cannot run neuron labeling / inspection / steering (the 🔴 box in
-§3). Treat it as a cautionary example, not a starting point.
+**`steamGames_loader` — the implicit-feedback variant.**
+`load_ratings()` reads `interactions.csv` (bare `userId,itemId`
+ownership pairs — no rating column to threshold) and collapses
+duplicate pairs so the matrix stays binary. Its tags differ from
+MovieLens in kind: they are **curated item-level genre/category
+labels** (one row per `(item, tag)`, no user dimension), so the
+tag-item matrix is binary incidence rather than per-user
+co-occurrence counts, and `MIN_TAG_INTERACTIONS` counts distinct
+items per tag. Model on this one when your dataset has implicit
+interactions and catalog-style tags.
 
 Both wrap their `DatasetLoader` subclass in a `Plugin(BasePlugin)`
 whose `run(seed, val_ratio, test_ratio)` calls `prepare()` and copies
@@ -254,11 +259,11 @@ obeys all three):
    `1.0` and there is nowhere to store a score. If your raw data has
    ratings / scores / play-counts, **threshold them into "interacted
    or not" and drop the score column** (MovieLens keeps
-   `rating >= 4.0`; LastFM1k treats every play as a positive).
+   `rating >= 4.0`; SteamGames treats every owned game as a positive).
 2. **Rename your raw columns to the canonical names.** The result must
    have exactly `userId` and `itemId`; your source columns can be
    named anything. `itemId` is whatever *you* define as "the item"
-   (MovieLens → `movieId`; LastFM1k → the artist MBID).
+   (MovieLens → `movieId`; SteamGames → the game id).
 3. **Both columns must be `pl.String`.** `build_csr_matrix()` converts
    them to Polars *Categoricals* to derive the `users` / `items`
    arrays and the CSR row/column codes — a non-string dtype breaks
@@ -549,10 +554,10 @@ in the repo, you build it yourself.
 
 ### Expected layout (the default — model your dataset on this)
 
-The **expected, fully-functional shape** is the MovieLens shape: an
-interactions file **plus tags plus item metadata**. This is the
-default this tutorial assumes — *not* the ratings-only LastFM1k shape,
-which gives you a reduced pipeline (see the 🔴 box in §3).
+The **expected, fully-functional shape** is an interactions file
+**plus tags plus item metadata** — both shipped datasets have all
+three. An interactions-only dataset still trains models but gives you
+a reduced pipeline (see the 🔴 box in §3).
 
 ```
 data/<your_dataset>/
@@ -572,7 +577,7 @@ rename your raw columns to these (see §5 Step 2), so you have freedom
 in your raw schema as long as your reader maps it.
 
 **`ratings.csv`** — one row per interaction. CSV with a header
-(TSV also fine — `lastFm1k` uses tab-separated). MovieLens columns:
+(TSV also fine — your reader parses it). MovieLens columns:
 
 ```
 userId,movieId,rating,timestamp
@@ -666,15 +671,13 @@ single OSF bundle with the complete, ready-to-use artifact set:
   → extracts the **full set** into `data/movieLens/`: `ratings.csv`,
   `tags.csv`, `metadata.json`, `descriptions.json`. This is the one
   that yields the full pipeline **and** UI item cards in a single step.
-- **`scripts/download_lastFm1k_all.sh`** *(recommended)* → OSF bundle →
-  `data/lastFm1k/ratings.tsv`.
+- **`scripts/download_steam-games_all.sh`** *(recommended)* → OSF
+  bundle → extracts the full set into `data/steam-games/`:
+  `interactions.csv`, `tags.csv`, `metadata.json`, `descriptions.json`.
 - `scripts/download_movieLens_dataset.sh` → fetches the **raw** dataset
   from GroupLens: only `ratings.csv` + `tags.csv` (raw leftovers →
   `data/movieLens/raw/`). It does **not** produce `metadata.json` —
   use the `_all` script if you want UI item cards (see the §7 note).
-- `scripts/download_lastFm1k_dataset.sh` → raw LastFM-1K from
-  mtg.upf.edu → `data/lastFm1k/ratings.tsv` (same end result as the
-  `_all` variant, different source).
 
 ---
 
@@ -685,7 +688,7 @@ dataset.
 
 - **🔴 No tags → pipeline stops at `neuron_labeling`.** `tag_ids.json`
   and `tag_item_matrix.npz` are produced only when the dataset has
-  tags (today: MovieLens only). Without them, CFM/SAE training still
+  tags (both shipped datasets do). Without them, CFM/SAE training still
   succeeds but `neuron_labeling/tf_idf` fails with
   `MissingContextError`, which blocks inspection and steering too.
 - **`metadata.json` only comes from the `_all` download script.** The

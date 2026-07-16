@@ -54,7 +54,7 @@ export interface ParamChoice {
  * ```ts
  * const registry = await fetchPluginRegistry();
  * // registry["dataset_loading"].implementations[0].display_name
- * // → "Lastfm1k Loader"
+ * // → "MovieLens Loader"
  * ```
  *
  * @throws {Error} If the HTTP request fails (non-2xx status).

@@ -88,17 +88,13 @@ mlflow:
 download-movielens:
     bash scripts/download_movieLens_dataset.sh
 
-# Download LastFM dataset
-download-lastfm:
-    bash scripts/download_lastFm1k_dataset.sh
-
 # Download all MovieLens artifacts (ratings, tags, metadata, descriptions) from OSF
 download-movielens-all:
     bash scripts/download_movieLens_all.sh
 
-# Download all LastFM-1K artifacts from OSF
-download-lastfm-all:
-    bash scripts/download_lastFm1k_all.sh
+# Download all Steam Games artifacts (interactions, tags, metadata, descriptions) from OSF
+download-steam-games-all:
+    bash scripts/download_steam-games_all.sh
 
 # Sync dependencies (update lock file)
 sync:
