@@ -196,10 +196,10 @@ export interface ParamGroup {
  * Represents one concrete plugin within a category.
  *
  * For example, within the "dataset_loading" category there might be
- * a "LastFM 1K Loader" implementation.
+ * a "Steam Games Loader" implementation.
  *
  * - `plugin_name`  – Dotted module path used to invoke the plugin
- *                     (e.g. "dataset_loading.lastFm1k_loader.lastFm1k_loader").
+ *                     (e.g. "dataset_loading.steamGames_loader.steamGames_loader").
  * - `display_name` – Human-readable name for the UI.
  * - `description`  – Short human-readable explanation of what this plugin
  *                    does, surfaced as a hover tooltip next to the plugin's

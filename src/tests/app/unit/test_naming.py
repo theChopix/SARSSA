@@ -66,10 +66,10 @@ class TestMakeDatasetLabel:
 
     def test_handles_other_loader(self) -> None:
         """Verify casing/digits are preserved for another loader."""
-        result = make_dataset_label("dataset_loading.lastFm1k_loader.lastFm1k_loader")
-        assert result == "lastFm1k"
+        result = make_dataset_label("dataset_loading.steamGames_loader.steamGames_loader")
+        assert result == "steamGames"
 
     def test_without_loader_suffix_returns_impl_segment(self) -> None:
         """Verify a missing ``_loader`` suffix leaves the name unchanged."""
-        result = make_dataset_label("dataset_loading.steamGames.steamGames")
-        assert result == "steamGames"
+        result = make_dataset_label("dataset_loading.customData.customData")
+        assert result == "customData"

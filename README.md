@@ -331,7 +331,7 @@ cp .env.sample .env                   # then set OPENAI_API_KEY
 #    Prefer the OSF "all" bundles: they include ratings + tags +
 #    metadata (full pipeline + UI), unlike the raw download_*_dataset.sh.
 bash scripts/download_movieLens_all.sh
-bash scripts/download_lastFm1k_all.sh
+bash scripts/download_steam-games_all.sh
 
 # 4. Run the stack (three terminals, or use Docker — see below)
 just mlflow                           # MLflow server → http://localhost:5000/mlflow (start first)
@@ -362,7 +362,7 @@ bind-mount targets must exist on the host **before** the first build
 ```bash
 cp .env.sample .env                       # then set OPENAI_API_KEY (§5)
 bash scripts/download_movieLens_all.sh    # datasets (Quick start, step 3)
-bash scripts/download_lastFm1k_all.sh
+bash scripts/download_steam-games_all.sh
 mkdir -p src/mlartifacts src/mlflow-data data          # bind-mount targets
 ```
 
@@ -442,7 +442,7 @@ just run / mlflow / frontend-dev      # run the services
 just check                            # lint + type-check
 just fix                              # format + autofix
 just pre-commit                       # run all pre-commit hooks
-just download-movielens / -lastfm     # raw datasets (ratings/tags only)
+just download-movielens               # raw dataset (ratings/tags only)
 bash scripts/download_*_all.sh        # full OSF bundles (recommended)
 ```
 
