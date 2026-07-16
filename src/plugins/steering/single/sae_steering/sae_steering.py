@@ -169,7 +169,9 @@ class Plugin(BasePlugin):
             str,
             "SAE concept neuron (from the neuron-labeling step) whose "
             "direction is amplified in the user's embedding to steer their "
-            "recommendations.",
+            "recommendations. Options read '<label> [neuron id <id>]'; a "
+            "'conf <c>' suffix and colour tint, when present, show "
+            "the label confidence (-1 to 1).",
         ],
         alpha: Annotated[
             float,

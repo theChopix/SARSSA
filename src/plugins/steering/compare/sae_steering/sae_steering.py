@@ -224,12 +224,16 @@ class Plugin(BaseComparePlugin):
             str,
             "SAE concept neuron (from the neuron-labeling step) whose "
             "direction is amplified in the user's embedding to steer their "
-            "recommendations.",
+            "recommendations. Options read '<label> [neuron id <id>]'; a "
+            "'conf <c>' suffix and colour tint, when present, show "
+            "the label confidence (-1 to 1).",
         ],
         past_neuron_id: Annotated[
             str,
             "Concept neuron from the past run to steer toward on the past "
-            "side, independent of the current run's neuron_id.",
+            "side, independent of the current run's neuron_id. Options read '<label> [neuron id <id>]'; a "
+            "'conf <c>' suffix and colour tint, when present, show "
+            "the label confidence (-1 to 1).",
         ],
         alpha: Annotated[
             float,
