@@ -120,7 +120,9 @@ class Plugin(BasePlugin):
         neuron_id: Annotated[
             str,
             "SAE concept neuron (from the neuron-labeling step) to inspect; "
-            "returns the items it activates on most strongly.",
+            "returns the items it activates on most strongly. Options read '<label> [neuron id <id>]'; a "
+            "'conf <c>' suffix and colour tint, when present, show "
+            "the label confidence (-1 to 1).",
         ],
         k: Annotated[
             int,
