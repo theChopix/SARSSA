@@ -728,8 +728,11 @@ dataset.
 - ⚙️ **What consumes these artifacts:**
   [`../../app/README.md`](../../app/README.md) — the pipeline engine,
   context wiring, and MLflow integration.
-- 🧪 **Downstream stages:** the `training_cfm/`, `training_sae/`,
-  `neuron_labeling/`, `inspection/`, `steering/` READMEs (per-category
-  contracts).
+- 🧪 **Downstream stages:**
+  [`../training_cfm/README.md`](../training_cfm/README.md),
+  [`../training_sae/README.md`](../training_sae/README.md) and
+  [`../neuron_labeling/README.md`](../neuron_labeling/README.md); the
+  `labeling_evaluation/`, `inspection/`, `steering/` READMEs are
+  still to come.
 - 📘 **Project overview, setup & Docker:**
   [root `README.md`](../../../README.md).

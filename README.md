@@ -181,7 +181,11 @@ automatically — no backend or frontend changes. Bringing your own
 steering** method is all this. Start with the plugin contract in
 [`src/plugins/README.md`](src/plugins/README.md); for the headline
 "bring your own dataset" walkthrough see
-[`src/plugins/dataset_loading/README.md`](src/plugins/dataset_loading/README.md).
+[`src/plugins/dataset_loading/README.md`](src/plugins/dataset_loading/README.md),
+and for adding a CFM/SAE variant or a labeling method the
+[`training_cfm`](src/plugins/training_cfm/README.md) /
+[`training_sae`](src/plugins/training_sae/README.md) /
+[`neuron_labeling`](src/plugins/neuron_labeling/README.md) READMEs.
 
 ### 3.2 Add a provider or model — `utils/`
 
@@ -252,6 +256,24 @@ task.
   custom-loader walkthrough, and the critical gotchas (e.g. a tagless
   dataset can't run neuron labeling). Read this to run SARSSA on your
   own data.
+
+- **[`src/plugins/training_cfm/README.md`](src/plugins/training_cfm/README.md)
+  — the base recommender stage.** The ELSA model (architecture +
+  loss), the training loop and its MLflow metrics, model persistence
+  via the registry, and how to add an alternative CFM architecture.
+
+- **[`src/plugins/training_sae/README.md`](src/plugins/training_sae/README.md)
+  — the sparse-autoencoder stage.** How the SAE base class and the
+  three sparsity variants (Basic / TopK / BatchTopK) are organised,
+  the full loss breakdown (reconstruction, L1, dead-neuron auxiliary,
+  contrastive InfoNCE), the augmentation paths of the training loop,
+  and how to add an SAE variant.
+
+- **[`src/plugins/neuron_labeling/README.md`](src/plugins/neuron_labeling/README.md)
+  — the neuron-labeling stage.** The category contract (neuron →
+  label string + confidence), the shipped tag-based methods
+  (correlation vs TF-IDF) and their confidence scoring, and how to
+  add a labeling method (e.g. LLM-based).
 
 - **[`src/utils/README.md`](src/utils/README.md) — shared
   utilities.** The toolbox both backend and plugins build on: the

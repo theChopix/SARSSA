@@ -522,9 +522,13 @@ These are real, code‑traced sharp edges — read before authoring.
 
 - 📂 **Per‑category contracts:** each category's own `README.md`
   (`<category>/README.md`) — the exact artifacts and params it
-  produces and consumes. Start with
-  [`dataset_loading/README.md`](dataset_loading/README.md), the
-  "bring your own dataset" tutorial (see the §7 table for all seven).
+  produces and consumes. Available today:
+  [`dataset_loading/README.md`](dataset_loading/README.md) (the
+  "bring your own dataset" tutorial),
+  [`training_cfm/README.md`](training_cfm/README.md),
+  [`training_sae/README.md`](training_sae/README.md) and
+  [`neuron_labeling/README.md`](neuron_labeling/README.md) (see the
+  §7 table for all seven categories).
 - ⚙️ **Backend & pipeline engine:**
   [`../app/README.md`](../app/README.md) — how the engine drives the
   `load_context → run → update_context` lifecycle inside MLflow
