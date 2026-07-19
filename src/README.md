@@ -14,7 +14,7 @@ reading import paths anywhere in the codebase.
 | Folder | What it is | Docs |
 |--------|------------|------|
 | `app/` | The **FastAPI backend** — HTTP API, the pipeline engine, plugin discovery, MLflow integration. | [`app/README.md`](app/README.md) |
-| `plugins/` | The **plugin system** and the seven pipeline categories (dataset loading → CFM/SAE training → neuron labeling → evaluation / inspection / steering). | [`plugins/README.md`](plugins/README.md) · dataset loading tutorial: [`plugins/dataset_loading/README.md`](plugins/dataset_loading/README.md) |
+| `plugins/` | The **plugin system** and the seven pipeline categories (dataset loading → CFM/SAE training → neuron labeling → evaluation / inspection / steering). | [`plugins/README.md`](plugins/README.md) · per-category docs: [`dataset_loading`](plugins/dataset_loading/README.md) · [`training_cfm`](plugins/training_cfm/README.md) · [`training_sae`](plugins/training_sae/README.md) · [`neuron_labeling`](plugins/neuron_labeling/README.md) |
 | `utils/` | Shared, provider-agnostic helpers used by both `app/` and `plugins/` (MLflow access, embedders, LLM clients, torch model loaders, logging). | `utils/README.md` *(planned)* |
 | `tests/` | Pytest suite; mirrors the tree (`tests/app`, `tests/plugins`, `tests/utils`). | — |
 
