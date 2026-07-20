@@ -95,7 +95,17 @@ export interface TaskStatusResponse {
   completed_steps: { category: string; run_id: string }[];
   context: PipelineContext | null;
   error: string | null;
-  messages: { timestamp: number; level: string; text: string }[];
+  messages: TaskMessage[];
+  created_at: number;
+  started_at: number | null;
+  current_step_started_at: number | null;
+}
+
+/** One plugin notification; level "progress" is a heartbeat, never a toast. */
+export interface TaskMessage {
+  timestamp: number;
+  level: string;
+  text: string;
 }
 
 // ── Running-task summary (from GET /pipelines/tasks) ────
@@ -122,6 +132,11 @@ export interface TaskSummary {
   total_steps: number;
   steps_requested: StepDefinition[];
   initial_context: PipelineContext;
+  created_at: number;
+  started_at: number | null;
+  current_step_started_at: number | null;
+  /** Latest notification only — this endpoint is polled for every task. */
+  last_message: TaskMessage | null;
 }
 
 // ── Execute-step response ───────────────────────────────

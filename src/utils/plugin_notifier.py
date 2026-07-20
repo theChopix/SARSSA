@@ -12,7 +12,7 @@ class NotificationMessage:
     Attributes:
         timestamp: Unix epoch seconds when the message was created.
         level: Severity / type — ``"info"``, ``"warning"``, ``"error"``,
-            ``"success"``.
+            ``"success"``, ``"progress"``.
         text: Human-readable message body.
     """
 
@@ -32,8 +32,9 @@ class NotificationMessage:
 class PluginNotifier:
     """Accumulates notification messages for the frontend.
 
-    Plugins call :meth:`info`, :meth:`warning`, :meth:`success`, or
-    :meth:`error` to record a message.  The pipeline worker shares
+    Plugins call :meth:`info`, :meth:`warning`, :meth:`success`,
+    :meth:`error`, or :meth:`progress` to record a message.  The
+    pipeline worker shares
     ``messages`` with ``TaskState.messages`` (same list object) so the
     polling endpoint sees new entries immediately — no copying needed.
 
@@ -90,6 +91,17 @@ class PluginNotifier:
             text: Message body.
         """
         self._append("error", text)
+
+    def progress(self, text: str) -> None:
+        """Record a progress heartbeat.
+
+        Unlike the other levels this is *not* surfaced as a toast —
+        the frontend only shows it as the task's current activity.
+
+        Args:
+            text: Message body.
+        """
+        self._append("progress", text)
 
 
 class NullNotifier(PluginNotifier):

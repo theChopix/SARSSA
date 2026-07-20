@@ -5,6 +5,7 @@ The worker functions. Each receives a shared
 as it progresses through the requested steps.
 """
 
+import time
 from typing import Any
 
 from app.core.pipeline_engine import PipelineEngine
@@ -69,6 +70,7 @@ def run_pipeline_worker(task: TaskState) -> None:
 
             task.current_step = category
             task.current_step_index = i
+            task.current_step_started_at = time.time()
             logger.info("[WORKER] Step %d/%d: %s", i + 1, len(task.steps_requested), plugin)
 
             engine.execute_step(
@@ -84,6 +86,7 @@ def run_pipeline_worker(task: TaskState) -> None:
         engine.finalize_run(context)
         task.context = context
         task.current_step = None
+        task.current_step_started_at = None
         task.status = "completed"
         logger.info("[WORKER] Pipeline completed: %s", run_id)
 
@@ -142,6 +145,7 @@ def run_step_worker(task: TaskState) -> None:
 
         task.current_step = category
         task.current_step_index = 0
+        task.current_step_started_at = time.time()
         logger.info("[STEP WORKER] Executing step: %s", plugin)
 
         engine.execute_step(plugin, params, context, notifier=notifier)
@@ -152,6 +156,7 @@ def run_step_worker(task: TaskState) -> None:
         engine.finalize_run(context)
         task.context = context
         task.current_step = None
+        task.current_step_started_at = None
         task.status = "completed"
         logger.info("[STEP WORKER] Done (run %s)", run_id)
 

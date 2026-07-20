@@ -402,3 +402,59 @@ class TestTaskStateMessages:
         t1.messages.append({"timestamp": 1.0, "level": "info", "text": "x"})
 
         assert t2.messages == []
+
+
+class TestTaskTimings:
+    """Tests for the created_at / started_at / last_message fields."""
+
+    def test_created_at_set_on_creation(self) -> None:
+        """Verify a fresh task is stamped and not yet started."""
+        _clear_store()
+        task = create_task([{"plugin": "a.b.c", "params": {}}])
+
+        assert task.created_at > 0
+        assert task.started_at is None
+
+    def test_summary_exposes_timings(self) -> None:
+        """Verify all three stamps reach the summary the menu polls."""
+        _clear_store()
+        task = create_task([{"plugin": "a.b.c", "params": {}}])
+        task.started_at = task.created_at + 5
+        task.current_step_started_at = task.created_at + 8
+
+        summary = task_to_summary(task)
+
+        assert summary.created_at == task.created_at
+        assert summary.started_at == task.created_at + 5
+        assert summary.current_step_started_at == task.created_at + 8
+
+    def test_summary_last_message_is_latest_only(self) -> None:
+        """Verify the summary carries the newest message, not the list."""
+        _clear_store()
+        task = create_task([{"plugin": "a.b.c", "params": {}}])
+        task.messages = [
+            {"timestamp": 1.0, "level": "info", "text": "first"},
+            {"timestamp": 2.0, "level": "progress", "text": "Epoch 2/10"},
+        ]
+
+        summary = task_to_summary(task)
+
+        assert summary.last_message == task.messages[-1]
+
+    def test_summary_last_message_none_when_silent(self) -> None:
+        """Verify a plugin that never notifies yields None, not an error."""
+        _clear_store()
+        task = create_task([{"plugin": "a.b.c", "params": {}}])
+
+        assert task_to_summary(task).last_message is None
+
+    def test_response_exposes_timings(self) -> None:
+        """Verify the detailed status response carries the stamps too."""
+        _clear_store()
+        task = create_task([{"plugin": "a.b.c", "params": {}}])
+        task.started_at = task.created_at + 1
+
+        response = task_to_response(task)
+
+        assert response.created_at == task.created_at
+        assert response.started_at == task.created_at + 1

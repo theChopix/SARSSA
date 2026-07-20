@@ -187,3 +187,33 @@ class TestNullNotifier:
         notifier.warning("x")
         notifier.success("x")
         notifier.error("x")
+
+
+class TestProgress:
+    """Tests for the progress level (heartbeat, never toasted)."""
+
+    def test_records_progress_level(self) -> None:
+        """Verify progress() appends a message tagged "progress"."""
+        notifier = PluginNotifier()
+
+        notifier.progress("Epoch 3/10")
+
+        assert len(notifier.messages) == 1
+        assert notifier.messages[0]["level"] == "progress"
+        assert notifier.messages[0]["text"] == "Epoch 3/10"
+
+    def test_carries_timestamp(self) -> None:
+        """Verify a heartbeat is timestamped like any other message."""
+        notifier = PluginNotifier()
+
+        notifier.progress("Epoch 1/10")
+
+        assert notifier.messages[0]["timestamp"] > 0
+
+    def test_null_notifier_discards_progress(self) -> None:
+        """Verify NullNotifier stays silent for heartbeats too."""
+        notifier = NullNotifier()
+
+        notifier.progress("ignored")
+
+        assert notifier.messages == []

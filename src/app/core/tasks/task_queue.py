@@ -8,6 +8,7 @@ moment.
 
 import queue
 import threading
+import time
 from collections.abc import Callable
 
 from app.models.pipeline import TaskState
@@ -58,6 +59,7 @@ def _dispatch_loop() -> None:
             continue
 
         task.status = "running"
+        task.started_at = time.time()
         try:
             worker(task)
         except Exception:

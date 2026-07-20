@@ -34,6 +34,9 @@ import { Layout } from "./components/Layout";
 import { ResultsPage } from "./pages/ResultsPage";
 import { GuidePage } from "./pages/GuidePage";
 import { usePipelineStore } from "./store/pipelineStore";
+import { TaskActivity } from "./components/TaskActivity";
+import { taskTimings } from "./utils/duration";
+import { useNow } from "./utils/useNow";
 import { collectParams } from "./utils/paramValidation";
 import type { StepDefinition } from "./types/pipeline";
 
@@ -61,6 +64,11 @@ function HomePage() {
   const currentStepIndex = usePipelineStore((s) => s.currentStepIndex);
   const totalSteps = usePipelineStore((s) => s.totalSteps);
   const currentTaskId = usePipelineStore((s) => s.currentTaskId);
+  const lastMessage = usePipelineStore((s) => s.lastMessage);
+  const taskCreatedAt = usePipelineStore((s) => s.taskCreatedAt);
+  const taskStartedAt = usePipelineStore((s) => s.taskStartedAt);
+  const taskStepStartedAt = usePipelineStore((s) => s.taskStepStartedAt);
+  const now = useNow();
   const cancelRequested = usePipelineStore((s) => s.cancelRequested);
   const pendingCancel =
     cancelRequested && cancelRequested.taskId === currentTaskId
@@ -280,9 +288,10 @@ function HomePage() {
       <div className="px-8 pb-8">
         {pipelineRunning ? (
           <div className="flex gap-3">
-            <div className="flex-1 py-3 rounded-lg text-white font-medium text-sm
-                            bg-blue-500 opacity-70 text-center">
-              <span className="flex items-center justify-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1 py-3 px-4
+                            rounded-lg bg-blue-500 opacity-70 text-white text-center">
+              {/* Line 1: status, with the timings trailing in smaller type. */}
+              <span className="flex items-center justify-center gap-2 text-sm font-medium">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {cancellationPending && pipelineQueued
                   ? "Removing from queue..."
@@ -293,7 +302,17 @@ function HomePage() {
                       : pipelineQueued
                         ? "Waiting in queue... another task is still running"
                         : `Running pipeline... Step ${currentStepIndex + 1} / ${totalSteps}`}
+                {(taskStartedAt !== null || taskCreatedAt !== null) && (
+                  <span className="text-xs font-normal text-blue-50">
+                    {taskTimings(now, taskCreatedAt, taskStartedAt, taskStepStartedAt)}
+                  </span>
+                )}
               </span>
+              {lastMessage && (
+                <span className="flex min-w-0 max-w-3xl">
+                  <TaskActivity message={lastMessage} variant="onColor" />
+                </span>
+              )}
             </div>
             <button
               onClick={cancelPipeline}

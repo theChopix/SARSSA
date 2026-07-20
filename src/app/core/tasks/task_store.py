@@ -130,6 +130,10 @@ def task_to_summary(task: TaskState) -> TaskSummary:
         total_steps=len(task.steps_requested),
         steps_requested=task.steps_requested,
         initial_context=task.initial_context,
+        created_at=task.created_at,
+        started_at=task.started_at,
+        current_step_started_at=task.current_step_started_at,
+        last_message=task.messages[-1] if task.messages else None,
     )
 
 
@@ -156,4 +160,7 @@ def task_to_response(task: TaskState) -> TaskStatusResponse:
         context=task.context,
         error=task.error,
         messages=list(task.messages),
+        created_at=task.created_at,
+        started_at=task.started_at,
+        current_step_started_at=task.current_step_started_at,
     )

@@ -1,6 +1,7 @@
 """Pydantic models and dataclasses for pipeline execution."""
 
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -70,6 +71,13 @@ class TaskState:
             executing plugin via ``PluginNotifier``.  Shared with the
             notifier's own list (same object) so new entries are
             visible to the polling endpoint immediately.
+        created_at: Unix epoch seconds when the task was submitted.
+        started_at: Unix epoch seconds when the worker picked it up,
+            ``None`` while still queued.  Kept separate from
+            *created_at* so the UI can tell "queued for 20 min" from
+            "running for 20 min".
+        current_step_started_at: Unix epoch seconds when the step named
+            by *current_step* began, ``None`` between steps.
     """
 
     task_id: str
@@ -89,6 +97,9 @@ class TaskState:
     context: dict[str, Any] | None = None
     error: str | None = None
     messages: list[dict[str, Any]] = field(default_factory=list)
+    created_at: float = field(default_factory=time.time)
+    started_at: float | None = None
+    current_step_started_at: float | None = None
 
 
 # ── API response model ────────────────────────────────────
@@ -112,6 +123,9 @@ class TaskStatusResponse(BaseModel):
     context: dict[str, Any] | None = None
     error: str | None = None
     messages: list[dict[str, Any]] = []
+    created_at: float = 0.0
+    started_at: float | None = None
+    current_step_started_at: float | None = None
 
 
 class TaskSummary(BaseModel):
@@ -121,6 +135,11 @@ class TaskSummary(BaseModel):
     layout when the task is loaded — hence ``steps_requested`` (the
     newly-run steps) plus ``initial_context`` (the upstream steps that
     were loaded from a previous run and are not in ``steps_requested``).
+
+    Carries only the *latest* notification, not the whole list: this
+    endpoint is polled for every active task, so the payload must stay
+    small.  Consumers needing the full history use
+    :class:`TaskStatusResponse`.
     """
 
     task_id: str
@@ -133,3 +152,7 @@ class TaskSummary(BaseModel):
     total_steps: int = 0
     steps_requested: list[dict[str, Any]] = []
     initial_context: dict[str, Any] = {}
+    created_at: float = 0.0
+    started_at: float | None = None
+    current_step_started_at: float | None = None
+    last_message: dict[str, Any] | None = None
