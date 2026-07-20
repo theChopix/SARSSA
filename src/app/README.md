@@ -175,6 +175,14 @@ containing `.`/`/`. For **cascading** dropdowns the hint sets
 The proxy endpoints exist so the browser never needs direct MLflow
 access or credentials.
 
+### CLI — scripting the API
+
+`scripts/sarssa_cli/` is a thin command-line client over the
+endpoints above (run pipelines, follow tasks, browse runs and
+experiments); it needs a running stack and shares the compute
+queue with the web UI. Usage, examples, and the pipeline-file format:
+[`scripts/sarssa_cli/README.md`](../../scripts/sarssa_cli/README.md).
+
 ---
 
 ## ⚙️ 5. The pipeline execution engine

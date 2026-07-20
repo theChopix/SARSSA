@@ -233,7 +233,9 @@ task.
   async execution with cooperative cancellation and the
   poll-based progress model, plugin discovery & the registry, the
   pipeline *context* object that wires steps together, the full HTTP
-  API reference, MLflow integration & `config.yaml`, the data models,
+  API reference (with a CLI for scripting it —
+  [`scripts/sarssa_cli/README.md`](scripts/sarssa_cli/README.md)),
+  MLflow integration & `config.yaml`, the data models,
   and a substantial operational-gotchas section. Read this to
   understand or debug pipeline execution.
 
@@ -466,6 +468,7 @@ just fix                              # format + autofix
 just pre-commit                       # run all pre-commit hooks
 just download-movielens               # raw dataset (ratings/tags only)
 bash scripts/download_*_all.sh        # full OSF bundles (recommended)
+uv run python scripts/sarssa_cli/sarssa_cli.py   # CLI (see scripts/sarssa_cli/README.md)
 ```
 
 Manual equivalents (no `just`): `uv sync --frozen`,
