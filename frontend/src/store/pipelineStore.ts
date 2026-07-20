@@ -55,6 +55,7 @@ import type {
   PipelineContext,
   PipelineRun,
   StepDefinition,
+  TaskMessage,
   TaskSummary,
 } from "../types/pipeline";
 
@@ -207,6 +208,14 @@ interface PipelineStore {
 
   /** Task ID of the currently running background pipeline task. */
   currentTaskId: string | null;
+
+  /** Latest notification from the running task, shown as its activity. */
+  lastMessage: TaskMessage | null;
+
+  /** When the running task was submitted / picked up / entered its step. */
+  taskCreatedAt: number | null;
+  taskStartedAt: number | null;
+  taskStepStartedAt: number | null;
 
   /**
    * Pending cancellation request, tied to the task it was issued for
@@ -444,6 +453,18 @@ function cancelCleanup(get: StoreGet, taskId: string): Partial<PipelineStore> {
 }
 
 /**
+ * Clear the live-activity fields. Spread wherever a task starts or ends,
+ * so a finished run's last message and timings can never be shown next
+ * to the following one.
+ */
+const activityReset = {
+  lastMessage: null,
+  taskCreatedAt: null,
+  taskStartedAt: null,
+  taskStepStartedAt: null,
+};
+
+/**
  * Reset to a clean idle state after polling a tracked run failed — the
  * task was evicted/404'd or the request errored. Shared by the
  * refresh-resume and load-task flows.
@@ -467,6 +488,7 @@ function handleTrackingFailure(
     pipelineRunning: false,
     pipelineQueued: false,
     currentTaskId: null,
+    ...activityReset,
     ...cancelCleanup(get, taskId),
     errorMessage: gone
       ? "The run is no longer available (it may have just finished, or the backend restarted)."
@@ -526,6 +548,13 @@ function pollTaskUntilDone(
           currentStepIndex: status.current_step_index,
           totalSteps: status.total_steps,
           pipelineQueued: status.status === "queued",
+          taskCreatedAt: status.created_at,
+          taskStartedAt: status.started_at,
+          taskStepStartedAt: status.current_step_started_at,
+          lastMessage:
+            status.messages.length > 0
+              ? status.messages[status.messages.length - 1]
+              : null,
         });
 
         // Mark completed steps as "done".
@@ -556,9 +585,11 @@ function pollTaskUntilDone(
         }
         firstTick = false;
 
-        // Fire toasts for any new plugin notifications.
+        // Fire toasts for any new plugin notifications. "progress" is a
+        // per-epoch heartbeat — shown as the task's activity, never a toast.
         const newMessages = status.messages.slice(seenMessageCount);
         for (const msg of newMessages) {
+          if (msg.level === "progress") continue;
           if (msg.level === "success") toast.success(msg.text);
           else if (msg.level === "warning") toast.warning(msg.text);
           else if (msg.level === "error") toast.error(msg.text);
@@ -586,6 +617,7 @@ function pollTaskUntilDone(
             pipelineQueued: false,
             context: status.context as PipelineContext | null,
             currentRunId: status.run_id,
+            ...activityReset,
             // A cancel that arrived too late (task completed anyway) must
             // not linger and label the next run as "Cancelling…".
             ...cancelCleanup(get, taskId),
@@ -608,6 +640,7 @@ function pollTaskUntilDone(
             pipelineRunning: false,
             pipelineQueued: false,
             ...cancelCleanup(get, taskId),
+            ...activityReset,
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline cancelled by user.",
           });
@@ -627,6 +660,7 @@ function pollTaskUntilDone(
             pipelineRunning: false,
             pipelineQueued: false,
             ...cancelCleanup(get, taskId),
+            ...activityReset,
             currentTaskId: null,
             errorMessage: status.error ?? "Pipeline failed",
           });
@@ -670,6 +704,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   currentStepIndex: 0,
   totalSteps: 0,
   currentTaskId: null,
+  lastMessage: null,
+  taskCreatedAt: null,
+  taskStartedAt: null,
+  taskStepStartedAt: null,
   cancelRequested: null,
   pendingSteps: null,
   runningTasks: [],
@@ -916,6 +954,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       cards,
       activeRunCategories: steps.map((s) => s.plugin.split(".")[0]),
       pipelineRunning: true,
+      ...activityReset,
       pipelineQueued: false,
       currentRunId: null,
       errorMessage: null,
@@ -971,6 +1010,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       cards: { ...get().cards, ...snapshot.cards },
       activeRunCategories: snapshot.activeRunCategories ?? [],
       pipelineRunning: true,
+      ...activityReset,
       currentTaskId: snapshot.taskId,
       currentRunId: snapshot.currentRunId,
       currentStepIndex: snapshot.currentStepIndex,
@@ -1019,6 +1059,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         (s) => s.plugin.split(".")[0]
       ),
       pipelineRunning: true,
+      ...activityReset,
       pipelineQueued: summary.status === "queued",
       currentTaskId: summary.task_id,
       currentRunId: summary.run_id,
@@ -1071,9 +1112,11 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
           try {
             const status = await getTaskStatus(task_id);
 
-            // Fire toasts for any new plugin notifications.
+            // Fire toasts for any new plugin notifications ("progress"
+            // heartbeats are not toasted — see pollTaskUntilDone).
             const newMessages = status.messages.slice(seenMessageCount);
             for (const msg of newMessages) {
+              if (msg.level === "progress") continue;
               if (msg.level === "success") toast.success(msg.text);
               else if (msg.level === "warning") toast.warning(msg.text);
               else if (msg.level === "error") toast.error(msg.text);
@@ -1190,6 +1233,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       currentStepIndex: 0,
       totalSteps: 0,
       currentTaskId: null,
+      ...activityReset,
       cancelRequested: null,
       pendingSteps: null,
     });

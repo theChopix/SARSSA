@@ -14,6 +14,9 @@ import { ChevronDown, ChevronUp, Clock, Loader2 } from "lucide-react";
 
 import { usePipelineStore } from "../store/pipelineStore";
 import type { TaskSummary } from "../types/pipeline";
+import { TaskActivity } from "./TaskActivity";
+import { taskTimings } from "../utils/duration";
+import { useNow } from "../utils/useNow";
 
 /** How often to refresh the running-tasks list, in milliseconds. */
 const POLL_INTERVAL_MS = 3000;
@@ -33,6 +36,7 @@ export function RunningTasksMenu() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const now = useNow();
 
   // Poll the running-tasks list while mounted.
   useEffect(() => {
@@ -111,15 +115,30 @@ export function RunningTasksMenu() {
                           </span>
                         )}
                       </span>
-                      <span className="shrink-0 text-xs text-gray-500">
+                      <span className="shrink-0 text-xs font-medium text-gray-500">
                         {task.status === "queued"
                           ? "queued"
                           : `step ${task.current_step_index + 1} / ${task.total_steps}`}
                       </span>
                     </span>
-                    {task.current_step && (
-                      <span className="block truncate text-xs text-gray-500">
-                        {task.current_step}
+                    <span className="mt-0.5 flex items-baseline justify-between gap-2">
+                      <span className="truncate text-xs text-gray-400">
+                        {taskTimings(
+                          now,
+                          task.created_at,
+                          task.started_at,
+                          task.current_step_started_at
+                        )}
+                      </span>
+                      {task.current_step && (
+                        <span className="shrink-0 truncate text-xs text-gray-500">
+                          {task.current_step}
+                        </span>
+                      )}
+                    </span>
+                    {task.last_message && (
+                      <span className="mt-1.5 flex min-w-0">
+                        <TaskActivity message={task.last_message} />
                       </span>
                     )}
                   </span>

@@ -231,6 +231,11 @@ def train(
         for key, val in train_losses.items():
             mlflow.log_metric(f"loss/{key}/train", float(np.mean(val)), step=epoch)
 
+        if notifier is not None:
+            notifier.progress(
+                f"Epoch {epoch}/{epochs} finished — train loss: {float(np.mean(train_losses['Loss'])):.4f}"
+            )
+
         if epoch % evaluate_every == 0:
             valid_loss, valid_metrics = evaluate(epoch, d)
             logger.info(
@@ -241,7 +246,7 @@ def train(
             )
             if notifier is not None:
                 notifier.info(
-                    f"Epoch {epoch}/{epochs} — loss: {valid_loss:.4f}"
+                    f"Epoch {epoch}/{epochs} finished — valid loss: {valid_loss:.4f}"
                     f" — cosine: {valid_metrics['CosineSim']:.4f}"
                     f" — NDCG@20 degradation: {valid_metrics['NDCG20_Degradation']:.4f}"
                 )

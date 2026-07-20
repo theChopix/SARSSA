@@ -124,7 +124,7 @@ def train(
         )
         if notifier is not None:
             notifier.info(
-                f"Epoch {epoch}/{epochs} — loss: {valid_metrics['loss']:.4f}"
+                f"Epoch {epoch}/{epochs} finished — valid loss: {valid_metrics['loss']:.4f}"
                 f" — R@20: {valid_metrics['R20']:.4f}"
                 f" — NDCG@20: {valid_metrics['NDCG20']:.4f}"
             )
