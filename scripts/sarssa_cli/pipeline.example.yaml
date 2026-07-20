@@ -1,0 +1,30 @@
+# Example pipeline definition for scripts/sarssa_cli/sarssa_cli.py.
+# Mirrors the POST /pipelines/run-async request body; every key except
+# `steps` is optional. Run it with:
+#
+#   uv run python scripts/sarssa_cli/sarssa_cli.py run scripts/sarssa_cli/pipeline.example.yaml
+#
+# Discover plugin paths and their parameters with:
+#
+#   uv run python scripts/sarssa_cli/sarssa_cli.py plugins list --params
+
+name: cli-example            # woven into the MLflow run name
+experiment: ""               # "" or omitted = the shared experiment
+description: MovieLens + ELSA baseline launched from the CLI
+tags:
+  purpose: cli-example
+
+steps:
+  - plugin: dataset_loading.movieLens_loader.movieLens_loader
+    params: {}               # omitted params fall back to their defaults
+  - plugin: training_cfm.elsa_trainer.elsa_trainer
+    params:
+      epochs: 25
+      factors: 512
+
+# To inherit completed steps from a past run instead of re-running
+# them, reference their step run ids (see: runs context <run_id>):
+#
+# context:
+#   dataset_loading:
+#     run_id: abc123...
