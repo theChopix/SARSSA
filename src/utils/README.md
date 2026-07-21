@@ -266,7 +266,9 @@ computing activations…), and a user watching the screen needs to know
 *which step is running and where in the process it is*. Without this
 channel the UI would have nothing to show — a run would just look
 frozen. So a plugin calls `self.notifier.info(...)` / `warning` /
-`success` / `error` to report progress, and:
+`success` / `error` / `progress` to report progress (`progress` is
+the high-frequency heartbeat level — shown as the task's live
+activity in the UI, never as a toast), and:
 - `NotificationMessage` — a `{timestamp, level, text}` record.
 - `PluginNotifier` — those calls append to a `messages` list the
   pipeline worker **aliases into** `TaskState.messages`, so the

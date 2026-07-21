@@ -185,8 +185,10 @@ if your labels are tag-based — `_confidence.py` for scoring.
   [dataset-loading README](../dataset_loading/README.md) §7). A
   future non-tag-based plugin would lift this for its own runs.
 - **Runs on CPU by design.** The one-hot activation pass builds
-  `num_items`-wide batches, which OOMs small GPUs, so the device is
-  pinned to CPU. It scales with catalogue size but is a
+  `num_items`-wide batches (constructed per batch — the full
+  items × items identity is never materialised), and the device stays
+  pinned to CPU as wide catalogues strain small GPUs. Batch progress
+  is reported to the UI. It scales with catalogue size but is a
   minutes-scale, not hours-scale, computation.
 - **Confidence can be negative.** `-1` is a perfectly *anti*-tracking
   label. Expect this mainly from `tf_idf`, whose choice rule doesn't

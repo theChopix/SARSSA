@@ -280,12 +280,17 @@ re‑persist `context.json`.
 ### Progress messages (no WebSockets)
 
 There is **no streaming**. Plugins call
-`self.notifier.info/warning/success/error(text)`; each call appends a
-`{timestamp, level, text}` dict (`utils/plugin_notifier.py`,
+`self.notifier.info/warning/success/error/progress(text)`; each call
+appends a `{timestamp, level, text}` dict (`utils/plugin_notifier.py`,
 `NotificationMessage`) to the shared list, and the UI surfaces them by
-polling `GET /tasks/{task_id}` and reading `messages`. Outside a
-pipeline (tests/scripts) plugins get a `NullNotifier` that discards
-messages, so the same plugin code runs unchanged.
+polling `GET /tasks/{task_id}` and reading `messages`. The `progress`
+level is a high-frequency heartbeat (per epoch/batch): shown as the
+task's live activity, never as a toast. Tasks also record
+`created_at` / `started_at` / `current_step_started_at`, and the
+`GET /tasks` summaries carry only the *latest* message — enough for
+the header menu to show timings + activity without the full list.
+Outside a pipeline (tests/scripts) plugins get a `NullNotifier` that
+discards messages, so the same plugin code runs unchanged.
 
 ---
 

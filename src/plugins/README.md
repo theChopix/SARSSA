@@ -83,7 +83,7 @@ below yourself — the engine calls them, in order (§4). You only
 | `name` | `None` | Human label for the UI. When `None`, the registry derives one from the directory name (`make_plugin_display_name`, `plugin_discovery/naming.py`). |
 | `description` | `None` | Optional one‑line explanation surfaced as the plugin's tooltip in the registry. |
 | `io_spec` | shared `PluginIOSpec()` | The I/O contract. **Always declare your own** (see §8). |
-| `notifier` | `NullNotifier()` | Progress channel. The engine swaps in a real `PluginNotifier` before `run()`; outside a pipeline it stays a silent no‑op, so the same code runs in tests unchanged. |
+| `notifier` | `NullNotifier()` | Progress channel. The engine swaps in a real `PluginNotifier` before `run()`; outside a pipeline it stays a silent no‑op, so the same code runs in tests unchanged. Use `.progress()` for high‑frequency per‑epoch/batch heartbeats — shown as live activity, never toasted. |
 | `cancellation` | `NullCancellationToken()` | Cooperative "Cancel now" token. The engine injects a live token before `run()`; a long‑running plugin can poll it and abort mid‑step (outside a pipeline it's a silent no‑op). |
 
 **Lifecycle methods:**

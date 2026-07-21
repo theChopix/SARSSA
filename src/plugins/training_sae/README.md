@@ -145,7 +145,9 @@ from**. That depends on augmentation:
     *independently* dropped-out copy of the same rows, encoded as the
     second view for the InfoNCE term.
 
-The rest in brief: validation runs every `evaluate_every` epochs —
+The rest in brief: every epoch ends with a `notifier.progress`
+heartbeat (train loss — shown as live activity in the UI, not a
+toast); validation runs every `evaluate_every` epochs —
 all loss terms on precomputed val embeddings (sample-weighted means)
 plus `evaluate_sparse_encoder`, which reports reconstruction
 **CosineSim**, sparsity **L0** and **DeadNeurons**, and the

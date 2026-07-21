@@ -599,17 +599,21 @@ const SECTIONS: GuideSection[] = [
         <ul className="list-disc pl-5 space-y-2 text-sm text-gray-700 leading-relaxed">
           <li>
             <strong>Progress.</strong> While a pipeline is running, the
-            bottom action bar shows <em>Step i / N</em>. Individual
-            plugin progress messages surface as toasts at the top of
-            the screen — they're polled every ~2 seconds, so there's a
-            small delay between the backend writing one and it
-            appearing.
+            bottom action bar shows <em>Step i / N</em>, how long the
+            pipeline and the current step have been running, and the
+            plugin's latest message (e.g.{" "}
+            <em>Epoch 12/25 finished — valid loss: …</em>). Important
+            events also pop up as toasts; frequent per-epoch heartbeats
+            only update that activity line. Everything is polled every
+            ~2 seconds, so there's a small delay between the backend
+            writing a message and it appearing.
           </li>
           <li>
             <strong>Running tasks menu.</strong> When a pipeline is
             running or waiting its turn, a <em>Running (N)</em> pill
             appears in the header (top-left). Open it to see every task
-            with its current step — queued ones carry a clock icon and a{" "}
+            with its current step, its pipeline/step runtimes and its
+            latest notification — queued ones carry a clock icon and a{" "}
             <em>queued</em> badge; click one to load it into the cards
             and follow its progress — handy when several tasks are
             lined up, or to jump back into a run from a fresh tab.

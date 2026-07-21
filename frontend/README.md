@@ -94,6 +94,8 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `api/items.ts` | item enrichment + artifact proxy/raw-URL helpers |
 | `api/errors.ts` | shared `ApiError` type + fetch error handling |
 | `utils/paramValidation.ts` | `collectParams` — client-side param validation that blocks a launch on missing-required / invalid values |
+| `utils/duration.ts` | Elapsed/relative-time formatting + `taskTimings` (pipeline · step) |
+| `utils/useNow.ts` | 5 s clock tick so relative times stay current between polls |
 | `store/pipelineStore.ts` | **The heart** — the single Zustand store: all state + the run/poll orchestration |
 | `store/runPersistence.ts` | Persists an in-progress run to **sessionStorage** so a page refresh restores the running layout (see §6) |
 | `types/plugin.ts` · `pipeline.ts` · `items.ts` | TypeScript mirrors of the backend models/response shapes |
@@ -101,7 +103,8 @@ Everything lives under `src/` (plus root config: `Dockerfile`,
 | `components/Layout.tsx` | Page shell (header + routed `<Outlet/>`) |
 | `components/Header.tsx` | Top bar + experiment picker + MLflow deep link |
 | `components/ExperimentMenu.tsx` | Header dropdown choosing the MLflow experiment new runs log into (the shared base experiment + ones created from the UI; selection persists in localStorage) |
-| `components/RunningTasksMenu.tsx` | Header pill listing in-flight runs (polls `GET /pipelines/tasks`); click loads a run |
+| `components/RunningTasksMenu.tsx` | Header pill listing in-flight runs (polls `GET /pipelines/tasks`) with per-task timings + last notification; click loads a run |
+| `components/TaskActivity.tsx` | Level-tinted chip showing a task's latest notifier message (white-menu + blue-bar variants) |
 | `components/PipelineCard.tsx` | **The main workhorse** — one data-driven card per category |
 | `components/LaunchModal.tsx` | Pre-run dialog: pipeline name + tags + description |
 | `components/InfoTooltip.tsx` | The ⓘ hover tooltip for param / plugin / category descriptions |
@@ -140,8 +143,9 @@ registry loaded ──▶ a PipelineCard per category
         └─▶ poll GET /pipelines/tasks/{task_id} every 2 s
               ├─ track the queued state ("Waiting in queue..." bar)
               ├─ update each card's status (running/done/error)
-              ├─ update progress (step i / N)
-              ├─ stream the plugin's notifier messages as sonner toasts
+              ├─ update progress (step i / N + pipeline/step timings)
+              ├─ mirror the latest notifier message into the bottom bar
+              ├─ toast new notifier messages (`progress` heartbeats don't toast)
               └─ on completed/cancelled/error → stop, refresh past runs
 ```
 
@@ -154,7 +158,7 @@ background task never stopped, the UI had just lost its handle to it. The
 snapshot is cleared on any terminal state.
 
 **Running-tasks menu.** A second, coarser poll (`RunningTasksMenu`,
-every 6 s) hits `GET /pipelines/tasks` for *all* queued + running tasks
+every 3 s) hits `GET /pipelines/tasks` for *all* queued + running tasks
 and shows them as a header pill (queued rows carry a clock icon).
 Selecting one calls `store.loadRunningTask`, which
 makes it the active run — restoring cards from the session snapshot when
@@ -210,7 +214,8 @@ display kind), or for pure UI/UX work.
   response shape changes, update the matching type or the cast lies.
 - **Progress is polling, not websockets** — a fixed 2 s interval in
   the store. Plugin messages surface as toasts only as fast as the
-  next poll.
+  next poll, and `progress`-level heartbeats never toast — they only
+  update the activity line.
 - **Refresh-recovery is sessionStorage-scoped and `one_time`-only.**
   An in-progress *pipeline* run survives a page refresh
   (`store/runPersistence.ts` → `resumeRun`), but mind the edges: it's
