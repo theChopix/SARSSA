@@ -107,12 +107,14 @@ class Plugin(BasePlugin):
         self.sae.to(device)
 
         # SAE activations: (items x neurons)
+        self.notifier.info(f"Computing SAE activations for {len(self.items):,} items...")
         item_acts = compute_sae_item_activations(
             self.base_model,
             self.sae,
             len(self.items),
             batch_size=batch_size,
             device=device,
+            notifier=self.notifier,
         )
         item_acts_np = item_acts.numpy()
         num_items, num_neurons = item_acts_np.shape
@@ -126,6 +128,9 @@ class Plugin(BasePlugin):
         if not valid_tag_mask.any():
             logger.warning("No tag meets min_support=%d; neurons stay unlabelled.", min_support)
 
+        self.notifier.info(
+            f"Correlating {num_neurons:,} neurons against {int(valid_tag_mask.sum()):,} tags..."
+        )
         corr = point_biserial_matrix(item_acts_np, attr)
 
         # dead neurons never activate (all-zero column) -> no variance -> masked

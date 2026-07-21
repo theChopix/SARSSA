@@ -137,10 +137,14 @@ class Plugin(BasePlugin):
             f"{embedding_provider}:{embedding_model}"
         )
 
-        embeddings = embed_labels(self.label_texts, embedding_provider, embedding_model)
+        embeddings = embed_labels(
+            self.label_texts, embedding_provider, embedding_model, self.notifier
+        )
 
         # pairwise cosine distance then hierarchical clustering
+        self.notifier.info(f"Computing pairwise distances for {len(embeddings):,} labels...")
         distances = pdist(embeddings, metric="cosine")
+        self.notifier.info(f"Clustering ({linkage_method} linkage)...")
         self.linkage_matrix = linkage(distances, method=linkage_method)
 
         # dynamic height so labels remain readable
@@ -154,6 +158,7 @@ class Plugin(BasePlugin):
             f"[neuron {nid}] {self.neuron_labels[nid]['label']}" for nid in self.neuron_ids
         ]
 
+        self.notifier.info(f"Drawing the dendrogram ({num_labels:,} leaves)...")
         self._fig, ax = plt.subplots(figsize=(figure_width, dynamic_height))
 
         dendrogram(
@@ -174,6 +179,7 @@ class Plugin(BasePlugin):
         self.num_neurons = len(self.neuron_ids)
 
         # Render the figure to memory and free it.
+        self.notifier.info("Exporting the figure (SVG + PDF)...")
         svg_buf = io.StringIO()
         self._fig.savefig(svg_buf, format="svg")
         self.dendrogram_svg = svg_buf.getvalue()

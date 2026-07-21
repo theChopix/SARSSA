@@ -280,6 +280,7 @@ class Plugin(BasePlugin):
             seed=seed,
             val_ratio=val_ratio,
             test_ratio=test_ratio,
+            notifier=self.notifier,
         )
 
         # Populate output params

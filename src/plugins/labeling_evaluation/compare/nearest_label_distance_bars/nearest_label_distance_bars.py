@@ -177,6 +177,7 @@ class Plugin(BaseComparePlugin):
             past_label_texts=past_label_texts,
             embedding_provider=embedding_provider,
             embedding_model=embedding_model,
+            notifier=self.notifier,
         )
 
         # Pair each current neuron with its distance + nearest past label

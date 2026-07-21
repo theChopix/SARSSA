@@ -67,6 +67,7 @@ class TestDendrogramRun:
             ["alpha", "beta", "gamma"],
             "openai",
             "text-embedding-3-small",
+            plugin.notifier,
         )
 
     @patch("plugins.labeling_evaluation.single.dendrogram.dendrogram.dendrogram")

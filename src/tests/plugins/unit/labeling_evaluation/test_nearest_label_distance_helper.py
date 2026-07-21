@@ -63,7 +63,7 @@ class TestComputeNearestDistances:
             ]
         )
 
-        def fake_embed(texts: list[str], _provider: str, _model: str) -> np.ndarray:
+        def fake_embed(texts: list[str], _provider: str, _model: str, _notifier=None) -> np.ndarray:
             if texts == ["c0", "c1", "c2"]:
                 return current_embeddings
             if texts == ["p0", "p1"]:
@@ -114,7 +114,7 @@ class TestComputeNearestDistances:
             ]
         )
 
-        def fake_embed(texts: list[str], _provider: str, _model: str) -> np.ndarray:
+        def fake_embed(texts: list[str], _provider: str, _model: str, _notifier=None) -> np.ndarray:
             return current_embeddings if "c" in texts[0] else past_embeddings
 
         mock_embed_labels.side_effect = fake_embed

@@ -18,6 +18,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 
 from plugins.labeling_evaluation._embedding_cache import embed_labels
+from utils.plugin_notifier import PluginNotifier
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ def compute_nearest_distances(
     past_label_texts: list[str],
     embedding_provider: str,
     embedding_model: str,
+    notifier: PluginNotifier | None = None,
 ) -> NearestLabelDistances:
     """Embed both label sets and find each current label's nearest past neighbour.
 
@@ -53,6 +55,7 @@ def compute_nearest_distances(
             registry (e.g. ``"openai"``).
         embedding_model: Provider-specific model identifier (e.g.
             ``"text-embedding-3-small"`` for OpenAI).
+        notifier: Optional notifier; announces each phase before it runs.
 
     Returns:
         NearestLabelDistances: Per-current-label cosine distance to
@@ -63,8 +66,16 @@ def compute_nearest_distances(
         ValueError: If either label list is empty (propagated from
             :func:`embed_labels`).
     """
-    current_embeddings = embed_labels(current_label_texts, embedding_provider, embedding_model)
-    past_embeddings = embed_labels(past_label_texts, embedding_provider, embedding_model)
+    current_embeddings = embed_labels(
+        current_label_texts, embedding_provider, embedding_model, notifier
+    )
+    past_embeddings = embed_labels(past_label_texts, embedding_provider, embedding_model, notifier)
+
+    if notifier is not None:
+        notifier.info(
+            f"Computing pairwise distances "
+            f"({len(current_label_texts):,} x {len(past_label_texts):,})..."
+        )
 
     # cdist returns shape (n_current, n_past); cosine distance is
     # 1 - cos_sim, so taking argmin/min over axis=1 picks the nearest

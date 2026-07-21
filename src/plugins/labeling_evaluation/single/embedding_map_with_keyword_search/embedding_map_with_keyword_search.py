@@ -214,7 +214,9 @@ class Plugin(BasePlugin):
         # so the second call (inside compute_label_embedding_coords)
         # is a free lookup.
         combined_texts = self.label_texts + [keyword]
-        embeddings = embed_labels(combined_texts, embedding_provider, embedding_model)
+        embeddings = embed_labels(
+            combined_texts, embedding_provider, embedding_model, self.notifier
+        )
         keyword_embedding = embeddings[-1]
         label_embeddings = embeddings[:-1]
 
@@ -237,6 +239,7 @@ class Plugin(BasePlugin):
             umap_min_dist=umap_min_dist,
             umap_metric=umap_metric,
             umap_random_state=umap_random_state,
+            notifier=self.notifier,
         )
         self.umap_coords = combined_coords[:-1]
         keyword_coords = combined_coords[-1]
