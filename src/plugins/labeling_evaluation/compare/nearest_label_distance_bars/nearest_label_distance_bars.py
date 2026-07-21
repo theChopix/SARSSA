@@ -213,13 +213,19 @@ class Plugin(BaseComparePlugin):
             for r in per_label_sorted
         ]
 
+        # bars start slightly below zero so perfect matches (0-values) are visible
+        max_y = max(bar_y, default=0.0)
+        base_offset = 0.03 * max_y if max_y > 0 else 0.001
+
         self._fig = go.Figure()
         self._fig.add_trace(
             go.Bar(
                 x=bar_x,
-                y=bar_y,
+                y=[v + base_offset for v in bar_y],
+                base=-base_offset,
                 marker={"color": BAR_COLOR},
                 text=hover_text,
+                textposition="none",
                 hovertemplate="%{text}<extra></extra>",
             )
         )
@@ -233,7 +239,10 @@ class Plugin(BaseComparePlugin):
                 "type": "category",
                 "showticklabels": False,
             },
-            yaxis_title="Cosine distance to nearest past label",
+            yaxis={
+                "title": "Cosine distance to nearest past label",
+                "range": [-1.5 * base_offset, 1.05 * max_y] if max_y > 0 else None,
+            },
             template="plotly_white",
             bargap=0.05,
         )
