@@ -121,11 +121,13 @@ class TestCompareSaeSteeringRun:
             "training_sae": {"run_id": "sae_past"},
             "neuron_labeling": {"run_id": "nl_past"},
         }
+        # Users must match the current side (same-dataset verification);
+        # items stay distinct so assertions can tell the two sides apart.
         past_loader = _make_past_loader(
             context=past_context,
             past_neuron_labels={"0": {"label": "past_a"}, "1": {"label": "past_b"}},
             past_full_csr=_make_csr([[1]], num_items=3),
-            past_users=np.array(["p_user"]),
+            past_users=np.array(["c_user"]),
             past_items=np.array(["p_a", "p_b", "p_c"]),
         )
         mock_compare_loader_cls.return_value = past_loader
@@ -157,11 +159,44 @@ class TestCompareSaeSteeringRun:
         assert plugin.past_steered_recommendations == ["p_c", "p_b"]
 
         assert plugin.user_original_id_param == "c_user"
-        assert plugin.past_user_original_id_param == "p_user"
+        assert plugin.past_user_original_id_param == "c_user"
         assert plugin.label_param == "current_a"
         assert plugin.past_label_param == "past_b"
 
         assert plugin.past_context == past_context
+
+    @patch("plugins.compare_plugin_interface.MLflowRunLoader")
+    @patch("plugins.plugin_interface.MLflowRunLoader")
+    def test_mismatched_user_sets_raise(
+        self,
+        mock_base_loader_cls: MagicMock,
+        mock_compare_loader_cls: MagicMock,
+    ) -> None:
+        """Verify a past run with a different user set is rejected."""
+        past_context = {
+            "dataset_loading": {"run_id": "ds_past"},
+            "training_cfm": {"run_id": "cfm_past"},
+            "training_sae": {"run_id": "sae_past"},
+            "neuron_labeling": {"run_id": "nl_past"},
+        }
+        past_loader = _make_past_loader(
+            context=past_context,
+            past_neuron_labels={"0": {"label": "past_a"}},
+            past_full_csr=_make_csr([[1]], num_items=3),
+            past_users=np.array(["someone_else"]),
+            past_items=np.array(["p_a", "p_b", "p_c"]),
+        )
+        mock_compare_loader_cls.return_value = past_loader
+        mock_base_loader_cls.return_value = past_loader
+
+        plugin = _build_plugin()
+        with pytest.raises(ValueError, match="different dataset"):
+            plugin.run(
+                past_run_id="parent_xyz",
+                user_id=0,
+                neuron_id="0",
+                past_neuron_id="0",
+            )
 
     @patch("plugins.compare_plugin_interface.MLflowRunLoader")
     def test_missing_past_run_id_kwarg_raises(

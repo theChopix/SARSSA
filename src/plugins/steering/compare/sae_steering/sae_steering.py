@@ -3,12 +3,16 @@
 For a chosen pair of SAE neurons (one from the current pipeline run
 and one from a user-selected past run) the plugin computes interaction
 history, base recommendations, and steered recommendations on each
-side and surfaces them as six interleaved rows.  Both halves share
-the same analytical core via
+side.  Both runs must be built from the same dataset (verified against
+``users.npy``), so the shared interaction history is shown once and the
+recommendations as four interleaved rows.  Both halves share the same
+analytical core via
 :func:`plugins.steering._steer.compute_steered_recommendations`.
 """
 
 from typing import Annotated
+
+import numpy as np
 
 from plugins.compare_plugin_interface import BaseComparePlugin
 from plugins.plugin_interface import (
@@ -35,8 +39,8 @@ class Plugin(BaseComparePlugin):
     current pipeline (``full_csr.npz``, ``users.npy``, ``items.npy``,
     base / SAE models, ``neuron_labels.json``) and pulls the past-run
     counterparts via :meth:`BaseComparePlugin.load_past_artifact`.
-    Returns six rows for the frontend — current and past halves of
-    interaction history, original recommendations, and steered
+    Returns five rows for the frontend — the shared interaction
+    history plus current and past halves of original and steered
     recommendations — interleaved so each pair sits next to its
     counterpart in the UI.
     """
@@ -44,9 +48,10 @@ class Plugin(BaseComparePlugin):
     name = "SAE Steering (compare)"
     description = (
         "Runs the steering experiment on two pipeline runs at once — the current and a "
-        "chosen past run — for the same user, each steered toward its own neuron. Six "
-        "interleaved rows pair the two runs' histories and recommendations so you can "
-        "compare how differently they steer."
+        "chosen past run — for the same user, each steered toward its own neuron. Shows "
+        "the shared interaction history once, then interleaved rows pair the two runs' "
+        "recommendations so you can compare how differently they steer. Both runs must "
+        "share the same dataset."
     )
 
     past_run_required_steps = [
@@ -131,11 +136,7 @@ class Plugin(BaseComparePlugin):
             rows=[
                 DisplayRowSpec(
                     "current_interacted_items",
-                    "Interaction History - Current Run",
-                ),
-                DisplayRowSpec(
-                    "past_interacted_items",
-                    "Interaction History - Past Run",
+                    "Interaction History",
                 ),
                 DisplayRowSpec(
                     "current_original_recommendations",
@@ -212,7 +213,9 @@ class Plugin(BaseComparePlugin):
         past_run_id: Annotated[
             str,
             "A previously completed pipeline run to compare against; its "
-            "dataset and SAE artifacts form the past-side counterpart.",
+            "dataset and SAE artifacts form the past-side counterpart. Must "
+            "be built from the same dataset as the current run so user "
+            "indices refer to the same people.",
         ],
         user_id: Annotated[
             int,
@@ -264,9 +267,28 @@ class Plugin(BaseComparePlugin):
             alpha: Steering strength in ``[0, 1]``; applied to both
                 sides.
             k: Number of recommendations to return on each side.
+
+        Raises:
+            ValueError: If the past run's user set differs from the
+                current run's (different dataset or filtering).
         """
         device = set_device()
         logger.info(f"Using device: {device}")
+
+        # verify dataset alignment first so a mismatch fails fast
+        past_users = self.load_past_artifact(
+            "dataset_loading",
+            "users.npy",
+            "npy",
+            allow_pickle=True,
+        )
+        if not np.array_equal(self.users, past_users):
+            raise ValueError(
+                "The selected past run was built from a different dataset or "
+                "filtering (its user set differs), so user indices don't refer "
+                "to the same people. Pick a past run whose dataset_loading "
+                "step matches the current pipeline's."
+            )
 
         current = compute_steered_recommendations(
             full_csr=self.full_csr,
@@ -286,12 +308,6 @@ class Plugin(BaseComparePlugin):
             "dataset_loading",
             "full_csr.npz",
             "npz",
-        )
-        past_users = self.load_past_artifact(
-            "dataset_loading",
-            "users.npy",
-            "npy",
-            allow_pickle=True,
         )
         past_items = self.load_past_artifact(
             "dataset_loading",
