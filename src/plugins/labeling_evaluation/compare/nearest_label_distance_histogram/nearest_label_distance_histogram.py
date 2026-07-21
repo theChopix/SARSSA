@@ -187,6 +187,7 @@ class Plugin(BaseComparePlugin):
             past_label_texts=past_label_texts,
             embedding_provider=embedding_provider,
             embedding_model=embedding_model,
+            notifier=self.notifier,
         )
 
         # Persist the same per-label JSON the bars plugin emits so

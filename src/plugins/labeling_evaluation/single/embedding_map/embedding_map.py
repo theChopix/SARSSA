@@ -141,6 +141,7 @@ class Plugin(BasePlugin):
             umap_min_dist=umap_min_dist,
             umap_metric=umap_metric,
             umap_random_state=umap_random_state,
+            notifier=self.notifier,
         )
 
         hover_texts = [

@@ -222,6 +222,7 @@ class Plugin(BaseComparePlugin):
             umap_min_dist=umap_min_dist,
             umap_metric=umap_metric,
             umap_random_state=umap_random_state,
+            notifier=self.notifier,
         )
         split = len(self.current_label_texts)
         self.current_umap_coords = combined_coords[:split]

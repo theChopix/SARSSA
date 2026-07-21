@@ -19,6 +19,7 @@ from functools import lru_cache
 import numpy as np
 
 from utils.embedder.registry import create_embedder
+from utils.plugin_notifier import PluginNotifier
 
 _CACHE_MAXSIZE = 4
 
@@ -54,6 +55,7 @@ def embed_labels(
     label_texts: list[str],
     provider: str,
     model: str,
+    notifier: PluginNotifier | None = None,
 ) -> np.ndarray:
     """Return embeddings for *label_texts*; memoized per (labels, provider, model).
 
@@ -66,6 +68,8 @@ def embed_labels(
             in a row hits the cache; a reordered list does not.
         provider: Embedder provider name (e.g. ``"openai"``).
         model: Model identifier (e.g. ``"text-embedding-3-small"``).
+        notifier: Optional notifier; announces the call and reports
+            whether the cache served it.
 
     Returns:
         np.ndarray: ``(len(label_texts), embedding_dim)`` array of
@@ -79,4 +83,10 @@ def embed_labels(
     """
     if not label_texts:
         raise ValueError("label_texts must not be empty")
-    return _embed_label_tuple(tuple(label_texts), provider, model)
+    if notifier is not None:
+        notifier.info(f"Embedding {len(label_texts):,} labels via {provider}/{model}...")
+    hits_before = _embed_label_tuple.cache_info().hits
+    embeddings = _embed_label_tuple(tuple(label_texts), provider, model)
+    if notifier is not None and _embed_label_tuple.cache_info().hits > hits_before:
+        notifier.info("Served from the embedding cache — no API call needed")
+    return embeddings

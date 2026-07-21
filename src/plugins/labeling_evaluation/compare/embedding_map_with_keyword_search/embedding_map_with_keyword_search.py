@@ -258,7 +258,9 @@ class Plugin(BaseComparePlugin):
         n_past = len(past_label_texts)
         combined_texts = self.current_label_texts + past_label_texts + [keyword]
 
-        embeddings = embed_labels(combined_texts, embedding_provider, embedding_model)
+        embeddings = embed_labels(
+            combined_texts, embedding_provider, embedding_model, self.notifier
+        )
         current_embeddings = embeddings[:n_current]
         past_embeddings = embeddings[n_current : n_current + n_past]
         keyword_embedding = embeddings[-1]
@@ -281,6 +283,7 @@ class Plugin(BaseComparePlugin):
             umap_min_dist=umap_min_dist,
             umap_metric=umap_metric,
             umap_random_state=umap_random_state,
+            notifier=self.notifier,
         )
         self.current_umap_coords = combined_coords[:n_current]
         self.past_umap_coords = combined_coords[n_current : n_current + n_past]

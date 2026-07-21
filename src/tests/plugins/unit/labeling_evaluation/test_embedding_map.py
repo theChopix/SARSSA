@@ -51,7 +51,7 @@ class TestComputeLabelEmbeddingCoords:
 
         np.testing.assert_array_equal(result, expected_coords)
         mock_embed_labels.assert_called_once_with(
-            ["a", "b", "c"], "openai", "text-embedding-3-small"
+            ["a", "b", "c"], "openai", "text-embedding-3-small", None
         )
 
         mock_umap_cls.assert_called_once_with(
@@ -159,4 +159,4 @@ class TestComputeLabelEmbeddingCoords:
             umap_random_state=1,
         )
 
-        mock_embed_labels.assert_called_once_with(["a"], "gemini", "m")
+        mock_embed_labels.assert_called_once_with(["a"], "gemini", "m", None)

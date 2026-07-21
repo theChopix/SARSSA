@@ -17,6 +17,7 @@ import numpy as np
 import umap
 
 from plugins.labeling_evaluation._embedding_cache import embed_labels
+from utils.plugin_notifier import PluginNotifier
 
 
 def compute_label_embedding_coords(
@@ -27,6 +28,7 @@ def compute_label_embedding_coords(
     umap_min_dist: float,
     umap_metric: str,
     umap_random_state: int,
+    notifier: PluginNotifier | None = None,
 ) -> np.ndarray:
     """Embed *label_texts* and project them to a 2-D UMAP space.
 
@@ -42,6 +44,7 @@ def compute_label_embedding_coords(
         umap_min_dist: ``min_dist`` knob forwarded to UMAP.
         umap_metric: Distance metric forwarded to UMAP.
         umap_random_state: Seed forwarded to UMAP for reproducibility.
+        notifier: Optional notifier; announces each phase before it runs.
 
     Returns:
         np.ndarray: ``(len(label_texts), 2)`` array of UMAP-reduced
@@ -53,8 +56,10 @@ def compute_label_embedding_coords(
     if not label_texts:
         raise ValueError("label_texts must not be empty")
 
-    embeddings = embed_labels(label_texts, embedding_provider, embedding_model)
+    embeddings = embed_labels(label_texts, embedding_provider, embedding_model, notifier)
 
+    if notifier is not None:
+        notifier.info(f"Projecting {len(label_texts):,} embeddings to 2-D with UMAP...")
     reducer = umap.UMAP(
         n_components=2,
         n_neighbors=umap_n_neighbors,

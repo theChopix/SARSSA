@@ -125,12 +125,14 @@ class Plugin(BasePlugin):
         self.sae.to(device)
 
         # compute SAE activations
+        self.notifier.info(f"Computing SAE activations for {len(self.items):,} items...")
         item_acts = compute_sae_item_activations(
             self.base_model,
             self.sae,
             len(self.items),
             batch_size=batch_size,
             device=device,
+            notifier=self.notifier,
         )
 
         # build tag–item probability matrix (global normalization)
@@ -145,6 +147,10 @@ class Plugin(BasePlugin):
         dead_neuron_mask = item_acts_np.sum(axis=0) == 0
 
         # aggregate tag → neuron (kept in-memory only; not persisted)
+        self.notifier.info(
+            f"Scoring {item_acts_np.shape[1]:,} neurons against "
+            f"{self.tag_item_prob.shape[0]:,} tags..."
+        )
         tag_neuron = self.tag_item_prob @ item_acts_np
 
         tag_neuron_dense = (

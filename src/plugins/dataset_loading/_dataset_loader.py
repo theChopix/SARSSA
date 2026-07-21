@@ -8,6 +8,8 @@ import numpy as np
 import polars as pl
 import scipy.sparse as sp
 
+from utils.plugin_notifier import PluginNotifier
+
 
 class DatasetLoader:
     # Constants (subclasses override)
@@ -54,8 +56,21 @@ class DatasetLoader:
         """Check whether a canonical file exists in data_dir."""
         return os.path.exists(self._resolve_path(filename))
 
-    def prepare(self, val_ratio: float, test_ratio: float, seed: int) -> None:
-        """Prepare all data for processing."""
+    def prepare(
+        self,
+        val_ratio: float,
+        test_ratio: float,
+        seed: int,
+        notifier: PluginNotifier | None = None,
+    ) -> None:
+        """Prepare all data for processing.
+
+        Args:
+            val_ratio: Validation split fraction.
+            test_ratio: Test split fraction.
+            seed: Random seed for the split.
+            notifier: Optional notifier; phases are announced before they run.
+        """
         self._seed = seed
         self._val_ratio = val_ratio
         self._test_ratio = test_ratio
@@ -64,6 +79,8 @@ class DatasetLoader:
         start = time.time()
 
         self.logger.info("Loading dataset...")
+        if notifier is not None:
+            notifier.info(f"Loading {self.name} interactions...")
         self.load_ratings()
         load_end = time.time()
         self.logger.info(f"Dataset loaded in {load_end - start:.2f}s")
@@ -71,16 +88,29 @@ class DatasetLoader:
         self.validate_interactions()
 
         self.logger.info("Filtering dataset...")
+        if notifier is not None:
+            notifier.info(
+                f"Filtering {len(self.df_interactions):,} interactions "
+                f"(min {self.MIN_USER_INTERACTIONS}/user, "
+                f"{self.MIN_ITEM_INTERACTIONS}/item)..."
+            )
         self.filter_interactions()
         filter_end = time.time()
         self.logger.info(f"Dataset filtered in {filter_end - load_end:.2f}s")
 
+        num_users = len(self.df_interactions["userId"].unique())
+        num_items = len(self.df_interactions["itemId"].unique())
         self.logger.info(
             "Final interactions: %d, users: %d, items: %d",
             len(self.df_interactions),
-            len(self.df_interactions["userId"].unique()),
-            len(self.df_interactions["itemId"].unique()),
+            num_users,
+            num_items,
         )
+        if notifier is not None:
+            notifier.info(
+                f"After filtering: {len(self.df_interactions):,} interactions, "
+                f"{num_users:,} users, {num_items:,} items"
+            )
 
         self.logger.info("Creating csr_matrix...")
         self.build_csr_matrix()
@@ -88,6 +118,8 @@ class DatasetLoader:
         self.logger.info(f"csr_matrix created in {csr_end - filter_end:.2f}s")
 
         self.logger.info("Splitting dataset...")
+        if notifier is not None:
+            notifier.info(f"Splitting {num_users:,} users into train/valid/test...")
         self.split(val_ratio, test_ratio, seed=seed)
         split_end = time.time()
         self.logger.info(f"Dataset split in {split_end - csr_end:.2f}s")
@@ -96,6 +128,12 @@ class DatasetLoader:
         self.logger.info(f"Dataset prepared in {split_end - start:.2f}s")
 
         self.load_optional_data()
+        if notifier is not None:
+            notifier.success(
+                f"{self.name} ready — {len(self.df_interactions):,} interactions, "
+                f"{num_users:,} users, {num_items:,} items "
+                f"(in {split_end - start:.0f}s)"
+            )
 
     @abstractmethod
     def load_ratings(self) -> None:

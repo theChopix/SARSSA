@@ -4,6 +4,7 @@ import torch
 from tqdm import tqdm
 
 from utils.data_loading.data_loader import DataLoader
+from utils.plugin_notifier import PluginNotifier
 from utils.torch.models.base_model import BaseModel
 from utils.torch.models.fused_model import FusedModel
 from utils.torch.models.sae_model import SAE
@@ -377,6 +378,7 @@ def compute_sae_item_activations(
     num_items: int,
     batch_size: int = 1024,
     device: str = "cpu",
+    notifier: PluginNotifier | None = None,
 ):
     """Compute SAE activations for all items using one-hot item representations.
 
@@ -389,6 +391,7 @@ def compute_sae_item_activations(
         num_items: Total number of items in the catalogue.
         batch_size: Number of items to process per batch.
         device: PyTorch device for computation.
+        notifier: Optional notifier; reports batch progress.
 
     Returns:
         torch.Tensor: SAE activation matrix of shape ``(num_items, num_neurons)``.
@@ -396,13 +399,17 @@ def compute_sae_item_activations(
     base_model.eval().to(device)
     sae.eval().to(device)
 
-    eye = torch.eye(num_items, device=device)
     activations = []
 
+    # one-hot rows are built per batch
     for i in tqdm(range(0, num_items, batch_size), desc="Computing SAE item activations"):
-        batch = eye[i : i + batch_size]
+        end = min(i + batch_size, num_items)
+        batch = torch.zeros(end - i, num_items, device=device)
+        batch[torch.arange(end - i, device=device), torch.arange(i, end, device=device)] = 1.0
         dense = base_model.encode(batch)
         e, *_ = sae.encode(dense)
         activations.append(e.cpu())
+        if notifier is not None:
+            notifier.progress(f"Item activations: {end:,} / {num_items:,}")
 
     return torch.cat(activations)  # (items × neurons)
