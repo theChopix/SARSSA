@@ -528,6 +528,7 @@ function DropdownSelect({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
+  const [sortByTint, setSortByTint] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -694,12 +695,29 @@ function DropdownSelect({
                          focus:outline-none focus:ring-2 focus:ring-blue-400
                          text-gray-800 bg-white"
             />
+            {options.some((o) => o.tint != null) && (
+              <label
+                className="mt-1.5 flex items-center gap-1.5 px-0.5 text-xs
+                           text-gray-600 cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  checked={sortByTint}
+                  onChange={(e) => setSortByTint(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                Sort by confidence
+              </label>
+            )}
           </div>
 
           {/* Filtered options */}
           <ul className="max-h-52 overflow-y-auto">
             {options
               .filter((o) => o.label.toLowerCase().includes(filter.toLowerCase()))
+              .sort((a, b) =>
+                sortByTint ? (b.tint ?? -Infinity) - (a.tint ?? -Infinity) : 0,
+              )
               .map((opt) => (
                 <li
                   key={opt.value}

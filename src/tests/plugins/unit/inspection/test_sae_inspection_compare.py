@@ -166,13 +166,13 @@ class TestCompareSaeInspectionFormatter:
             }
         )
         assert {
-            "label": "concept_a [neuron id 0] · conf 0.50",
+            "label": "concept_a [neuron id 0] · conf 0.500",
             "value": "0",
             "tint": 0.5,
             "emphasis": "concept_a",
         } in result
         assert {
-            "label": "concept_b [neuron id 5] · conf -0.10",
+            "label": "concept_b [neuron id 5] · conf -0.100",
             "value": "5",
             "tint": -0.1,
             "emphasis": "concept_b",

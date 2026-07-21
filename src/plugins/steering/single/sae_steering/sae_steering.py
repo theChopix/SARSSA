@@ -153,7 +153,7 @@ class Plugin(BasePlugin):
             if confidence is None:
                 text = f"{name} [neuron id {nid}]"
             else:
-                text = f"{name} [neuron id {nid}] · conf {confidence:.2f}"
+                text = f"{name} [neuron id {nid}] · conf {confidence:.3f}"
             choices.append({"label": text, "value": nid, "tint": confidence, "emphasis": name})
         return choices
 
