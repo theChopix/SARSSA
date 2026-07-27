@@ -373,6 +373,7 @@ class TestTaskToSummary:
         summary = task_to_summary(task)
 
         assert summary.task_id == task.task_id
+        assert summary.kind == "pipeline"
         assert summary.run_id == "run1"
         assert summary.pipeline_name == "Baseline"
         assert summary.status == "queued"
@@ -381,6 +382,14 @@ class TestTaskToSummary:
         assert summary.total_steps == 2
         assert summary.steps_requested == steps
         assert summary.initial_context == initial_context
+
+    def test_step_kind_reaches_summary(self) -> None:
+        """Verify a single-step task is summarised with kind "step"."""
+        _clear_store()
+        task = create_task([{"plugin": "a.b.c", "params": {}}], kind="step")
+
+        assert task.kind == "step"
+        assert task_to_summary(task).kind == "step"
 
 
 class TestTaskStateMessages:

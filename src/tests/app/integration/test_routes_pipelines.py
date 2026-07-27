@@ -637,6 +637,7 @@ class TestExecuteStepAsync:
         task = get_task(task_id)
         assert task is not None
         assert task.run_id == "my_parent_run"
+        assert task.kind == "step"
 
     @patch("app.api.routes_pipelines.run_step_worker")
     def test_task_has_correct_step(self, _mock_worker: MagicMock, client: TestClient) -> None:

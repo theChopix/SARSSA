@@ -686,6 +686,166 @@ function pollTaskUntilDone(
   });
 }
 
+/**
+ * Poll a single-step background task every 2s until it reaches a terminal
+ * state, updating the category's card and toasting plugin notifications.
+ *
+ * Shared by `runSingleStep` (fresh launch) and `adoptStepTask` (loading a
+ * step task from the running-tasks menu). Unlike `pollTaskUntilDone` it
+ * never touches the pipeline progress state — the card spinner and the
+ * plain "Executing step..." bar are the only progress UI.
+ *
+ * @param skipMessageBacklog - When adopting, suppress toasts for messages
+ *   already emitted before adoption so only genuinely new ones fire.
+ * @param supersede - Register as the single active poller, replacing the
+ *   previous one (menu adoption switches tasks). A natively launched step
+ *   polls unregistered so adopting another task never orphans its card.
+ */
+function pollStepTaskUntilDone(
+  taskId: string,
+  category: string,
+  set: StoreSet,
+  get: StoreGet,
+  {
+    skipMessageBacklog = false,
+    supersede = false,
+  }: { skipMessageBacklog?: boolean; supersede?: boolean } = {}
+): Promise<void> {
+  const abort = { cancelled: false };
+  if (supersede) {
+    if (activePoll) activePoll.cancelled = true;
+    activePoll = abort;
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    let seenMessageCount = 0;
+    let firstTick = true;
+    const interval = setInterval(async () => {
+      // Stop quietly if a newer poller has taken over.
+      if (abort.cancelled) {
+        clearInterval(interval);
+        resolve();
+        return;
+      }
+      try {
+        const status = await getTaskStatus(taskId);
+
+        // On adoption the message backlog was already shown elsewhere —
+        // adopt the current count once so only new ones toast.
+        if (firstTick && skipMessageBacklog) {
+          seenMessageCount = status.messages.length;
+        }
+        firstTick = false;
+
+        // Fire toasts for any new plugin notifications ("progress"
+        // heartbeats are not toasted — see pollTaskUntilDone).
+        const newMessages = status.messages.slice(seenMessageCount);
+        for (const msg of newMessages) {
+          if (msg.level === "progress") continue;
+          if (msg.level === "success") toast.success(msg.text);
+          else if (msg.level === "warning") toast.warning(msg.text);
+          else if (msg.level === "error") toast.error(msg.text);
+          else toast.info(msg.text);
+        }
+        seenMessageCount += newMessages.length;
+
+        if (status.status === "completed") {
+          clearInterval(interval);
+          const completed = status.completed_steps[0];
+          const c = { ...get().cards };
+          if (completed && c[completed.category]) {
+            c[completed.category] = {
+              ...c[completed.category],
+              status: "done",
+              stepRunId: completed.run_id,
+            };
+            set({ cards: c });
+          }
+          resolve();
+        } else if (status.status === "error") {
+          clearInterval(interval);
+          const c = { ...get().cards };
+          if (c[category]) {
+            c[category] = { ...c[category], status: "error" };
+          }
+          set({
+            cards: c,
+            errorMessage: status.error ?? "Step execution failed.",
+          });
+          resolve();
+        } else if (status.status === "cancelled") {
+          clearInterval(interval);
+          const c = { ...get().cards };
+          if (c[category]) {
+            c[category] = { ...c[category], status: "idle" };
+          }
+          set({
+            cards: c,
+            errorMessage: status.error ?? "Step cancelled.",
+          });
+          resolve();
+        }
+      } catch (pollError) {
+        clearInterval(interval);
+        reject(pollError);
+      }
+    }, 2000);
+  });
+}
+
+/**
+ * Adopt a running single-step task from the running-tasks menu.
+ *
+ * Rebuilds the parent run's card layout from its context artifact (a step
+ * task carries no initial_context), marks the executing card as running,
+ * and polls without any pipeline chrome — no bottom-bar progress, no
+ * cancel buttons — mirroring a natively launched single step.
+ */
+async function adoptStepTask(
+  summary: TaskSummary,
+  set: StoreSet,
+  get: StoreGet
+): Promise<void> {
+  const category = summary.steps_requested[0]?.plugin.split(".")[0] ?? "";
+
+  let context: PipelineContext | null = null;
+  if (summary.run_id) {
+    try {
+      context = await fetchRunContext(summary.run_id);
+    } catch (error) {
+      console.error("Failed to fetch parent run context:", error);
+    }
+  }
+
+  const cards = markLoadedContext(
+    cardsFromSteps(get().cards, summary.steps_requested),
+    context ?? undefined
+  );
+  if (cards[category]) {
+    cards[category] = { ...cards[category], status: "running", stepRunId: null };
+  }
+  set({
+    cards,
+    activeRunCategories: [category],
+    pipelineRunning: false,
+    pipelineQueued: false,
+    ...activityReset,
+    currentTaskId: summary.task_id,
+    currentRunId: summary.run_id,
+    context,
+    errorMessage: null,
+  });
+
+  try {
+    await pollStepTaskUntilDone(summary.task_id, category, set, get, {
+      skipMessageBacklog: true,
+      supersede: true,
+    });
+  } catch (error) {
+    handleTrackingFailure(error, summary.task_id, set, get);
+  }
+}
+
 // ── Store implementation ────────────────────────────────
 
 /**
@@ -1050,7 +1210,13 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
   loadRunningTask: async (summary: TaskSummary) => {
     // Already the active run — nothing to switch to.
-    if (get().currentTaskId === summary.task_id && get().pipelineRunning) {
+    if (get().currentTaskId === summary.task_id) {
+      return;
+    }
+
+    // Single-step tasks adopt like a natively launched step
+    if (summary.kind === "step") {
+      await adoptStepTask(summary, set, get);
       return;
     }
 
@@ -1117,66 +1283,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       const { task_id } = await executeStepAsync(runId, step);
 
       // Poll every 2 seconds until the task reaches a terminal state.
-      await new Promise<void>((resolve, reject) => {
-        let seenMessageCount = 0;
-        const interval = setInterval(async () => {
-          try {
-            const status = await getTaskStatus(task_id);
-
-            // Fire toasts for any new plugin notifications ("progress"
-            // heartbeats are not toasted — see pollTaskUntilDone).
-            const newMessages = status.messages.slice(seenMessageCount);
-            for (const msg of newMessages) {
-              if (msg.level === "progress") continue;
-              if (msg.level === "success") toast.success(msg.text);
-              else if (msg.level === "warning") toast.warning(msg.text);
-              else if (msg.level === "error") toast.error(msg.text);
-              else toast.info(msg.text);
-            }
-            seenMessageCount += newMessages.length;
-
-            if (status.status === "completed") {
-              clearInterval(interval);
-              const completed = status.completed_steps[0];
-              const c = { ...get().cards };
-              if (completed && c[completed.category]) {
-                c[completed.category] = {
-                  ...c[completed.category],
-                  status: "done",
-                  stepRunId: completed.run_id,
-                };
-                set({ cards: c });
-              }
-              resolve();
-            } else if (status.status === "error") {
-              clearInterval(interval);
-              const c = { ...get().cards };
-              if (c[category]) {
-                c[category] = { ...c[category], status: "error" };
-              }
-              set({
-                cards: c,
-                errorMessage: status.error ?? "Step execution failed.",
-              });
-              resolve();
-            } else if (status.status === "cancelled") {
-              clearInterval(interval);
-              const c = { ...get().cards };
-              if (c[category]) {
-                c[category] = { ...c[category], status: "idle" };
-              }
-              set({
-                cards: c,
-                errorMessage: status.error ?? "Step cancelled.",
-              });
-              resolve();
-            }
-          } catch (pollError) {
-            clearInterval(interval);
-            reject(pollError);
-          }
-        }, 2000);
-      });
+      await pollStepTaskUntilDone(task_id, category, set, get);
     } catch (error) {
       console.error("Execute step async error:", error);
       const c = { ...get().cards };

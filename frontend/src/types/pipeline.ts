@@ -122,6 +122,8 @@ export interface TaskMessage {
  */
 export interface TaskSummary {
   task_id: string;
+  /** "pipeline" for full runs, "step" for single-step executions. */
+  kind: "pipeline" | "step";
   run_id: string | null;
   pipeline_name: string;
   /** MLflow experiment the task logs to ("" = shared experiment). */

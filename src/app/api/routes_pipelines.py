@@ -335,7 +335,7 @@ def execute_step_async(run_id: str, step: StepDefinition) -> dict[str, str]:
         dict[str, str]: ``{"task_id": "..."}``.  Poll
             ``GET /tasks/{task_id}`` for progress.
     """
-    task = create_task(steps=[step.model_dump()], run_id=run_id)
+    task = create_task(steps=[step.model_dump()], run_id=run_id, kind="step")
 
     submit(task, run_step_worker)
 
