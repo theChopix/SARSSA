@@ -77,11 +77,19 @@ class Plugin(BasePlugin):
     )
 
     def load_context(self, context: dict) -> None:
-        """Load neuron labels and derive sorted IDs and label texts."""
+        """Load neuron labels and derive sorted IDs and label texts.
+
+        Unlabeled neurons (label ``None``) are excluded — embedding the
+        literal text "None" would only add noise to the map.
+        """
         super().load_context(context)
-        self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
+        self.neuron_ids = sorted(
+            (nid for nid, entry in self.neuron_labels.items() if entry["label"] is not None),
+            key=lambda x: int(x),
+        )
         self.label_texts = [str(self.neuron_labels[nid]["label"]) for nid in self.neuron_ids]
-        logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
+        skipped = len(self.neuron_labels) - len(self.neuron_ids)
+        logger.info(f"Loaded {len(self.neuron_ids)} neuron labels ({skipped} unlabeled excluded)")
 
     def run(
         self,
@@ -153,7 +161,7 @@ class Plugin(BasePlugin):
                 x=self.umap_coords[:, 0],
                 y=self.umap_coords[:, 1],
                 mode="markers",
-                marker={"size": point_size, "opacity": 0.8, "colorscale": "Viridis"},
+                marker={"size": point_size, "opacity": 0.5, "colorscale": "Viridis"},
                 text=hover_texts,
                 hovertemplate="%{text}<extra></extra>",
                 customdata=self.neuron_ids,

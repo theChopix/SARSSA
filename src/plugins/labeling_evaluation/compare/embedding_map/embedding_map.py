@@ -30,7 +30,7 @@ from utils.plugin_logger import get_logger
 logger = get_logger(__name__)
 
 CURRENT_RUN_COLOR = "#1f77b4"
-PAST_RUN_COLOR = "#d62728"
+PAST_RUN_COLOR = "#ff7f0e"
 
 
 class Plugin(BaseComparePlugin):
@@ -120,11 +120,19 @@ class Plugin(BaseComparePlugin):
                 run-id dicts.
         """
         super().load_context(context)
-        self.current_neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
+        # unlabeled neurons (label None) are excluded from the map
+        self.current_neuron_ids = sorted(
+            (nid for nid, entry in self.neuron_labels.items() if entry["label"] is not None),
+            key=lambda x: int(x),
+        )
         self.current_label_texts = [
             str(self.neuron_labels[nid]["label"]) for nid in self.current_neuron_ids
         ]
-        logger.info(f"Loaded {len(self.current_neuron_ids)} current-run neuron labels")
+        skipped = len(self.neuron_labels) - len(self.current_neuron_ids)
+        logger.info(
+            f"Loaded {len(self.current_neuron_ids)} current-run neuron labels "
+            f"({skipped} unlabeled excluded)"
+        )
 
     def run(
         self,
@@ -198,7 +206,11 @@ class Plugin(BaseComparePlugin):
             "neuron_labels.json",
             "json",
         )
-        past_neuron_ids = sorted(past_neuron_labels.keys(), key=lambda x: int(x))
+        # unlabeled neurons (label None) are excluded from the map
+        past_neuron_ids = sorted(
+            (nid for nid, entry in past_neuron_labels.items() if entry["label"] is not None),
+            key=lambda x: int(x),
+        )
         past_label_texts = [str(past_neuron_labels[nid]["label"]) for nid in past_neuron_ids]
 
         logger.info(
@@ -240,26 +252,34 @@ class Plugin(BaseComparePlugin):
         self._fig = go.Figure()
         self._fig.add_trace(
             go.Scatter(
-                x=self.current_umap_coords[:, 0],
-                y=self.current_umap_coords[:, 1],
-                mode="markers",
-                name="Current Run",
-                marker={"size": point_size, "opacity": 0.8, "color": CURRENT_RUN_COLOR},
-                text=current_hover,
-                hovertemplate="%{text}<extra></extra>",
-                customdata=self.current_neuron_ids,
-            )
-        )
-        self._fig.add_trace(
-            go.Scatter(
                 x=self.past_umap_coords[:, 0],
                 y=self.past_umap_coords[:, 1],
                 mode="markers",
                 name="Past Run",
-                marker={"size": point_size, "opacity": 0.8, "color": PAST_RUN_COLOR},
+                marker={"size": point_size, "opacity": 0.45, "color": PAST_RUN_COLOR},
                 text=past_hover,
                 hovertemplate="%{text}<extra></extra>",
                 customdata=past_neuron_ids,
+            )
+        )
+        self._fig.add_trace(
+            go.Scatter(
+                x=self.current_umap_coords[:, 0],
+                y=self.current_umap_coords[:, 1],
+                mode="markers",
+                name="Current Run",
+                marker={
+                    # Slightly smaller so the cross sits inside the circle
+                    # of a coincident past point.
+                    "size": max(1, point_size - 1),
+                    "opacity": 0.9,
+                    "color": CURRENT_RUN_COLOR,
+                    "symbol": "x-thin",
+                    "line": {"width": 1.5, "color": CURRENT_RUN_COLOR},
+                },
+                text=current_hover,
+                hovertemplate="%{text}<extra></extra>",
+                customdata=self.current_neuron_ids,
             )
         )
 
