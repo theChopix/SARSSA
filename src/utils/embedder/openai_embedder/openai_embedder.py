@@ -18,7 +18,12 @@ class OpenAIEmbeddingLLM(EmbeddingLLM):
     def __init__(self, model: str):
         self.model = model
         api_key = os.getenv("OPENAI_API_KEY") or ""
-        self.model_ = OpenAIEmbeddings(openai_api_key=api_key, model=self.model)  # type: ignore[arg-type]
+        self.model_ = OpenAIEmbeddings(
+            openai_api_key=api_key,  # type: ignore[arg-type]
+            model=self.model,
+            request_timeout=60,
+            max_retries=5,
+        )
 
     def generate_embedding(self, text: str) -> list[float]:
         return self.model_.embed_query(text)
