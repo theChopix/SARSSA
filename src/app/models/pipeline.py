@@ -46,6 +46,8 @@ class TaskState:
 
     Attributes:
         task_id: Unique identifier for this task.
+        kind: ``"pipeline"`` for full runs, ``"step"`` for single-step
+            executions on an existing run.
         status: One of ``"queued"``, ``"running"``, ``"completed"``,
             ``"error"``, ``"cancelled"``.
         run_id: MLflow parent run ID (set after ``engine.start_run()``).
@@ -81,6 +83,7 @@ class TaskState:
     """
 
     task_id: str
+    kind: str = "pipeline"
     status: str = "running"
     cancel_event: threading.Event = field(default_factory=threading.Event)
     abort_event: threading.Event = field(default_factory=threading.Event)
@@ -143,6 +146,7 @@ class TaskSummary(BaseModel):
     """
 
     task_id: str
+    kind: str = "pipeline"
     run_id: str | None = None
     pipeline_name: str = ""
     experiment_name: str = ""

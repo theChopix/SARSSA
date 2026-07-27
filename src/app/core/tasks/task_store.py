@@ -20,6 +20,7 @@ def create_task(
     pipeline_name: str = "",
     experiment_name: str = "",
     run_id: str | None = None,
+    kind: str = "pipeline",
 ) -> TaskState:
     """Create a new task, store it, and return it.
 
@@ -35,6 +36,8 @@ def create_task(
         run_id: Optional pre-existing MLflow parent run ID.  When provided,
             ``task.run_id`` is set immediately so the worker can resume an
             existing run rather than starting a fresh one.
+        kind: ``"pipeline"`` for full runs, ``"step"`` for single-step
+            executions on an existing run.
 
     Returns:
         TaskState: The newly created task with status ``"queued"``.
@@ -42,6 +45,7 @@ def create_task(
     task_id = uuid.uuid4().hex
     task = TaskState(
         task_id=task_id,
+        kind=kind,
         status="queued",
         steps_requested=steps,
         initial_context=initial_context or {},
@@ -121,6 +125,7 @@ def task_to_summary(task: TaskState) -> TaskSummary:
     """
     return TaskSummary(
         task_id=task.task_id,
+        kind=task.kind,
         run_id=task.run_id,
         pipeline_name=task.pipeline_name,
         experiment_name=task.experiment_name,
