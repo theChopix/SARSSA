@@ -153,7 +153,7 @@ class TestSingleKeywordSearchRun:
         # Keyword trace is a single star.
         keyword = traces[2]
         assert len(keyword.x) == 1
-        assert keyword.marker.symbol == "star"
+        assert keyword.marker.symbol == "cross-thin"
         assert keyword.x[0] == 50.0
 
     @patch(
@@ -197,9 +197,11 @@ class TestSingleKeywordSearchRun:
         assert len(sidebars) == 1
         items = sidebars[0].items
         assert len(items) == 2
+        # Trace points draw reversed (closest on top), so the i-th best
+        # sidebar item targets point (n - 1 - i).
         for i, item in enumerate(items):
             assert item.trace_index == 1
-            assert item.point_index == i
+            assert item.point_index == len(items) - 1 - i
 
     def test_empty_keyword_raises(self) -> None:
         """Verify a blank keyword is rejected before any embedding work."""

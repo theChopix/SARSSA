@@ -2,7 +2,7 @@
 
 Renders an interactive UMAP scatter plot of neuron labels and adds:
 
-- A keyword marker (star symbol) at the keyword's UMAP-projected
+- A keyword marker (red cross) at the keyword's UMAP-projected
   position so the viewer can see where it sits in label space.
 - A separate "highlight" trace containing the top-k labels closest
   to the keyword by cosine similarity over the high-dimensional
@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 
 PLAIN_COLOR = "#9ca3af"
 HIGHLIGHT_COLOR = "#f59e0b"
-KEYWORD_COLOR = "#10b981"
+KEYWORD_COLOR = "#ff0000"
 HIGHLIGHT_DEFAULT_SIZE = 14
 KEYWORD_MARKER_SIZE = 18
 
@@ -132,9 +132,14 @@ class Plugin(BasePlugin):
                 run-id dicts.
         """
         super().load_context(context)
-        self.neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
+        # unlabeled neurons (label None) are excluded from the map
+        self.neuron_ids = sorted(
+            (nid for nid, entry in self.neuron_labels.items() if entry["label"] is not None),
+            key=lambda x: int(x),
+        )
         self.label_texts = [str(self.neuron_labels[nid]["label"]) for nid in self.neuron_ids]
-        logger.info(f"Loaded {len(self.neuron_ids)} neuron labels")
+        skipped = len(self.neuron_labels) - len(self.neuron_ids)
+        logger.info(f"Loaded {len(self.neuron_ids)} neuron labels ({skipped} unlabeled excluded)")
 
     def run(
         self,
@@ -255,14 +260,18 @@ class Plugin(BasePlugin):
             f"<b>Neuron {self.neuron_ids[i]}</b><br>{self.label_texts[i]}" for i in plain_indices
         ]
 
-        highlight_coords = self.umap_coords[top_k_indices]
+        # draw matches in ascending-similarity order so the closest one
+        # is rendered last
+        draw_indices = top_k_indices[::-1]
+        draw_similarities = top_k_similarities[::-1]
+        highlight_coords = self.umap_coords[draw_indices]
         highlight_hover = [
             (
                 f"<b>Neuron {self.neuron_ids[int(idx)]}</b><br>"
                 f"{self.label_texts[int(idx)]}<br>"
                 f"<b>Similarity:</b> {sim:.4f}"
             )
-            for idx, sim in zip(top_k_indices, top_k_similarities, strict=True)
+            for idx, sim in zip(draw_indices, draw_similarities, strict=True)
         ]
 
         top_k_records = [
@@ -285,7 +294,7 @@ class Plugin(BasePlugin):
                     name="Other labels",
                     marker={
                         "size": point_size,
-                        "opacity": 0.6,
+                        "opacity": 0.35,
                         "color": PLAIN_COLOR,
                     },
                     text=plain_hover,
@@ -320,9 +329,9 @@ class Plugin(BasePlugin):
                 name=f"Keyword: {keyword}",
                 marker={
                     "size": KEYWORD_MARKER_SIZE,
-                    "symbol": "star",
+                    "symbol": "cross-thin",
                     "color": KEYWORD_COLOR,
-                    "line": {"width": 1, "color": "#065f46"},
+                    "line": {"width": 3, "color": KEYWORD_COLOR},
                 },
                 text=[f"<b>Keyword</b><br>{keyword}"],
                 hovertemplate="%{text}<extra></extra>",
@@ -345,7 +354,7 @@ class Plugin(BasePlugin):
                 label=f"[neuron {rec['neuron_id']}] {rec['label']}",
                 similarity=rec["similarity"],
                 trace_index=highlight_trace_index,
-                point_index=i,
+                point_index=len(top_k_records) - 1 - i,
             )
             for i, rec in enumerate(top_k_records)
         ]

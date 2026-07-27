@@ -70,6 +70,7 @@ class TestCompareEmbeddingMapRun:
             past_neuron_labels={
                 "7": {"label": "past_a"},
                 "9": {"label": "past_b"},
+                "11": {"label": None},  # unlabeled -> excluded from the map
                 "12": {"label": "past_c"},
             },
         )
@@ -169,6 +170,31 @@ class TestCompareEmbeddingMapRun:
         }
         with pytest.raises(MissingContextError, match="past_run_id"):
             plugin.run(**kwargs_without_past_run_id)
+
+
+class TestCompareEmbeddingMapLoadContext:
+    """Tests for current-side label loading."""
+
+    @patch("plugins.plugin_interface.MLflowRunLoader")
+    def test_unlabeled_neurons_excluded(self, mock_loader_cls: MagicMock) -> None:
+        """Verify None-labeled neurons never reach the map."""
+        from plugins.labeling_evaluation.compare.embedding_map.embedding_map import (
+            Plugin,
+        )
+
+        loader = MagicMock()
+        loader.get_json_artifact.return_value = {
+            "0": {"label": "a"},
+            "1": {"label": None},
+            "2": {"label": "b"},
+        }
+        mock_loader_cls.return_value = loader
+
+        plugin = Plugin()
+        plugin.load_context({"neuron_labeling": {"run_id": "nl"}})
+
+        assert plugin.current_neuron_ids == ["0", "2"]
+        assert plugin.current_label_texts == ["a", "b"]
 
 
 class TestCompareEmbeddingMapHints:

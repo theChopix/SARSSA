@@ -49,8 +49,8 @@ logger = get_logger(__name__)
 
 CURRENT_PLAIN_COLOR = "#bfdbfe"
 CURRENT_HIGHLIGHT_COLOR = "#1d4ed8"
-PAST_PLAIN_COLOR = "#fecaca"
-PAST_HIGHLIGHT_COLOR = "#b91c1c"
+PAST_PLAIN_COLOR = "#fed7aa"
+PAST_HIGHLIGHT_COLOR = "#c2410c"
 KEYWORD_COLOR = "#10b981"
 HIGHLIGHT_DEFAULT_SIZE = 14
 KEYWORD_MARKER_SIZE = 18
@@ -147,11 +147,19 @@ class Plugin(BaseComparePlugin):
     def load_context(self, context: dict[str, Any]) -> None:
         """Load current-run neuron labels and derive sorted ids and texts."""
         super().load_context(context)
-        self.current_neuron_ids = sorted(self.neuron_labels.keys(), key=lambda x: int(x))
+        # unlabeled neurons (label None) are excluded from the map
+        self.current_neuron_ids = sorted(
+            (nid for nid, entry in self.neuron_labels.items() if entry["label"] is not None),
+            key=lambda x: int(x),
+        )
         self.current_label_texts = [
             str(self.neuron_labels[nid]["label"]) for nid in self.current_neuron_ids
         ]
-        logger.info(f"Loaded {len(self.current_neuron_ids)} current-run neuron labels")
+        skipped = len(self.neuron_labels) - len(self.current_neuron_ids)
+        logger.info(
+            f"Loaded {len(self.current_neuron_ids)} current-run neuron labels "
+            f"({skipped} unlabeled excluded)"
+        )
 
     def run(
         self,
@@ -251,7 +259,11 @@ class Plugin(BaseComparePlugin):
             "neuron_labels.json",
             "json",
         )
-        past_neuron_ids = sorted(past_neuron_labels.keys(), key=lambda x: int(x))
+        # unlabeled neurons (label None) are excluded from the map
+        past_neuron_ids = sorted(
+            (nid for nid, entry in past_neuron_labels.items() if entry["label"] is not None),
+            key=lambda x: int(x),
+        )
         past_label_texts = [str(past_neuron_labels[nid]["label"]) for nid in past_neuron_ids]
 
         n_current = len(self.current_label_texts)
@@ -328,19 +340,6 @@ class Plugin(BaseComparePlugin):
         self._fig = go.Figure()
         self._fig.add_trace(
             _make_plain_trace(
-                name="Current Run",
-                coords=self.current_umap_coords[plain_current_idx],
-                hover=[
-                    f"<b>Current Neuron {self.current_neuron_ids[i]}</b><br>"
-                    f"{self.current_label_texts[i]}"
-                    for i in plain_current_idx
-                ],
-                color=CURRENT_PLAIN_COLOR,
-                size=point_size,
-            )
-        )
-        self._fig.add_trace(
-            _make_plain_trace(
                 name="Past Run",
                 coords=self.past_umap_coords[plain_past_idx],
                 hover=[
@@ -349,19 +348,25 @@ class Plugin(BaseComparePlugin):
                 ],
                 color=PAST_PLAIN_COLOR,
                 size=point_size,
+                opacity=0.45,
+            )
+        )
+        self._fig.add_trace(
+            _make_plain_trace(
+                name="Current Run",
+                coords=self.current_umap_coords[plain_current_idx],
+                hover=[
+                    f"<b>Current Neuron {self.current_neuron_ids[i]}</b><br>"
+                    f"{self.current_label_texts[i]}"
+                    for i in plain_current_idx
+                ],
+                color=CURRENT_PLAIN_COLOR,
+                size=max(1, point_size - 1),
+                symbol="x-thin",
+                opacity=0.9,
             )
         )
 
-        self._fig.add_trace(
-            _make_highlight_trace(
-                name="Top current",
-                matches=current_top_k,
-                coords=self.current_umap_coords,
-                color=CURRENT_HIGHLIGHT_COLOR,
-                origin_label="Current",
-            )
-        )
-        current_highlight_trace_index = 2
         self._fig.add_trace(
             _make_highlight_trace(
                 name="Top past",
@@ -371,7 +376,18 @@ class Plugin(BaseComparePlugin):
                 origin_label="Past",
             )
         )
-        past_highlight_trace_index = 3
+        past_highlight_trace_index = 2
+        self._fig.add_trace(
+            _make_highlight_trace(
+                name="Top current",
+                matches=current_top_k,
+                coords=self.current_umap_coords,
+                color=CURRENT_HIGHLIGHT_COLOR,
+                origin_label="Current",
+                symbol="x-thin",
+            )
+        )
+        current_highlight_trace_index = 3
 
         self._fig.add_trace(
             go.Scatter(
@@ -381,9 +397,9 @@ class Plugin(BaseComparePlugin):
                 name=f"Keyword: {keyword}",
                 marker={
                     "size": KEYWORD_MARKER_SIZE,
-                    "symbol": "star",
+                    "symbol": "cross-thin",
                     "color": KEYWORD_COLOR,
-                    "line": {"width": 1, "color": "#065f46"},
+                    "line": {"width": 3, "color": KEYWORD_COLOR},
                 },
                 text=[f"<b>Keyword</b><br>{keyword}"],
                 hovertemplate="%{text}<extra></extra>",
@@ -535,14 +551,20 @@ def _make_plain_trace(
     hover: list[str],
     color: str,
     size: int,
+    symbol: str = "circle",
+    opacity: float = 0.55,
 ) -> go.Scatter:
     """Build the plain (non-highlighted) scatter trace for one side."""
+    marker: dict = {"size": size, "opacity": opacity, "color": color, "symbol": symbol}
+    if symbol.endswith("-thin"):
+        # thin (stroke-only) symbols are invisible without an explicit line
+        marker["line"] = {"width": 1.5, "color": color}
     return go.Scatter(
         x=coords[:, 0] if len(coords) > 0 else [],
         y=coords[:, 1] if len(coords) > 0 else [],
         mode="markers",
         name=name,
-        marker={"size": size, "opacity": 0.55, "color": color},
+        marker=marker,
         text=hover,
         hovertemplate="%{text}<extra></extra>",
     )
@@ -555,13 +577,19 @@ def _make_highlight_trace(
     coords: np.ndarray,
     color: str,
     origin_label: str,
+    symbol: str = "circle",
 ) -> go.Scatter:
     """Build a highlight-trace scatter for one side's top-k matches.
 
-    The trace's points are indexed in the same order as *matches* so
-    sidebar JS can target ``matches[i]`` by passing point index ``i``
-    to ``Plotly.restyle``.
+    Points are drawn in reversed *matches* order so the closest match
+    renders last (on top); ``matches[i]`` therefore sits at point
+    index ``len(matches) - 1 - i`` for the sidebar's ``Plotly.restyle``.
     """
+    line = (
+        {"width": 3, "color": color}
+        if symbol.endswith("-thin")
+        else {"width": 1, "color": "#1f2937"}
+    )
     if not matches:
         # An empty highlight trace still needs to occupy a stable
         # trace index so the keyword trace sits at the same spot
@@ -574,16 +602,18 @@ def _make_highlight_trace(
             marker={
                 "size": HIGHLIGHT_DEFAULT_SIZE,
                 "color": color,
-                "line": {"width": 1, "color": "#1f2937"},
+                "symbol": symbol,
+                "line": line,
             },
         )
-    pts = coords[[m.local_index for m in matches]]
+    draw_matches = list(reversed(matches))
+    pts = coords[[m.local_index for m in draw_matches]]
     hover = [
         (
             f"<b>{origin_label} Neuron {m.neuron_id}</b><br>{m.label}<br>"
             f"<b>Similarity:</b> {m.similarity:.4f}"
         )
-        for m in matches
+        for m in draw_matches
     ]
     return go.Scatter(
         x=pts[:, 0],
@@ -594,7 +624,8 @@ def _make_highlight_trace(
             "size": HIGHLIGHT_DEFAULT_SIZE,
             "opacity": 0.95,
             "color": color,
-            "line": {"width": 1, "color": "#1f2937"},
+            "symbol": symbol,
+            "line": line,
         },
         text=hover,
         hovertemplate="%{text}<extra></extra>",
@@ -610,12 +641,14 @@ def _build_sidebars(
     search_scope: SearchScope,
 ) -> list[Sidebar]:
     """Build the sidebar(s) per the configured search scope."""
+    # Highlight traces draw their points in reversed order (closest on
+    # top), so the i-th best match sits at point index (n - 1 - i).
     current_items = [
         SidebarItem(
             label=f"[neuron {m.neuron_id}] {m.label}",
             similarity=m.similarity,
             trace_index=current_trace_idx,
-            point_index=i,
+            point_index=len(current_top_k) - 1 - i,
             badge="current" if search_scope == "combined" else None,
         )
         for i, m in enumerate(current_top_k)
@@ -625,7 +658,7 @@ def _build_sidebars(
             label=f"[neuron {m.neuron_id}] {m.label}",
             similarity=m.similarity,
             trace_index=past_trace_idx,
-            point_index=i,
+            point_index=len(past_top_k) - 1 - i,
             badge="past" if search_scope == "combined" else None,
         )
         for i, m in enumerate(past_top_k)

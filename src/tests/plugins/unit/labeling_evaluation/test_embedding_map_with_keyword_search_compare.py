@@ -302,11 +302,12 @@ class TestCompareKeywordSearchCombined:
             search_scope="combined",
         )
 
+        # Past highlights sit at trace 2 (below), current at 3 (on top).
         for item in plugin._sidebars[0].items:
             if item.badge == "current":
-                assert item.trace_index == 2
-            elif item.badge == "past":
                 assert item.trace_index == 3
+            elif item.badge == "past":
+                assert item.trace_index == 2
 
 
 class TestCompareKeywordSearchValidation:
