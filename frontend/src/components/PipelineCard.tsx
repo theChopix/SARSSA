@@ -55,7 +55,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { usePipelineStore, mlflowRunUrl } from "../store/pipelineStore";
+import {
+  usePipelineStore,
+  mlflowRunUrl,
+  mlflowRunArtifactsUrl,
+} from "../store/pipelineStore";
 import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
 import { fetchEligiblePipelineRuns } from "../api/pipelines";
 import type { ParamChoice } from "../api/plugins";
@@ -893,6 +897,17 @@ function RunInfoBlock({
               className="text-blue-500 hover:text-blue-700 hover:underline"
             >
               See step run
+            </a>
+          )}
+          {stepRunId && <span className="text-gray-300">|</span>}
+          {stepRunId && (
+            <a
+              href={mlflowRunArtifactsUrl(mlflowInfo, stepRunId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-700 hover:underline"
+            >
+              See step artifacts
             </a>
           )}
         </div>
