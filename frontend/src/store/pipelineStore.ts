@@ -453,6 +453,32 @@ function markLoadedContext(
   return cards;
 }
 
+/** A fresh card grid — every category reset to its default state. */
+function pristineCards(get: StoreGet): Record<string, CardState> {
+  return Object.fromEntries(
+    Object.keys(get().cards).map((key) => [key, defaultCard()])
+  );
+}
+
+/**
+ * Keep only one_time (pipeline) categories of a run context. Multi-run
+ * steps recorded on a run must not fill their cards when a layout is
+ * rebuilt — mirroring loadFromPreviousRun's scoping.
+ */
+function scopeContextToPipeline(
+  context: PipelineContext | undefined,
+  registry: PluginRegistry | null
+): PipelineContext | undefined {
+  if (!context || !registry) return context;
+  const scoped: PipelineContext = {};
+  for (const [category, data] of Object.entries(context)) {
+    if (registry[category]?.category_info.type === "one_time") {
+      scoped[category] = data;
+    }
+  }
+  return scoped;
+}
+
 /**
  * Drop the pending cancellation request if it belongs to *taskId* — used
  * when that task reaches a terminal state. A request for a different task
@@ -697,25 +723,19 @@ function pollTaskUntilDone(
  *
  * @param skipMessageBacklog - When adopting, suppress toasts for messages
  *   already emitted before adoption so only genuinely new ones fire.
- * @param supersede - Register as the single active poller, replacing the
- *   previous one (menu adoption switches tasks). A natively launched step
- *   polls unregistered so adopting another task never orphans its card.
  */
 function pollStepTaskUntilDone(
   taskId: string,
   category: string,
   set: StoreSet,
   get: StoreGet,
-  {
-    skipMessageBacklog = false,
-    supersede = false,
-  }: { skipMessageBacklog?: boolean; supersede?: boolean } = {}
+  { skipMessageBacklog = false }: { skipMessageBacklog?: boolean } = {}
 ): Promise<void> {
+  // Supersede any previous poller — the tab tracks one task at a time,
+  // and every switch rebuilds the card grid for the new task.
+  if (activePoll) activePoll.cancelled = true;
   const abort = { cancelled: false };
-  if (supersede) {
-    if (activePoll) activePoll.cancelled = true;
-    activePoll = abort;
-  }
+  activePoll = abort;
 
   return new Promise<void>((resolve, reject) => {
     let seenMessageCount = 0;
@@ -796,10 +816,11 @@ function pollStepTaskUntilDone(
 /**
  * Adopt a running single-step task from the running-tasks menu.
  *
- * Rebuilds the parent run's card layout from its context artifact (a step
- * task carries no initial_context), marks the executing card as running,
- * and polls without any pipeline chrome — no bottom-bar progress, no
- * cancel buttons — mirroring a natively launched single step.
+ * Rebuilds the card grid from scratch: the parent run's one_time steps
+ * (from its context artifact — a step task carries no initial_context)
+ * plus the executing card marked as running. Polls without any pipeline
+ * chrome — no bottom-bar progress, no cancel buttons — mirroring a
+ * natively launched single step.
  */
 async function adoptStepTask(
   summary: TaskSummary,
@@ -817,9 +838,10 @@ async function adoptStepTask(
     }
   }
 
+  const scoped = scopeContextToPipeline(context ?? undefined, get().registry);
   const cards = markLoadedContext(
-    cardsFromSteps(get().cards, summary.steps_requested),
-    context ?? undefined
+    cardsFromSteps(pristineCards(get), summary.steps_requested),
+    scoped
   );
   if (cards[category]) {
     cards[category] = { ...cards[category], status: "running", stepRunId: null };
@@ -832,14 +854,13 @@ async function adoptStepTask(
     ...activityReset,
     currentTaskId: summary.task_id,
     currentRunId: summary.run_id,
-    context,
+    context: scoped ?? null,
     errorMessage: null,
   });
 
   try {
     await pollStepTaskUntilDone(summary.task_id, category, set, get, {
       skipMessageBacklog: true,
-      supersede: true,
     });
   } catch (error) {
     handleTrackingFailure(error, summary.task_id, set, get);
@@ -1224,13 +1245,19 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     // rebuild the layout from the task's requested steps plus any upstream
     // steps it was loaded on top of, so cards that came from a previous run
     // are restored as done too (steps_requested holds only the new steps).
+    // Either way the grid starts from scratch — cards of runs this tab
+    // showed before must not survive the switch.
     const snapshot = loadRunSnapshot(summary.task_id);
+    const initialContext = scopeContextToPipeline(
+      summary.initial_context,
+      get().registry
+    );
     set({
       cards: snapshot
-        ? { ...get().cards, ...snapshot.cards }
+        ? { ...pristineCards(get), ...snapshot.cards }
         : markLoadedContext(
-            cardsFromSteps(get().cards, summary.steps_requested),
-            summary.initial_context
+            cardsFromSteps(pristineCards(get), summary.steps_requested),
+            initialContext
           ),
       activeRunCategories: summary.steps_requested.map(
         (s) => s.plugin.split(".")[0]
@@ -1242,7 +1269,7 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       currentRunId: summary.run_id,
       currentStepIndex: snapshot?.currentStepIndex ?? summary.current_step_index,
       totalSteps: snapshot?.totalSteps ?? summary.total_steps,
-      context: snapshot ? null : summary.initial_context,
+      context: snapshot ? null : (initialContext ?? null),
       errorMessage: null,
     });
 
