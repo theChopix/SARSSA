@@ -96,6 +96,17 @@ export function mlflowRunUrl(info: MlflowInfo, runId: string): string {
 }
 
 /**
+ * Deep link to a run's Artifacts tab in the MLflow UI.
+ *
+ * @param info  - MLflow connection info (base URL + experiment ID).
+ * @param runId - The MLflow run ID to link to.
+ * @returns Full URL to the run's artifacts view.
+ */
+export function mlflowRunArtifactsUrl(info: MlflowInfo, runId: string): string {
+  return `${mlflowRunUrl(info, runId)}/artifacts`;
+}
+
+/**
  * Construct a deep link to the experiment's run list in the MLflow UI.
  *
  * @param info - MLflow connection info (base URL + experiment ID).

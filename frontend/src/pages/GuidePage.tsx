@@ -297,10 +297,11 @@ const SECTIONS: GuideSection[] = [
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
           <strong>Sequential cards</strong> show, once completed, the
           locked pipeline-run name plus deep links into MLflow ("See
-          pipeline run", "See step run"). All of the step's outputs —
-          interaction matrices, trained models, neuron labels, … — live
-          in MLflow as artifacts of that step's nested run; click
-          through to browse them.
+          pipeline run", "See step run", "See step artifacts"). All of
+          the step's outputs — interaction matrices, trained models,
+          neuron labels, … — live in MLflow as artifacts of that step's
+          nested run; <em>See step artifacts</em> jumps straight to
+          them.
         </p>
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
           <strong>Multi-run cards</strong> expose the same MLflow links{" "}
@@ -389,8 +390,9 @@ const SECTIONS: GuideSection[] = [
           </li>
           <li>
             <strong>Per-card</strong> — completed cards expose{" "}
-            <em>See pipeline run</em> and <em>See step run</em> links
-            straight to those runs in MLflow.
+            <em>See pipeline run</em>, <em>See step run</em> and{" "}
+            <em>See step artifacts</em> links straight to those runs
+            (or the step's artifact browser) in MLflow.
           </li>
         </ul>
         <p className="text-sm text-gray-700 leading-relaxed mt-3 mb-3">
