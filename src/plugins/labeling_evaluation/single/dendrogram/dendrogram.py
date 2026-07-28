@@ -47,6 +47,8 @@ _CLUSTER_PALETTE = [
 ]
 _MAX_IDS_IN_LEAF = 8
 _MAX_HOVER_LABELS = 8
+_PDF_TREE_WIDTH_IN = 20.0
+_PDF_MIN_HEIGHT_IN = 10.0
 
 
 def _depth_linkage(Z: np.ndarray) -> np.ndarray:
@@ -229,10 +231,7 @@ class Plugin(BasePlugin):
         param_groups=[
             ParamGroup("Embedding", ["embedding_provider", "embedding_model"]),
             ParamGroup("Clustering", ["linkage_method"]),
-            ParamGroup(
-                "Visualization",
-                ["axis_mode", "figure_width", "base_height", "label_font_size"],
-            ),
+            ParamGroup("Visualization", ["axis_mode", "label_font_size"]),
         ],
     )
 
@@ -427,17 +426,6 @@ class Plugin(BasePlugin):
             "cosine merge distance, 'depth' spreads them by depth below the "
             "root so structure stays readable when distances are skewed.",
         ] = "depth",
-        figure_width: Annotated[
-            int,
-            "Width of the rendered dendrogram figure, in inches. Larger "
-            "values give the merge axis more room.",
-        ] = 20,
-        base_height: Annotated[
-            int,
-            "Minimum height of the static SVG/PDF figure, in inches. Actual "
-            "height grows with the label count (~0.25 in per label); this "
-            "sets the floor for small label sets.",
-        ] = 10,
         label_font_size: Annotated[
             int,
             "Font size of the per-leaf label text. Lower values keep many "
@@ -451,8 +439,6 @@ class Plugin(BasePlugin):
             embedding_model: Provider-specific model identifier.
             linkage_method: SciPy linkage method.
             axis_mode: ``"distance"`` or ``"depth"`` merge-axis encoding.
-            figure_width: Figure width in inches.
-            base_height: Minimum static-figure height in inches.
             label_font_size: Leaf label font size.
 
         Raises:
@@ -503,8 +489,8 @@ class Plugin(BasePlugin):
         # the longest label so tight_layout can't squeeze the tree
         pdf_leaf_texts = self._leaf_texts(max_ids=None)
         label_margin = _longest_label_width_in(pdf_leaf_texts, label_font_size)
-        total_width = figure_width + label_margin + 1.0
-        dynamic_height = max(base_height, num_labels * 0.25)
+        total_width = _PDF_TREE_WIDTH_IN + label_margin + 1.0
+        dynamic_height = max(_PDF_MIN_HEIGHT_IN, num_labels * 0.25)
         self._fig, ax = plt.subplots(figsize=(total_width, dynamic_height))
         dendrogram(
             Z_plot,
