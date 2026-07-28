@@ -571,6 +571,13 @@ function pollTaskUntilDone(
       try {
         const status = await getTaskStatus(taskId);
 
+        // A newer poller may have taken over during the request.
+        if (abort.cancelled) {
+          clearInterval(interval);
+          resolve();
+          return;
+        }
+
         // Track the run id and load past runs until this run is in the list,
         // so completed-step cards show its friendly name, not the raw id.
         if (status.run_id) {
@@ -749,6 +756,13 @@ function pollStepTaskUntilDone(
       }
       try {
         const status = await getTaskStatus(taskId);
+
+        // A newer poller may have taken over during the request.
+        if (abort.cancelled) {
+          clearInterval(interval);
+          resolve();
+          return;
+        }
 
         // On adoption the message backlog was already shown elsewhere —
         // adopt the current count once so only new ones toast.
@@ -1190,8 +1204,8 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   },
 
   resumeRun: async () => {
-    // Already tracking a run in this session — don't start a second poller.
-    if (get().pipelineRunning) return;
+    // Already tracking a task (pipeline or step) — don't take over.
+    if (get().pipelineRunning || get().currentTaskId) return;
 
     const snapshot = loadLatestRunSnapshot();
     if (!snapshot) return;
@@ -1234,6 +1248,10 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
     if (get().currentTaskId === summary.task_id) {
       return;
     }
+
+    // Drop the abandoned task's snapshot so a later mount can't resume it.
+    const previousTaskId = get().currentTaskId;
+    if (previousTaskId) clearRunSnapshot(previousTaskId);
 
     // Single-step tasks adopt like a natively launched step
     if (summary.kind === "step") {
@@ -1308,6 +1326,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
     try {
       const { task_id } = await executeStepAsync(runId, step);
+
+      // Register as the tracked task (menu guard + "(open)" marker).
+      set({ currentTaskId: task_id });
 
       // Poll every 2 seconds until the task reaches a terminal state.
       await pollStepTaskUntilDone(task_id, category, set, get);
