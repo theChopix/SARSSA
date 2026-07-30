@@ -310,3 +310,56 @@ class TestCompareSaeSteeringHints:
         ]
         assert len(past_neuron_hints) == 1
         assert past_neuron_hints[0].source_run_param == "past_run_id"
+
+
+class TestCompareUserChoicesFormatter:
+    """Tests for the static _format_user_choices helper."""
+
+    def test_formats_rows_with_counts_and_tint(self) -> None:
+        """Verify per-row labels, index values, and count-scaled tints."""
+        import scipy.sparse as sp
+
+        from plugins.steering.compare.sae_steering.sae_steering import Plugin
+
+        users = np.array(["100", "205", "999"], dtype=object)
+        csr = sp.csr_matrix(np.array([[1, 0, 1], [0, 0, 0], [1, 1, 1]]))
+
+        result = Plugin._format_user_choices((users, csr))
+
+        assert result[0] == {
+            "label": "user 100 · 2 interactions [row 0]",
+            "value": "0",
+            "tint": 2 / 3,
+            "emphasis": "user 100",
+        }
+        assert result[1]["label"] == "user 205 · 0 interactions [row 1]"
+        assert result[2]["tint"] == 1.0
+        assert len(result) == 3
+
+    def test_empty_dataset_yields_no_options(self) -> None:
+        """Verify an empty users/CSR pair formats to an empty list."""
+        import scipy.sparse as sp
+
+        from plugins.steering.compare.sae_steering.sae_steering import Plugin
+
+        users = np.array([], dtype=object)
+        csr = sp.csr_matrix((0, 5))
+
+        assert Plugin._format_user_choices((users, csr)) == []
+
+    def test_user_id_hint_is_server_searched_multi_artifact(self) -> None:
+        """Verify the user_id hint declares both artifacts and server search."""
+        from plugins.plugin_interface import DynamicDropdownHint
+        from plugins.steering.compare.sae_steering.sae_steering import Plugin
+
+        hints = [
+            h
+            for h in Plugin.io_spec.param_ui_hints
+            if isinstance(h, DynamicDropdownHint) and h.param_name == "user_id"
+        ]
+        assert len(hints) == 1
+        hint = hints[0]
+        assert hint.server_search is True
+        assert hint.artifact_step == "dataset_loading"
+        assert [s.file for s in hint.artifact_files] == ["users.npy", "full_csr.npz"]
+        assert hint.artifact_files[0].kwargs == {"allow_pickle": True}

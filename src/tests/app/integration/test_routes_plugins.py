@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from app.config.config import PLUGIN_CATEGORIES
 from plugins.plugin_interface import (
     DependentDropdownHint,
+    DropdownArtifactSpec,
     DynamicDropdownHint,
     PluginIOSpec,
 )
@@ -396,3 +397,155 @@ class TestGetParamChoicesEndpoint:
         assert response.json() == [{"label": "drama", "value": "7"}]
         mock_get_context.assert_called_once_with("past_parent_run")
         mock_loader_cls.assert_called_once_with("past_step_run")
+
+
+class TestServerSearchParamChoices:
+    """Tests for server_search dropdowns on the param-choices endpoint."""
+
+    def setup_method(self) -> None:
+        """Clear the formatted-options cache between tests."""
+        from app.api.routes_plugins import _OPTIONS_CACHE
+
+        _OPTIONS_CACHE.clear()
+
+    def _mock_plugin(self) -> MagicMock:
+        """Build a mock plugin with a server-searched multi-artifact hint.
+
+        Returns:
+            MagicMock: Plugin whose formatter joins users and counts.
+        """
+
+        def _fmt(data: tuple) -> list[dict[str, object]]:
+            users, counts = data
+            return [
+                {
+                    "label": f"user {u} · {c} interactions [row {i}]",
+                    "value": str(i),
+                    "tint": c / 9,
+                }
+                for i, (u, c) in enumerate(zip(users, counts, strict=True))
+            ]
+
+        hint = DynamicDropdownHint(
+            param_name="user_id",
+            artifact_step="dataset_loading",
+            artifact_files=[
+                DropdownArtifactSpec(file="users.npy", loader="npy", kwargs={"allow_pickle": True}),
+                DropdownArtifactSpec(file="counts.npy", loader="npy"),
+            ],
+            formatter="_fmt",
+            server_search=True,
+        )
+        plugin = MagicMock()
+        plugin.io_spec = PluginIOSpec(param_ui_hints=[hint])
+        plugin.__class__._fmt = staticmethod(_fmt)
+        return plugin
+
+    def _mock_loader(self) -> MagicMock:
+        """Loader stub serving three users and their counts."""
+        loader = MagicMock()
+        loader.get_npy_artifact.side_effect = lambda f, **_kw: (
+            ["alpha", "beta", "gamma"] if f == "users.npy" else [5, 2, 9]
+        )
+        return loader
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_returns_envelope_with_limit(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify the envelope shape and that limit truncates options."""
+        mock_pm.load.return_value = self._mock_plugin()
+        mock_loader_cls.return_value = self._mock_loader()
+
+        response = client.get(
+            "/plugins/param-choices/steering/steering.sae.sae/user_id",
+            params={"run_id": "r1", "limit": 2},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        assert len(data["options"]) == 2
+        assert data["options"][0]["value"] == "0"
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_search_filters_labels(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify search filters options and total counts the matches."""
+        mock_pm.load.return_value = self._mock_plugin()
+        mock_loader_cls.return_value = self._mock_loader()
+
+        response = client.get(
+            "/plugins/param-choices/steering/steering.sae.sae/user_id",
+            params={"run_id": "r1", "search": "BETA"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["options"][0]["value"] == "1"
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_options_cached_per_run(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify the second request reuses formatted options without loading."""
+        mock_pm.load.return_value = self._mock_plugin()
+        mock_loader = self._mock_loader()
+        mock_loader_cls.return_value = mock_loader
+
+        for _ in range(2):
+            client.get(
+                "/plugins/param-choices/steering/steering.sae.sae/user_id",
+                params={"run_id": "r1"},
+            )
+
+        # One call per artifact file, first request only.
+        assert mock_loader.get_npy_artifact.call_count == 2
+        mock_loader.get_npy_artifact.assert_any_call("users.npy", allow_pickle=True)
+
+    def test_registry_marks_steering_user_id_as_server_searched(self, client: TestClient) -> None:
+        """Verify the real registry exposes user_id as a server-search dropdown."""
+        registry = client.get("/plugins/registry").json()
+        for impl in registry["steering"]["implementations"]:
+            param = next(p for p in impl["params"] if p["name"] == "user_id")
+            assert param["widget"] == "dropdown"
+            assert param["widget_config"]["server_search"] is True
+            assert param["widget_config"]["run_id_source"] == "dataset_loading"
+            assert param["widget_config"]["choices_endpoint"].endswith("/user_id")
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    @patch("app.api.routes_plugins.PluginManager")
+    def test_sort_by_tint_is_global_before_limit(
+        self,
+        mock_pm: MagicMock,
+        mock_loader_cls: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify sorting happens before limiting, so the page is the global top."""
+        mock_pm.load.return_value = self._mock_plugin()
+        mock_loader_cls.return_value = self._mock_loader()
+
+        response = client.get(
+            "/plugins/param-choices/steering/steering.sae.sae/user_id",
+            params={"run_id": "r1", "limit": 2, "sort_by_tint": "true"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 3
+        # Counts are [5, 2, 9] → global top-2 by tint are rows 2 and 0.
+        assert [o["value"] for o in data["options"]] == ["2", "0"]

@@ -1,5 +1,7 @@
 """API routes for plugin discovery and registry."""
 
+import threading
+from collections import OrderedDict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -8,10 +10,20 @@ from app.core.param_choices import resolve_dependent_choices
 from app.core.pipeline_runs import get_run_context
 from app.core.plugin_discovery.plugin_manager import PluginManager
 from app.core.plugin_discovery.plugin_registry import get_plugin_registry
-from plugins.plugin_interface import DependentDropdownHint, DynamicDropdownHint
+from plugins.plugin_interface import (
+    DependentDropdownHint,
+    DropdownArtifactSpec,
+    DynamicDropdownHint,
+)
 from utils.mlflow_manager import MLflowRunLoader
 
 router = APIRouter()
+
+# formatted-options cache for server_search dropdowns, keyed by
+# (plugin_name, param_name, run_id)
+_OPTIONS_CACHE: OrderedDict[tuple[str, str, str], list[dict[str, Any]]] = OrderedDict()
+_OPTIONS_CACHE_MAX = 4
+_OPTIONS_CACHE_LOCK = threading.Lock()
 
 
 @router.get("/registry")
@@ -41,13 +53,27 @@ def get_param_choices(
         None,
         description="Current value of the controlling param (dependent dropdowns).",
     ),
-) -> list[dict[str, Any]]:
+    search: str | None = Query(
+        None,
+        description="Substring filter on option labels (server_search dropdowns).",
+    ),
+    limit: int = Query(
+        200,
+        ge=1,
+        le=1000,
+        description="Maximum options returned by a server_search dropdown.",
+    ),
+    sort_by_tint: bool = Query(
+        False,
+        description="Sort options by tint descending before limiting (server_search dropdowns).",
+    ),
+) -> list[dict[str, Any]] | dict[str, Any]:
     """Return dropdown options for a plugin parameter.
 
     For a ``DependentDropdownHint`` the options are computed from the
     controlling param's *value*. Otherwise the parameter's
-    ``DynamicDropdownHint`` artifact is loaded from *run_id* and passed
-    through the plugin's formatter method.
+    ``DynamicDropdownHint`` artifact(s) are loaded from *run_id* and
+    passed through the plugin's formatter method.
 
     Args:
         category: Plugin category key (e.g. ``"steering"``).
@@ -57,10 +83,18 @@ def get_param_choices(
             produced the source artifact (dynamic dropdowns).
         value: Current value of the controlling param
             (dependent dropdowns).
+        search: Case-insensitive substring filter on option labels
+            (only applied for ``server_search`` hints).
+        limit: Page size for ``server_search`` hints.
+        sort_by_tint: Sort the (filtered) options by tint descending
+            before applying *limit*, so the page holds the global top.
 
     Returns:
-        list[dict[str, Any]]: Each dict has ``"label"`` and ``"value"``
-            keys; neuron dropdowns also carry a numeric ``"confidence"``.
+        list[dict[str, Any]] | dict[str, Any]: For plain dropdowns a
+            list of option dicts (``"label"``/``"value"`` keys, plus
+            optional ``"tint"``/``"emphasis"``). For ``server_search``
+            dropdowns an envelope ``{"options": [...], "total": int}``
+            where *total* counts all options matching *search*.
 
     Raises:
         HTTPException: 404 if the plugin, parameter hint, resolver, or
@@ -104,7 +138,6 @@ def get_param_choices(
         )
 
     resolved_run_id = _resolve_artifact_run_id(hint, run_id)
-    artifact_data = _load_hint_artifact(hint, resolved_run_id)
     formatter = getattr(plugin_instance.__class__, hint.formatter, None)
     if formatter is None:
         raise HTTPException(
@@ -112,7 +145,53 @@ def get_param_choices(
             detail=(f"Formatter '{hint.formatter}' not found on plugin '{plugin_name}'."),
         )
 
-    return formatter(artifact_data)
+    if not hint.server_search:
+        return formatter(_load_hint_artifact(hint, resolved_run_id))
+
+    options = _cached_options(plugin_name, param_name, resolved_run_id, hint, formatter)
+    if search:
+        needle = search.lower()
+        options = [o for o in options if needle in str(o.get("label", "")).lower()]
+    if sort_by_tint:
+        options = sorted(
+            options,
+            key=lambda o: -(o["tint"] if o.get("tint") is not None else float("-inf")),
+        )
+    return {"options": options[:limit], "total": len(options)}
+
+
+def _cached_options(
+    plugin_name: str,
+    param_name: str,
+    run_id: str,
+    hint: DynamicDropdownHint,
+    formatter: Any,
+) -> list[dict[str, Any]]:
+    """Return the full formatted option list, cached per run.
+
+    Args:
+        plugin_name: Dotted plugin module path.
+        param_name: Name of the ``run()`` parameter.
+        run_id: Resolved run id holding the source artifact(s).
+        hint: The dropdown hint.
+        formatter: The plugin's formatter static method.
+
+    Returns:
+        list[dict[str, Any]]: All formatted options.
+    """
+    key = (plugin_name, param_name, run_id)
+    with _OPTIONS_CACHE_LOCK:
+        cached = _OPTIONS_CACHE.get(key)
+        if cached is not None:
+            _OPTIONS_CACHE.move_to_end(key)
+            return cached
+
+    options = formatter(_load_hint_artifact(hint, run_id))
+    with _OPTIONS_CACHE_LOCK:
+        _OPTIONS_CACHE[key] = options
+        if len(_OPTIONS_CACHE) > _OPTIONS_CACHE_MAX:
+            _OPTIONS_CACHE.popitem(last=False)
+    return options
 
 
 def _find_dropdown_hint(
@@ -209,31 +288,39 @@ def _load_hint_artifact(
     hint: DynamicDropdownHint,
     run_id: str,
 ) -> Any:
-    """Load the artifact referenced by a DynamicDropdownHint.
+    """Load the artifact(s) referenced by a DynamicDropdownHint.
 
     Args:
-        hint: The dropdown hint specifying the artifact.
-        run_id: MLflow run ID to load the artifact from.
+        hint: The dropdown hint specifying the artifact(s).
+        run_id: MLflow run ID to load the artifact(s) from.
 
     Returns:
-        Any: The loaded artifact data.
+        Any: The loaded artifact data — a single object for the
+            single-file form, a tuple (in ``artifact_files`` order)
+            for the multi-file form.
 
     Raises:
-        HTTPException: 404 if the artifact cannot be loaded.
+        HTTPException: 404 if an artifact cannot be loaded.
     """
     loader = MLflowRunLoader(run_id)
-    try:
-        match hint.artifact_loader:
-            case "json":
-                return loader.get_json_artifact(hint.artifact_file)
-            case "npy":
-                return loader.get_npy_artifact(hint.artifact_file)
-            case "npz":
-                return loader.get_npz_artifact(hint.artifact_file)
-            case _:
-                raise ValueError(f"Unsupported artifact loader: '{hint.artifact_loader}'")
-    except Exception as exc:
-        raise HTTPException(
-            status_code=404,
-            detail=(f"Failed to load artifact '{hint.artifact_file}' from run '{run_id}': {exc}"),
-        ) from exc
+    specs = hint.artifact_files or [
+        DropdownArtifactSpec(file=hint.artifact_file, loader=hint.artifact_loader)
+    ]
+    loaded = []
+    for spec in specs:
+        try:
+            match spec.loader:
+                case "json":
+                    loaded.append(loader.get_json_artifact(spec.file, **spec.kwargs))
+                case "npy":
+                    loaded.append(loader.get_npy_artifact(spec.file, **spec.kwargs))
+                case "npz":
+                    loaded.append(loader.get_npz_artifact(spec.file, **spec.kwargs))
+                case _:
+                    raise ValueError(f"Unsupported artifact loader: '{spec.loader}'")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=404,
+                detail=(f"Failed to load artifact '{spec.file}' from run '{run_id}': {exc}"),
+            ) from exc
+    return tuple(loaded) if hint.artifact_files else loaded[0]
