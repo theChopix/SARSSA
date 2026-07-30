@@ -71,6 +71,10 @@ export interface CategoryInfo {
  * - `required_steps`   – Step keys an eligible past run must have
  *                         completed (used when
  *                         `widget = "past_runs_dropdown"`).
+ * - `server_search`    – When true the option list is searched and
+ *                         paged on the backend; the dropdown fetches
+ *                         via `search`/`limit` instead of loading all
+ *                         options up front.
  */
 export interface WidgetConfig {
   choices: { label: string; value: string }[] | null;
@@ -82,6 +86,7 @@ export interface WidgetConfig {
   slider_max: number | null;
   slider_step: number | null;
   required_steps: string[] | null;
+  server_search: boolean | null;
 }
 
 // ── Plugin parameter metadata ───────────────────────────

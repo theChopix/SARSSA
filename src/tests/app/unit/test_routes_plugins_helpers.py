@@ -19,6 +19,7 @@ from app.api.routes_plugins import (
     _resolve_artifact_run_id,
 )
 from plugins.plugin_interface import (
+    DropdownArtifactSpec,
     DynamicDropdownHint,
     ParamUIHint,
     PluginIOSpec,
@@ -158,6 +159,31 @@ class TestLoadHintArtifact:
 
         mock_loader.get_npy_artifact.assert_called_once_with("data.npy")
         assert result == [1, 2, 3]
+
+    @patch("app.api.routes_plugins.MLflowRunLoader")
+    def test_loads_multiple_artifacts_as_tuple(
+        self,
+        mock_loader_cls: MagicMock,
+    ) -> None:
+        """Verify artifact_files loads a tuple with per-file loader kwargs."""
+        mock_loader = MagicMock()
+        mock_loader.get_npy_artifact.return_value = "users"
+        mock_loader.get_npz_artifact.return_value = "matrix"
+        mock_loader_cls.return_value = mock_loader
+
+        hint = DynamicDropdownHint(
+            param_name="user_id",
+            artifact_files=[
+                DropdownArtifactSpec(file="users.npy", loader="npy", kwargs={"allow_pickle": True}),
+                DropdownArtifactSpec(file="full_csr.npz", loader="npz"),
+            ],
+            formatter="_fmt",
+        )
+        result = _load_hint_artifact(hint, "run123")
+
+        assert result == ("users", "matrix")
+        mock_loader.get_npy_artifact.assert_called_once_with("users.npy", allow_pickle=True)
+        mock_loader.get_npz_artifact.assert_called_once_with("full_csr.npz")
 
     @patch("app.api.routes_plugins.MLflowRunLoader")
     def test_loads_npz_artifact(

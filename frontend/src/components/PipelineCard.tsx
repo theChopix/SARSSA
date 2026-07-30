@@ -60,7 +60,11 @@ import {
   mlflowRunUrl,
   mlflowRunArtifactsUrl,
 } from "../store/pipelineStore";
-import { fetchParamChoices, fetchDependentParamChoices } from "../api/plugins";
+import {
+  fetchParamChoices,
+  fetchDependentParamChoices,
+  searchParamChoices,
+} from "../api/plugins";
 import { fetchEligiblePipelineRuns } from "../api/pipelines";
 import type { ParamChoice } from "../api/plugins";
 import type {
@@ -510,6 +514,9 @@ function tintStyle(tint?: number | null): CSSProperties | undefined {
  *   on the same plugin form (a parent pipeline run id selected
  *   via a `past_runs_dropdown`) and refetches whenever it changes.
  */
+/** Page size for server-searched dropdowns. */
+const SERVER_SEARCH_PAGE_SIZE = 200;
+
 function DropdownSelect({
   param,
   value,
@@ -528,18 +535,24 @@ function DropdownSelect({
   disabled?: boolean;
 }) {
   const [options, setOptions] = useState<ParamChoice[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
+  const [debouncedFilter, setDebouncedFilter] = useState("");
   const [sortByTint, setSortByTint] = useState(false);
+  const [pickedLabel, setPickedLabel] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Stale-response guard: only the newest request may write state.
+  const fetchSeqRef = useRef(0);
 
   const endpoint = param.widget_config!.choices_endpoint!;
   const sourceStep = param.widget_config!.run_id_source;
   const sourceRunParam = param.widget_config!.source_run_param;
   const sourceParam = param.widget_config!.source_param;
+  const serverSearch = param.widget_config!.server_search === true;
 
   // Cascading run-id source wins when set; otherwise fall back to the
   // current pipeline's upstream-step run id.
@@ -564,42 +577,75 @@ function DropdownSelect({
       : null
     : runId;
 
-  // Fetch options when the fetch key becomes available.
+  // Debounce the search text so server-searched dropdowns don't fire a
+  // request per keystroke.
+  useEffect(() => {
+    if (!serverSearch) return;
+    const id = setTimeout(() => setDebouncedFilter(filter), 300);
+    return () => clearTimeout(id);
+  }, [filter, serverSearch]);
+
+  // Server-side sort only; client-sorted dropdowns must not refetch.
+  const serverSort = serverSearch && sortByTint;
+
+  // Fetch options when the fetch key becomes available (and, for
+  // server-searched dropdowns, whenever the search text settles).
   const loadOptions = useCallback(async () => {
     if (!fetchKey) return;
+    const seq = ++fetchSeqRef.current;
 
     setLoading(true);
     setError(null);
     try {
-      const choices = sourceParam
-        ? await fetchDependentParamChoices(endpoint, fetchKey)
-        : await fetchParamChoices(endpoint, fetchKey);
-      setOptions(choices);
+      if (serverSearch) {
+        const page = await searchParamChoices(
+          endpoint,
+          fetchKey,
+          debouncedFilter,
+          SERVER_SEARCH_PAGE_SIZE,
+          serverSort
+        );
+        if (seq !== fetchSeqRef.current) return;
+        setOptions(page.options);
+        setTotal(page.total);
+      } else {
+        const choices = sourceParam
+          ? await fetchDependentParamChoices(endpoint, fetchKey)
+          : await fetchParamChoices(endpoint, fetchKey);
+        if (seq !== fetchSeqRef.current) return;
+        setOptions(choices);
+      }
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load options");
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
-  }, [endpoint, fetchKey, sourceParam]);
+  }, [endpoint, fetchKey, sourceParam, serverSearch, debouncedFilter, serverSort]);
 
+  // Server-searched dropdowns fetch lazily, while open.
+  const serverOpen = serverSearch && open;
   useEffect(() => {
+    if (serverSearch && !serverOpen) return;
     loadOptions();
-  }, [loadOptions]);
+  }, [loadOptions, serverOpen, serverSearch]);
 
   // When the cascade source changes, drop any stale value that no
   // longer matches an option from the new source.  Skipped while
   // options are still loading so a transient empty list does not
   // wipe a valid selection.
+  // (Server-searched lists are paged, so a valid value may simply not
+  // be on the current page — never treat that as stale.)
   const isCascade = Boolean(sourceRunParam || sourceParam);
   useEffect(() => {
-    if (!isCascade || !fetchKey || loading) return;
+    if (serverSearch || !isCascade || !fetchKey || loading) return;
     if (!value) return;
     if (options.length === 0) return;
     const stillValid = options.some((o) => o.value === value);
     if (!stillValid) {
       onChange("");
     }
-  }, [options, value, isCascade, fetchKey, loading, onChange]);
+  }, [options, value, isCascade, fetchKey, loading, onChange, serverSearch]);
 
   // Close dropdown when clicking outside.
   useEffect(() => {
@@ -641,7 +687,9 @@ function DropdownSelect({
     );
   }
 
-  if (loading) {
+  // While an open server-searched panel refetches (typing), keep the
+  // panel mounted so the search input doesn't lose focus.
+  if (loading && !(serverSearch && open)) {
     return (
       <span className="flex-1 text-sm text-gray-400 italic flex items-center gap-1">
         <Loader2 className="h-3 w-3 animate-spin" /> Loading options…
@@ -657,7 +705,11 @@ function DropdownSelect({
     );
   }
 
-  const selectedLabel = options.find((o) => o.value === value)?.label;
+  // A server-searched page may not contain the selected value — fall
+  // back to showing the raw value rather than "— select —".
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label ??
+    (serverSearch && value ? pickedLabel ?? value : undefined);
 
   return (
     <div ref={wrapperRef} className="flex-1 relative">
@@ -710,22 +762,28 @@ function DropdownSelect({
                   onChange={(e) => setSortByTint(e.target.checked)}
                   className="cursor-pointer"
                 />
-                Sort by confidence
+                {/** bit hardcoded, I know :( **/}
+                {serverSearch ? "Sort by interaction count" : "Sort by confidence"}
               </label>
             )}
           </div>
 
-          {/* Filtered options */}
-          <ul className="max-h-52 overflow-y-auto">
-            {options
-              .filter((o) => o.label.toLowerCase().includes(filter.toLowerCase()))
-              .sort((a, b) =>
-                sortByTint ? (b.tint ?? -Infinity) - (a.tint ?? -Infinity) : 0,
-              )
-              .map((opt) => (
+          {/* Filtered options (server-searched lists arrive pre-filtered
+              and, when sorting, pre-sorted) */}
+          <ul className={`max-h-52 overflow-y-auto ${loading ? "opacity-50" : ""}`}>
+            {(serverSearch
+              ? options
+              : options
+                  .filter((o) =>
+                    o.label.toLowerCase().includes(filter.toLowerCase())
+                  )
+                  .sort((a, b) =>
+                    sortByTint ? (b.tint ?? -Infinity) - (a.tint ?? -Infinity) : 0,
+                  )
+            ).map((opt) => (
                 <li
                   key={opt.value}
-                  onClick={() => { onChange(opt.value); onLabelChange?.(opt.label); setOpen(false); setFilter(""); }}
+                  onClick={() => { onChange(opt.value); onLabelChange?.(opt.label); setPickedLabel(opt.label); setOpen(false); setFilter(""); }}
                   style={tintStyle(opt.tint)}
                   className={`px-2 py-1.5 text-sm text-gray-800 cursor-pointer
                     transition hover:brightness-95
@@ -742,6 +800,14 @@ function DropdownSelect({
                 </li>
               ))}
           </ul>
+
+          {/* Paging note for server-searched lists */}
+          {serverSearch && total > options.length && (
+            <div className="border-t border-gray-200 px-2 py-1 text-xs text-gray-500">
+              Showing first {options.length.toLocaleString()} of{" "}
+              {total.toLocaleString()} — refine the search
+            </div>
+          )}
         </div>
       )}
     </div>

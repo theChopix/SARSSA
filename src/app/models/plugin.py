@@ -101,6 +101,9 @@ class WidgetConfig(BaseModel):
         required_steps: Step keys that an eligible past run must
             contain in its ``context.json`` (used when
             ``widget="past_runs_dropdown"``).
+        server_search: When ``True`` the frontend must not fetch the
+            full option list — it queries ``choices_endpoint`` with
+            ``search``/``limit`` params and renders the returned page.
     """
 
     choices: list[dict[str, str]] | None = None
@@ -112,6 +115,7 @@ class WidgetConfig(BaseModel):
     slider_max: float | None = None
     slider_step: float | None = None
     required_steps: list[str] | None = None
+    server_search: bool | None = None
 
 
 class ParameterInfo(BaseModel):

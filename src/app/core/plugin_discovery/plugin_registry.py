@@ -134,6 +134,7 @@ def _resolve_widget(
             choices_endpoint=endpoint,
             run_id_source=hint.artifact_step,
             source_run_param=hint.source_run_param,
+            server_search=hint.server_search or None,
         )
 
     if isinstance(hint, PastRunsDropdownHint):

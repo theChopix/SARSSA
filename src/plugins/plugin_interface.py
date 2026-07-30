@@ -201,6 +201,22 @@ class ParamUIHint:
 
 
 @dataclass
+class DropdownArtifactSpec:
+    """One source artifact of a multi-artifact dropdown hint.
+
+    Attributes:
+        file: Artifact filename in MLflow.
+        loader: Loader strategy (``"json"``, ``"npy"``, ``"npz"``).
+        kwargs: Extra keyword args for the loader (e.g.
+            ``{"allow_pickle": True}``).
+    """
+
+    file: str
+    loader: str = "json"
+    kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class DynamicDropdownHint(ParamUIHint):
     """Render a parameter as a dropdown populated from an artifact.
 
@@ -231,6 +247,15 @@ class DynamicDropdownHint(ParamUIHint):
             ``None`` (the default) keeps the original behaviour
             where ``run_id`` already points directly at the run
             holding the artifact.
+        artifact_files: Multi-artifact alternative to
+            *artifact_file*: a list of :class:`DropdownArtifactSpec`
+            entries.  When non-empty it replaces the single-file
+            fields and the formatter receives a tuple of loaded
+            artifacts in list order.
+        server_search: When ``True`` the option list is searched
+            and truncated on the backend (``search``/``limit``
+            query params) instead of shipping all options to the
+            frontend.  Use for lists too large to render at once.
     """
 
     artifact_step: str = ""
@@ -238,6 +263,8 @@ class DynamicDropdownHint(ParamUIHint):
     artifact_loader: str = "json"
     formatter: str = ""
     source_run_param: str | None = None
+    artifact_files: list[DropdownArtifactSpec] = field(default_factory=list)
+    server_search: bool = False
 
 
 @dataclass

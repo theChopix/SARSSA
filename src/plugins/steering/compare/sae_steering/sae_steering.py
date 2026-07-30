@@ -18,6 +18,7 @@ from plugins.compare_plugin_interface import BaseComparePlugin
 from plugins.plugin_interface import (
     ArtifactSpec,
     DisplayRowSpec,
+    DropdownArtifactSpec,
     DynamicDropdownHint,
     ItemRowsDisplaySpec,
     OutputArtifactSpec,
@@ -158,6 +159,18 @@ class Plugin(BaseComparePlugin):
         ),
         param_ui_hints=[
             DynamicDropdownHint(
+                param_name="user_id",
+                artifact_step="dataset_loading",
+                artifact_files=[
+                    DropdownArtifactSpec(
+                        file="users.npy", loader="npy", kwargs={"allow_pickle": True}
+                    ),
+                    DropdownArtifactSpec(file="full_csr.npz", loader="npz"),
+                ],
+                formatter="_format_user_choices",
+                server_search=True,
+            ),
+            DynamicDropdownHint(
                 param_name="neuron_id",
                 artifact_step="neuron_labeling",
                 artifact_file="neuron_labels.json",
@@ -180,6 +193,37 @@ class Plugin(BaseComparePlugin):
             ),
         ],
     )
+
+    @staticmethod
+    def _format_user_choices(
+        data: tuple,
+    ) -> list[dict[str, object]]:
+        """Format users.npy + full_csr.npz into dropdown options.
+
+        Args:
+            data: Tuple of (users array of original ids, interaction CSR
+                matrix); row i of the CSR belongs to users[i].
+
+        Returns:
+            list[dict[str, object]]: One option per user row — ``"value"``
+                is the 0-based row index, ``"label"`` shows the original
+                id and interaction count, ``"tint"`` scales with the
+                count relative to the most active user.
+        """
+        users, csr = data
+        if len(users) == 0:
+            return []
+        counts = csr.getnnz(axis=1)
+        max_count = max(int(counts.max()), 1)
+        return [
+            {
+                "label": f"user {uid} · {int(count)} interactions [row {i}]",
+                "value": str(i),
+                "tint": float(count) / max_count,
+                "emphasis": f"user {uid}",
+            }
+            for i, (uid, count) in enumerate(zip(users, counts, strict=True))
+        ]
 
     @staticmethod
     def _format_neuron_choices(
@@ -220,7 +264,8 @@ class Plugin(BaseComparePlugin):
         user_id: Annotated[
             int,
             "0-based index of the user whose recommendations to steer; "
-            "returns their history plus original and steered "
+            "options show the dataset's original user id and interaction "
+            "count. Returns their history plus original and steered "
             "recommendations.",
         ],
         neuron_id: Annotated[

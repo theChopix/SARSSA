@@ -101,6 +101,50 @@ export async function fetchParamChoices(
   return (await response.json()) as ParamChoice[];
 }
 
+/** One page of a server-searched option list. */
+export interface ParamChoicePage {
+  options: ParamChoice[];
+  /** Total number of options matching the search (before the limit). */
+  total: number;
+}
+
+/**
+ * Fetch one page of a server-searched dropdown's options.
+ *
+ * @param choicesEndpoint - URL path from `widget_config.choices_endpoint`.
+ * @param runId           - MLflow run ID of the upstream step.
+ * @param search          - Substring filter applied on the backend.
+ * @param limit           - Maximum options to return.
+ * @param sortByTint      - Sort by tint descending before limiting, so
+ *                          the page holds the global top.
+ * @returns The matching page plus the total match count.
+ *
+ * @throws {Error} If the HTTP request fails (non-2xx status).
+ */
+export async function searchParamChoices(
+  choicesEndpoint: string,
+  runId: string,
+  search: string,
+  limit: number,
+  sortByTint: boolean
+): Promise<ParamChoicePage> {
+  const params = new URLSearchParams({ run_id: runId, limit: String(limit) });
+  if (search) params.set("search", search);
+  if (sortByTint) params.set("sort_by_tint", "true");
+  const response = await fetch(
+    `${API_BASE_URL}${choicesEndpoint}?${params}`
+  );
+
+  if (!response.ok) {
+    throw await ApiError.fromResponse(
+      response,
+      "Failed to fetch param choices"
+    );
+  }
+
+  return (await response.json()) as ParamChoicePage;
+}
+
 /**
  * Fetch dropdown options that depend on another param's value.
  *
