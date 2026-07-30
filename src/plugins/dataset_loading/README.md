@@ -730,9 +730,11 @@ dataset.
   context wiring, and MLflow integration.
 - 🧪 **Downstream stages:**
   [`../training_cfm/README.md`](../training_cfm/README.md),
-  [`../training_sae/README.md`](../training_sae/README.md) and
-  [`../neuron_labeling/README.md`](../neuron_labeling/README.md); the
-  `labeling_evaluation/`, `inspection/`, `steering/` READMEs are
-  still to come.
+  [`../training_sae/README.md`](../training_sae/README.md),
+  [`../neuron_labeling/README.md`](../neuron_labeling/README.md), and
+  the three evaluation stages —
+  [`../labeling_evaluation/README.md`](../labeling_evaluation/README.md),
+  [`../inspection/README.md`](../inspection/README.md),
+  [`../steering/README.md`](../steering/README.md).
 - 📘 **Project overview, setup & Docker:**
   [root `README.md`](../../../README.md).

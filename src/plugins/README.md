@@ -457,19 +457,19 @@ results):
 
 | # | Category | Phase | What it does (briefly) |
 |---|----------|-------|------------------------|
-| 0 | `dataset_loading` | `one_time` | Load an interaction dataset; split into train/val/test matrices + item metadata |
-| 1 | `training_cfm` | `one_time` | Train the base collaborative‑filtering recommender (ELSA) |
-| 2 | `training_sae` | `one_time` | Train a sparse autoencoder on the base model's embeddings (ships TopK / BatchTopK / Basic trainers) |
-| 3 | `neuron_labeling` | `one_time` | Assign human‑readable concept labels to the SAE neurons (ships TF‑IDF and tag‑correlation methods) |
-| 4 | `labeling_evaluation` | `multi_run` · visual | Judge label quality — embedding maps, dendrograms, nearest‑label distances |
-| 5 | `inspection` | `multi_run` · visual | Explore which items a concept neuron activates on most |
-| 6 | `steering` | `multi_run` · visual | Steer recommendations by amplifying/suppressing concepts |
+| 0 | [`dataset_loading`](dataset_loading/README.md) | `one_time` | Load an interaction dataset; split into train/val/test matrices + item metadata |
+| 1 | [`training_cfm`](training_cfm/README.md) | `one_time` | Train the base collaborative‑filtering recommender (ELSA) |
+| 2 | [`training_sae`](training_sae/README.md) | `one_time` | Train a sparse autoencoder on the base model's embeddings (ships TopK / BatchTopK / Basic trainers) |
+| 3 | [`neuron_labeling`](neuron_labeling/README.md) | `one_time` | Assign human‑readable concept labels to the SAE neurons (ships TF‑IDF and tag‑correlation methods) |
+| 4 | [`labeling_evaluation`](labeling_evaluation/README.md) | `multi_run` · visual | Judge label quality — embedding maps, dendrograms, nearest‑label distances |
+| 5 | [`inspection`](inspection/README.md) | `multi_run` · visual | Explore which items a concept neuron activates on most |
+| 6 | [`steering`](steering/README.md) | `multi_run` · visual | Steer recommendations by amplifying/suppressing concepts |
 
-Each category has (or will have) its own `README.md` documenting the
-exact artifacts/params it produces and expects, so a downstream plugin
-knows what context keys and filenames to declare — `dataset_loading/`
-is the headline "bring your own dataset" tutorial; the other six get
-one `README.md` each.
+Every category has its own `README.md` — linked from the table above —
+documenting the exact artifacts/params it produces and expects, so a
+downstream plugin knows what context keys and filenames to declare.
+`dataset_loading/` is the headline "bring your own dataset" tutorial;
+the other six document their own stage.
 
 This document is the **cross‑category contract**; those are the
 **per‑category** specifics. Orchestration is in
@@ -520,15 +520,17 @@ These are real, code‑traced sharp edges — read before authoring.
 
 ## ➡️ 9. Where to go next
 
-- 📂 **Per‑category contracts:** each category's own `README.md`
-  (`<category>/README.md`) — the exact artifacts and params it
-  produces and consumes. Available today:
-  [`dataset_loading/README.md`](dataset_loading/README.md) (the
-  "bring your own dataset" tutorial),
-  [`training_cfm/README.md`](training_cfm/README.md),
-  [`training_sae/README.md`](training_sae/README.md) and
-  [`neuron_labeling/README.md`](neuron_labeling/README.md) (see the
-  §7 table for all seven categories).
+- 📂 **Per‑category contracts:** each category's own `README.md` —
+  the exact artifacts and params it produces and consumes, in pipeline
+  order:
+  [`dataset_loading`](dataset_loading/README.md) (the "bring your own
+  dataset" tutorial) →
+  [`training_cfm`](training_cfm/README.md) →
+  [`training_sae`](training_sae/README.md) →
+  [`neuron_labeling`](neuron_labeling/README.md) →
+  [`labeling_evaluation`](labeling_evaluation/README.md) →
+  [`inspection`](inspection/README.md) →
+  [`steering`](steering/README.md).
 - ⚙️ **Backend & pipeline engine:**
   [`../app/README.md`](../app/README.md) — how the engine drives the
   `load_context → run → update_context` lifecycle inside MLflow

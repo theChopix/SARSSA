@@ -255,5 +255,12 @@ and `encode`/`decode`, so they work unchanged.
   [`../training_cfm/README.md`](../training_cfm/README.md)
 - **The labeling stage that names the trained neurons:**
   [`../neuron_labeling/README.md`](../neuron_labeling/README.md)
+- **What the trained neurons are then used for:**
+  [`../labeling_evaluation/README.md`](../labeling_evaluation/README.md)
+  (is the concept space coherent?),
+  [`../inspection/README.md`](../inspection/README.md) (what does a
+  neuron fire on?), and
+  [`../steering/README.md`](../steering/README.md) — the last one
+  loads this checkpoint directly
 - **The plugin contract** (discovery, `io_spec`, `run()` params):
   [`../README.md`](../README.md)

@@ -200,7 +200,11 @@ if your labels are tag-based — `_confidence.py` for scoring.
 
 - **The SAE whose neurons get named here:**
   [`../training_sae/README.md`](../training_sae/README.md)
-- **The stages that consume the labels:** `labeling_evaluation/`,
-  `inspection/`, `steering/` (per-category READMEs still to come)
+- **The stages that consume the labels:**
+  [`../labeling_evaluation/README.md`](../labeling_evaluation/README.md)
+  (is the label set well-structured?),
+  [`../inspection/README.md`](../inspection/README.md) (does a label
+  match the items it fires on?), and
+  [`../steering/README.md`](../steering/README.md) (act on a concept)
 - **The plugin contract** (discovery, `io_spec`, `run()` params):
   [`../README.md`](../README.md)

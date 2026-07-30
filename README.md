@@ -182,10 +182,14 @@ steering** method is all this. Start with the plugin contract in
 [`src/plugins/README.md`](src/plugins/README.md); for the headline
 "bring your own dataset" walkthrough see
 [`src/plugins/dataset_loading/README.md`](src/plugins/dataset_loading/README.md),
-and for adding a CFM/SAE variant or a labeling method the
+and for adding a CFM/SAE variant, a labeling method or an evaluation
+view the
 [`training_cfm`](src/plugins/training_cfm/README.md) /
 [`training_sae`](src/plugins/training_sae/README.md) /
-[`neuron_labeling`](src/plugins/neuron_labeling/README.md) READMEs.
+[`neuron_labeling`](src/plugins/neuron_labeling/README.md) /
+[`labeling_evaluation`](src/plugins/labeling_evaluation/README.md) /
+[`inspection`](src/plugins/inspection/README.md) /
+[`steering`](src/plugins/steering/README.md) READMEs.
 
 ### 3.2 Add a provider or model — `utils/`
 
@@ -277,6 +281,23 @@ task.
   (correlation vs TF-IDF) and their confidence scoring, and how to
   add a labeling method (e.g. LLM-based).
 
+- **[`src/plugins/labeling_evaluation/README.md`](src/plugins/labeling_evaluation/README.md)
+  — judging the label set.** The category contract (embed the label
+  texts, measure cosine relationships, render one HTML page), the
+  seven shipped views (dendrogram, embedding maps, keyword search,
+  nearest-label distances), the `single/` vs `compare/` split, and the
+  shared embedding cache.
+
+- **[`src/plugins/inspection/README.md`](src/plugins/inspection/README.md)
+  — checking what a neuron fires on.** The precomputed-activation
+  lookup behind the top-k item rows, the neuron dropdown, and why
+  compare picks both neurons independently.
+
+- **[`src/plugins/steering/README.md`](src/plugins/steering/README.md)
+  — nudging recommendations.** The steering formula and what `alpha`
+  means, the baseline-vs-steered experiment, the server-searched user
+  dropdown, and why compare requires the same dataset.
+
 - **[`src/utils/README.md`](src/utils/README.md) — shared
   utilities.** The toolbox both backend and plugins build on: the
   batching `DataLoader`; the pluggable **embedder** and **LLM**
@@ -296,10 +317,9 @@ task.
   path — the FE is registry-driven, so most extension needs no FE
   changes.
 
-> The per-category plugin docs (CFM/SAE training, neuron labeling,
-> labeling-evaluation, inspection, steering) are forthcoming; until
-> then the [plugin-system doc](src/plugins/README.md) is their
-> umbrella contract.
+> All seven plugin categories now have their own README; the
+> [plugin-system doc](src/plugins/README.md) is the umbrella contract
+> they all share.
 
 ---
 

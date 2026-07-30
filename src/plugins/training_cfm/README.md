@@ -236,6 +236,10 @@ steering/inspection stages only ever touch the checkpoint through
 
 - **The SAE that decomposes this model's embeddings:**
   [`../training_sae/README.md`](../training_sae/README.md)
+- **The stage that runs this model at inference:**
+  [`../steering/README.md`](../steering/README.md) — it loads this
+  checkpoint to produce both the baseline and the steered
+  recommendations
 - **The plugin contract** (discovery, `io_spec`, `run()` params):
   [`../README.md`](../README.md)
 - **The dataset stage that feeds this one:**
