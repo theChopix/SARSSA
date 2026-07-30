@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 
-class TestGetEnrichedItems:
-    """Tests for GET /items/enrich."""
+class TestPostEnrichedItems:
+    """Tests for POST /items/enrich."""
 
     @patch("app.core.item_enrichment.item_enrichment.load_item_metadata")
     def test_returns_200(
@@ -22,7 +22,7 @@ class TestGetEnrichedItems:
     ) -> None:
         """Verify the endpoint returns HTTP 200."""
         mock_load.return_value = {}
-        response = client.get("/items/enrich", params={"run_id": "r1", "ids": "1"})
+        response = client.post("/items/enrich", json={"run_id": "r1", "ids": ["1"]})
         assert response.status_code == 200
 
     @patch("app.core.item_enrichment.item_enrichment.load_item_metadata")
@@ -36,9 +36,9 @@ class TestGetEnrichedItems:
             "10": {"title": "Movie A", "year": 2020},
             "20": {"title": "Movie B", "year": 2021},
         }
-        response = client.get(
+        response = client.post(
             "/items/enrich",
-            params={"run_id": "r1", "ids": "10,20"},
+            json={"run_id": "r1", "ids": ["10", "20"]},
         )
         data = response.json()
 
@@ -55,9 +55,9 @@ class TestGetEnrichedItems:
     ) -> None:
         """Verify graceful fallback with invalid/missing run."""
         mock_load.return_value = {}
-        response = client.get(
+        response = client.post(
             "/items/enrich",
-            params={"run_id": "invalid_run", "ids": "42,99"},
+            json={"run_id": "invalid_run", "ids": ["42", "99"]},
         )
         data = response.json()
 
@@ -73,13 +73,29 @@ class TestGetEnrichedItems:
     ) -> None:
         """Verify empty ids produces empty items list."""
         mock_load.return_value = {"1": {"title": "X"}}
-        response = client.get(
+        response = client.post(
             "/items/enrich",
-            params={"run_id": "r1", "ids": ""},
+            json={"run_id": "r1", "ids": []},
         )
         data = response.json()
 
         assert data["items"] == []
+
+    @patch("app.core.item_enrichment.item_enrichment.load_item_metadata")
+    def test_many_ids_accepted(
+        self,
+        mock_load: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Verify thousands of ids pass (the URL-length regression)."""
+        mock_load.return_value = {}
+        ids = [str(100000 + i) for i in range(6000)]
+        response = client.post(
+            "/items/enrich",
+            json={"run_id": "r1", "ids": ids},
+        )
+        assert response.status_code == 200
+        assert len(response.json()["items"]) == 6000
 
     @patch("app.core.item_enrichment.item_enrichment.load_item_metadata")
     def test_response_has_expected_keys(
@@ -89,9 +105,9 @@ class TestGetEnrichedItems:
     ) -> None:
         """Verify response contains items and metadata_available."""
         mock_load.return_value = {}
-        response = client.get(
+        response = client.post(
             "/items/enrich",
-            params={"run_id": "r1", "ids": "1"},
+            json={"run_id": "r1", "ids": ["1"]},
         )
         data = response.json()
 

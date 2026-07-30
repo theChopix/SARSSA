@@ -12,9 +12,10 @@ import type { EnrichResponse } from "../types/items";
 /**
  * Fetch enriched metadata for a list of item IDs.
  *
- * Calls `GET /items/enrich` with the dataset-loading run ID and
- * a comma-separated list of item IDs. The backend joins the IDs
- * with `item_metadata.json` from the given MLflow run.
+ * Calls `POST /items/enrich` with the dataset-loading run ID and
+ * the item IDs in the JSON body (an interaction history can hold
+ * thousands of ids — too many for a URL query string). The backend
+ * joins the IDs with `item_metadata.json` from the given MLflow run.
  *
  * @param runId  - MLflow run ID of the dataset-loading step.
  * @param ids    - Array of item IDs to enrich.
@@ -34,12 +35,11 @@ export async function fetchEnrichedItems(
   runId: string,
   ids: string[]
 ): Promise<EnrichResponse> {
-  const params = new URLSearchParams({
-    run_id: runId,
-    ids: ids.join(","),
+  const response = await fetch(`${API_BASE_URL}/items/enrich`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId, ids }),
   });
-
-  const response = await fetch(`${API_BASE_URL}/items/enrich?${params}`);
 
   if (!response.ok) {
     throw await ApiError.fromResponse(

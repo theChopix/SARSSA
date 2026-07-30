@@ -11,6 +11,7 @@ from app.core.item_enrichment.item_enrichment import (
     get_step_artifact_path,
     load_step_artifact,
 )
+from app.models.items import EnrichItemsRequest
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -82,24 +83,23 @@ def get_raw_artifact(
     return FileResponse(path, media_type=media_type)
 
 
-@router.get("/enrich")
-def get_enriched_items(
-    run_id: str = Query(..., description="MLflow run ID"),
-    ids: str = Query("", description="Comma-separated item IDs"),
-) -> dict[str, Any]:
+@router.post("/enrich")
+def post_enriched_items(request: EnrichItemsRequest) -> dict[str, Any]:
     """Enrich item IDs with metadata from a dataset-loading run.
 
+    POST with the ids in the body — an interaction history can hold
+    thousands of ids, past what a URL query string can carry.
+
     Args:
-        run_id: MLflow run ID that produced item_metadata.json.
-        ids: Comma-separated list of item IDs to enrich.
+        request: Run id and the item IDs to enrich.
 
     Returns:
         dict[str, Any]: ``{"items": [...], "metadata_available": bool}``.
     """
-    item_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
+    item_ids = [i.strip() for i in request.ids if i.strip()]
     try:
-        items, metadata_available = enrich_items(run_id, item_ids)
+        items, metadata_available = enrich_items(request.run_id, item_ids)
     except Exception as exc:
-        logger.exception("Unexpected error enriching items for run %s", run_id)
+        logger.exception("Unexpected error enriching items for run %s", request.run_id)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"items": items, "metadata_available": metadata_available}
