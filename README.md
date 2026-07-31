@@ -375,32 +375,93 @@ cp .env.sample .env      # then edit .env and set OPENAI_API_KEY
 
 ### Quick start (local) — in order
 
+**1. Install the dependencies.** `--frozen` installs the exact versions
+recorded in `uv.lock` instead of re-resolving them, so you get the
+environment the project was tested with. The second command is the
+frontend's `npm install`.
+
 ```bash
-# 1. Dependencies (--frozen = install the exact locked versions)
 uv sync --frozen
-just frontend-install                 # cd frontend && npm install
-
-# 2. Credentials (see §5)
-cp .env.sample .env                   # then set OPENAI_API_KEY
-
-# 3. Datasets — the gitignored data/ folder is built locally.
-#    Prefer the OSF "all" bundles: they include ratings + tags +
-#    metadata (full pipeline + UI), unlike the raw download_*_dataset.sh.
-bash scripts/download_movieLens_all.sh
-bash scripts/download_steam-games_all.sh
-
-# 4. Run the stack (three terminals, or use Docker — see below)
-just mlflow                           # MLflow server → http://localhost:5000/mlflow (start first)
-just run                              # backend  → http://localhost:8000
-just frontend-dev                     # frontend → http://localhost:5173
+just frontend-install
 ```
 
-Then open **http://localhost:5173**. The backend logs runs and
-artifacts through the MLflow server, so `just mlflow` must be up
-before `just run`. A pipeline that starts with a dataset-loading step
-needs step 3 done first, or it fails with `FileNotFoundError`.
+*Done when:* a `.venv/` directory exists in the repository root and
+`frontend/node_modules/` is populated.
 
-**GPU acceleration (local).** There is nothing extra to configure.
+**2. Set up credentials.** This copies the template; you then open
+`.env` and replace the `OPENAI_API_KEY` placeholder with a real key
+([§5](#5-configuration-env) explains what it is used for). Nothing else
+in the file has to be filled in to get started.
+
+```bash
+cp .env.sample .env
+```
+
+*Done when:* `.env` exists and the key is a real value rather than the
+`sk-your-openai-api-key-here` placeholder.
+
+*If you skip it:* everything still starts and a pipeline runs
+end-to-end — but the `labeling_evaluation` plugins that call an
+embedding provider fail at the moment you run them, not at startup.
+
+**3. Download a dataset.** `data/` is gitignored, so it is empty on a
+fresh clone and you fill it yourself. One dataset is enough to get
+going; running both scripts simply gives you both. Each `_all` script
+pulls a single ready-made bundle from **OSF** ([Open Science
+Framework](https://osf.io/), a public repository for research data),
+so one download gives you the complete set of files.
+
+```bash
+bash scripts/download_movieLens_all.sh
+bash scripts/download_steam-games_all.sh
+```
+
+There is also an older script that fetches MovieLens straight from its
+original source, which is why the `_all` ones are the recommended
+route:
+
+| Script | Source | Gives you |
+|---|---|---|
+| `download_movieLens_all.sh` *(recommended)* | OSF bundle | `ratings.csv`, `tags.csv`, `metadata.json` |
+| `download_steam-games_all.sh` *(recommended)* | OSF bundle | `interactions.csv`, `tags.csv`, `metadata.json` |
+| `download_movieLens_dataset.sh` | GroupLens (raw ML-32M) | `ratings.csv`, `tags.csv` — **no `metadata.json`** |
+
+`metadata.json` is what the UI turns into item cards (the item lists
+shown by the `inspection` and `steering` results), so a dataset fetched
+the raw way shows **bare item IDs** instead of titles and images.
+Training and labeling are unaffected — the pipeline runs either way.
+
+*Done when:* `data/movieLens/` holds `ratings.csv`, `tags.csv` and
+`metadata.json`. Same for `data/steam-games/`, with `interactions.csv`
+in place of `ratings.csv`.
+
+*If you skip it:* the first pipeline step — dataset loading — fails
+with `FileNotFoundError`, because there is nothing on disk to load.
+
+**4. Start the three services.** They run **in parallel, each in its
+own terminal**, and the order matters: the backend logs every run and
+artifact through the MLflow server, so MLflow has to be up first.
+
+```bash
+just mlflow          # MLflow   → http://localhost:5000/mlflow  (start first)
+just run             # backend  → http://localhost:8000
+just frontend-dev    # frontend → http://localhost:5173
+```
+
+*Done when:* all three addresses below respond.
+
+**Check that it works.** Each service answers on its own address, so
+opening all three tells you which one is missing when something is
+off:
+
+| URL | What you should see |
+|---|---|
+| **http://localhost:5173** | the SARSSA UI — the pipeline cards, starting with *Dataset Loading* |
+| http://localhost:8000/docs | the backend's interactive API documentation (FastAPI's Swagger UI) |
+| http://localhost:5000/mlflow | MLflow's own UI, already listing the `pipeline_experiments` experiment — the backend creates it at startup, before any pipeline has run |
+
+**GPU acceleration (local).** There is nothing extra to configure to
+utilize the GPU.
 `uv sync --frozen` installs the **CUDA build** of PyTorch and the CUDA runtime
 ships inside that wheel — so on a host with an **NVIDIA driver**,
 training uses the GPU automatically.
