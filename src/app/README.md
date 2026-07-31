@@ -14,20 +14,22 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ The big picture](#-1-the-big-picture)
-2. [📁 Directory map](#-2-directory-map)
-3. [🚀 Running the backend](#-3-running-the-backend)
-4. [🛰️ HTTP API reference](#-4-http-api-reference)
-5. [⚙️ The pipeline execution engine](#-5-the-pipeline-execution-engine)
-6. [🔗 The pipeline context object](#-6-the-pipeline-context-object)
-7. [🔌 Engine ↔ plugin contract](#-7-engine--plugin-contract)
-8. [🧭 Plugin discovery & the registry](#-8-plugin-discovery--the-registry)
-9. [🗃️ MLflow integration & configuration](#-9-mlflow-integration--configuration)
-10. [🧱 Data models](#-10-data-models)
-11. [⚠️ Operational notes & gotchas](#-11-operational-notes--gotchas)
-12. [🔭 Where to go next](#-12-where-to-go-next)
+1. [🗺️ The big picture](#1-big-picture)
+2. [📁 Directory map](#2-directory-map)
+3. [🚀 Running the backend](#3-running-the-backend)
+4. [🛰️ HTTP API reference](#4-http-api-reference)
+5. [⚙️ The pipeline execution engine](#5-pipeline-execution-engine)
+6. [🔗 The pipeline context object](#6-pipeline-context-object)
+7. [🔌 Engine ↔ plugin contract](#7-engine-plugin-contract)
+8. [🧭 Plugin discovery & the registry](#8-plugin-discovery)
+9. [🗃️ MLflow integration & configuration](#9-mlflow-integration-configuration)
+10. [🧱 Data models](#10-data-models)
+11. [⚠️ Operational notes & gotchas](#11-operational-notes-gotchas)
+12. [🔭 Where to go next](#12-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. The big picture
 
@@ -68,6 +70,8 @@ JSON document called the **context** (see §6).
 
 ---
 
+<a id="2-directory-map"></a>
+
 ## 📁 2. Directory map
 
 | Path | Responsibility |
@@ -92,6 +96,8 @@ The backend also imports two shared utilities from outside `src/app`:
 `utils.plugin_notifier.PluginNotifier` (progress messages).
 
 ---
+
+<a id="3-running-the-backend"></a>
 
 ## 🚀 3. Running the backend
 
@@ -118,6 +124,8 @@ dataset download instructions live in the
 not provisioning.
 
 ---
+
+<a id="4-http-api-reference"></a>
 
 ## 🛰️ 4. HTTP API reference
 
@@ -184,6 +192,8 @@ queue with the web UI. Usage, examples, and the pipeline-file format:
 [`scripts/sarssa_cli/README.md`](../../scripts/sarssa_cli/README.md).
 
 ---
+
+<a id="5-pipeline-execution-engine"></a>
 
 ## ⚙️ 5. The pipeline execution engine
 
@@ -294,6 +304,8 @@ discards messages, so the same plugin code runs unchanged.
 
 ---
 
+<a id="6-pipeline-context-object"></a>
+
 ## 🔗 6. The pipeline context object
 
 The **context** is how steps find each other's outputs. It is a plain
@@ -333,6 +345,8 @@ dict:
 
 ---
 
+<a id="7-engine-plugin-contract"></a>
+
 ## 🔌 7. Engine ↔ plugin contract
 
 The engine treats every plugin as a `BasePlugin`
@@ -369,6 +383,8 @@ plugins, and how to author one is documented in
 the orchestration‑side view of that boundary.
 
 ---
+
+<a id="8-plugin-discovery"></a>
 
 ## 🧭 8. Plugin discovery & the registry
 
@@ -412,6 +428,8 @@ manual registration** — plugins are found by directory convention.
   category, and `GET /plugins/registry` serialises it.
 
 ---
+
+<a id="9-mlflow-integration-configuration"></a>
 
 ## 🗃️ 9. MLflow integration & configuration
 
@@ -516,6 +534,8 @@ use it under the hood of `load_context`.
 
 ---
 
+<a id="10-data-models"></a>
+
 ## 🧱 10. Data models
 
 ### `models/pipeline.py`
@@ -544,6 +564,8 @@ shapes the frontend consumes from `/plugins/registry`, so the
 
 ---
 
+<a id="11-operational-notes-gotchas"></a>
+
 ## ⚠️ 11. Operational notes & gotchas
 
 - **Tasks are in‑memory only.** `_tasks` is a module‑level dict
@@ -571,6 +593,8 @@ shapes the frontend consumes from `/plugins/registry`, so the
   the shared `sarssa` logger (`utils/logger.py`).
 
 ---
+
+<a id="12-where-to-go"></a>
 
 ## 🔭 12. Where to go next
 

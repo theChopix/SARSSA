@@ -17,17 +17,19 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture: the category contract](#-1-big-picture-the-category-contract)
-2. [🎚️ How steering actually works](#-2-how-steering-actually-works)
-3. [🔀 `single/` vs `compare/`](#-3-single-vs-compare)
-4. [📊 The plugins](#-4-the-plugins)
-5. [📥 Inputs · 📤 Outputs](#-5-inputs--outputs)
-6. [🎛️ `run()` parameters](#-6-run-parameters)
-7. [🛠️ Adding your own steering plugin](#-7-adding-your-own-steering-plugin)
-8. [⚠️ Operational notes & gotchas](#-8-operational-notes--gotchas)
-9. [➡️ Where to go next](#-9-where-to-go-next)
+1. [🗺️ Big picture: the category contract](#1-big-picture)
+2. [🎚️ How steering actually works](#2-how-steering-actually)
+3. [🔀 `single/` vs `compare/`](#3-single-vs-compare)
+4. [📊 The plugins](#4-plugins)
+5. [📥 Inputs · 📤 Outputs](#5-inputs-outputs)
+6. [🎛️ `run()` parameters](#6-run-parameters)
+7. [🛠️ Adding your own steering plugin](#7-adding-your-own)
+8. [⚠️ Operational notes & gotchas](#8-operational-notes-gotchas)
+9. [➡️ Where to go next](#9-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. Big picture: the category contract
 
@@ -75,6 +77,8 @@ Three things define the category:
 
 ---
 
+<a id="2-how-steering-actually"></a>
+
 ## 🎚️ 2. How steering actually works
 
 The user's interaction vector goes through the base model into an
@@ -101,6 +105,8 @@ top *k* is returned. The baseline list comes from the same model with
 no steering at all, so the two lists differ only by the concept nudge.
 
 ---
+
+<a id="3-single-vs-compare"></a>
 
 ## 🔀 3. `single/` vs `compare/`
 
@@ -138,6 +144,8 @@ directions:
   any model.
 
 ---
+
+<a id="4-plugins"></a>
 
 ## 📊 4. The plugins
 
@@ -196,6 +204,8 @@ better — or just differently — than the previous one?
 
 ---
 
+<a id="5-inputs-outputs"></a>
+
 ## 📥 5. Inputs · 📤 Outputs
 
 **Inputs** — identical for both plugins, and the heaviest set in the
@@ -222,6 +232,8 @@ readable long after you have forgotten which index you picked.
 
 ---
 
+<a id="6-run-parameters"></a>
+
 ## 🎛️ 6. `run()` parameters
 
 | Plugin | Param | Default | Meaning |
@@ -237,6 +249,8 @@ readable long after you have forgotten which index you picked.
 the matrix all raise before any model work happens.
 
 ---
+
+<a id="7-adding-your-own"></a>
 
 ## 🛠️ 7. Adding your own steering plugin
 
@@ -271,6 +285,8 @@ Keep the category's shape:
 
 ---
 
+<a id="8-operational-notes-gotchas"></a>
+
 ## ⚠️ 8. Operational notes & gotchas
 
 - **`alpha = 1` erases the user.** At full strength the entire
@@ -296,6 +312,8 @@ Keep the category's shape:
   interacted with.
 
 ---
+
+<a id="9-where-to-go"></a>
 
 ## ➡️ 9. Where to go next
 

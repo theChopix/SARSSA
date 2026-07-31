@@ -13,17 +13,19 @@
 
 ## 📑 Table of Contents
 
-1. [🎯 What it is & who it's for](#-1-what-it-is--who-its-for)
-2. [🏗️ How it works](#-2-how-it-works)
-3. [🧩 Extending SARSSA](#-3-extending-sarssa)
-4. [📚 Documentation](#-4-documentation)
-5. [🔐 Configuration & `.env`](#-5-configuration--env)
-6. [🚀 Setup & run](#-6-setup--run)
-7. [🗂️ Project layout](#-7-project-layout)
-8. [🛠️ Technologies](#-8-technologies)
-9. [🧑‍💻 Development](#-9-development)
+1. [🎯 What it is & who it's for](#1-what-it-is)
+2. [🏗️ How it works](#2-how-it-works)
+3. [🧩 Extending SARSSA](#3-extending-sarssa)
+4. [📚 Documentation](#4-documentation)
+5. [🔐 Configuration & `.env`](#5-configuration-env)
+6. [🚀 Setup & run](#6-setup-run)
+7. [🗂️ Project layout](#7-project-layout)
+8. [🛠️ Technologies](#8-technologies)
+9. [🧑‍💻 Development](#9-development)
 
 ---
+
+<a id="1-what-it-is"></a>
 
 ## 🎯 1. What it is & who it's for
 
@@ -78,7 +80,7 @@ are reproducible and reusable across experiments.
 - *As-is* — drive the shipped pipeline from the web UI (configure
   cards → run → browse results).
 - *Extended* — add your own dataset, model, labeling/steering method,
-  or LLM/embedding provider. See [§3](#-3-extending-sarssa).
+  or LLM/embedding provider. See [§3](#3-extending-sarssa).
 
 Key capabilities: plugin-based multi-step pipelines; MLflow experiment
 tracking & reproducibility; a web UI for composing, running, and
@@ -88,6 +90,8 @@ MLflow experiment spaces on top of a shared base experiment (handy
 e.g. for multi-user deployments).
 
 ---
+
+<a id="2-how-it-works"></a>
 
 ## 🏗️ 2. How it works
 
@@ -161,9 +165,11 @@ in the selected experiment, leaving the base one untouched.
 
 For the deeper mental models see the
 [backend](src/app/README.md), [plugin-system](src/plugins/README.md),
-and [frontend](frontend/README.md) docs (indexed in [§4](#-4-documentation)).
+and [frontend](frontend/README.md) docs (indexed in [§4](#4-documentation)).
 
 ---
+
+<a id="3-extending-sarssa"></a>
 
 ## 🧩 3. Extending SARSSA
 
@@ -217,6 +223,8 @@ config section ([`src/app/README.md`](src/app/README.md)).
 > to change.
 
 ---
+
+<a id="4-documentation"></a>
 
 ## 📚 4. Documentation
 
@@ -323,6 +331,8 @@ task.
 
 ---
 
+<a id="5-configuration-env"></a>
+
 ## 🔐 5. Configuration & `.env`
 
 Runtime secrets are supplied via a **`.env` file in the project
@@ -348,6 +358,8 @@ cp .env.sample .env      # then edit .env and set OPENAI_API_KEY
 > key lives in `.env`.
 
 ---
+
+<a id="6-setup-run"></a>
 
 ## 🚀 6. Setup & run
 
@@ -498,6 +510,8 @@ Manual equivalents (no `just`): `uv sync --frozen`,
 
 ---
 
+<a id="7-project-layout"></a>
+
 ## 🗂️ 7. Project layout
 
 ```
@@ -518,9 +532,11 @@ SARSSA/
 ```
 
 Each `README.md` documents the folder it sits in; the table in
-[§4](#-4-documentation) says when to read which.
+[§4](#4-documentation) says when to read which.
 
 ---
+
+<a id="8-technologies"></a>
 
 ## 🛠️ 8. Technologies
 
@@ -530,9 +546,11 @@ Each `README.md` documents the folder it sits in; the table in
   react-router, sonner — built and served by nginx in Docker.
 
 The development tooling (uv, ruff, ty, pytest, pre-commit, just) is
-covered in [§9](#-9-development).
+covered in [§9](#9-development).
 
 ---
+
+<a id="9-development"></a>
 
 ## 🧑‍💻 9. Development
 

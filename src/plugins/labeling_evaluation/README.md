@@ -17,16 +17,18 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture: the category contract](#-1-big-picture-the-category-contract)
-2. [🔀 `single/` vs `compare/`](#-2-single-vs-compare)
-3. [📊 The seven plugins](#-3-the-seven-plugins)
-4. [📥 Inputs · 📤 Outputs](#-4-inputs--outputs)
-5. [🎛️ `run()` parameters](#-5-run-parameters)
-6. [🛠️ Adding your own evaluation plugin](#-6-adding-your-own-evaluation-plugin)
-7. [⚠️ Operational notes & gotchas](#-7-operational-notes--gotchas)
-8. [➡️ Where to go next](#-8-where-to-go-next)
+1. [🗺️ Big picture: the category contract](#1-big-picture)
+2. [🔀 `single/` vs `compare/`](#2-single-vs-compare)
+3. [📊 The seven plugins](#3-seven-plugins)
+4. [📥 Inputs · 📤 Outputs](#4-inputs-outputs)
+5. [🎛️ `run()` parameters](#5-run-parameters)
+6. [🛠️ Adding your own evaluation plugin](#6-adding-your-own)
+7. [⚠️ Operational notes & gotchas](#7-operational-notes-gotchas)
+8. [➡️ Where to go next](#8-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. Big picture: the category contract
 
@@ -86,6 +88,8 @@ this declaration.
 
 ---
 
+<a id="2-single-vs-compare"></a>
+
 ## 🔀 2. `single/` vs `compare/`
 
 Like the other `multi_run` categories (`inspection`, `steering`), the
@@ -116,6 +120,8 @@ Two plugins are **compare-only** (`nearest_label_distance_*`): a
 drift measurement has nothing to say about a single run.
 
 ---
+
+<a id="3-seven-plugins"></a>
 
 ## 📊 3. The seven plugins
 
@@ -203,6 +209,8 @@ so, uniformly or in a few specific places?
 
 ---
 
+<a id="4-inputs-outputs"></a>
+
 ## 📥 4. Inputs · 📤 Outputs
 
 **Inputs** — identical for all seven plugins:
@@ -234,6 +242,8 @@ nearest_past_label}` — so the matching can be inspected outside the
 chart.
 
 ---
+
+<a id="5-run-parameters"></a>
 
 ## 🎛️ 5. `run()` parameters
 
@@ -270,6 +280,8 @@ any ranking):
 
 ---
 
+<a id="6-adding-your-own"></a>
+
 ## 🛠️ 6. Adding your own evaluation plugin
 
 This is the friendliest category to extend: no training, no GPU, and
@@ -301,6 +313,8 @@ label sets).
 
 ---
 
+<a id="7-operational-notes-gotchas"></a>
+
 ## ⚠️ 7. Operational notes & gotchas
 
 - **🔴 Embedding calls cost money and need an API key.** Every plugin
@@ -325,6 +339,8 @@ label sets).
   datasets will render fine and mean very little.
 
 ---
+
+<a id="8-where-to-go"></a>
 
 ## ➡️ 8. Where to go next
 

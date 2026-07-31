@@ -16,17 +16,19 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Orientation](#-1-orientation)
-2. [📦 `data_loading/`](#-2-data_loading)
-3. [🔤 `embedder/`](#-3-embedder)
-4. [💬 `llm/`](#-4-llm)
-5. [🔥 `torch/` — the ML model framework](#-5-torch--the-ml-model-framework)
-6. [🗃️ `mlflow_manager.py`](#-6-mlflow_managerpy)
-7. [🪵 `plugin_logger.py` & `plugin_notifier.py`](#-7-plugin_loggerpy--plugin_notifierpy)
-8. [⚠️ Gotchas](#-8-gotchas)
-9. [➡️ Where to go next](#-9-where-to-go-next)
+1. [🗺️ Orientation](#1-orientation)
+2. [📦 `data_loading/`](#2-dataloading)
+3. [🔤 `embedder/`](#3-embedder)
+4. [💬 `llm/`](#4-llm)
+5. [🔥 `torch/` — the ML model framework](#5-torch)
+6. [🗃️ `mlflow_manager.py`](#6-mlflowmanager-py)
+7. [🪵 `plugin_logger.py` & `plugin_notifier.py`](#7-pluginlogger-py-pluginnotifier)
+8. [⚠️ Gotchas](#8-gotchas)
+9. [➡️ Where to go next](#9-where-to-go)
 
 ---
+
+<a id="1-orientation"></a>
 
 ## 🗺️ 1. Orientation
 
@@ -55,6 +57,8 @@ toolboxes. Quick map of what lives here and who calls it:
 
 ---
 
+<a id="2-dataloading"></a>
+
 ## 📦 2. `data_loading/`
 
 One file, `data_loader.py` → **`DataLoader`**: a tiny iterator that
@@ -72,6 +76,8 @@ training/eval inner loop.
 > [`../plugins/dataset_loading/README.md`](../plugins/dataset_loading/README.md)).
 
 ---
+
+<a id="3-embedder"></a>
 
 ## 🔤 3. `embedder/`
 
@@ -99,6 +105,8 @@ this README only flags that this is an extension point.
 
 ---
 
+<a id="4-llm"></a>
+
 ## 💬 4. `llm/`
 
 Structurally a mirror of `embedder/`, for chat completions:
@@ -124,6 +132,8 @@ provider without touching callers); the concrete how-to lives in the
 module itself.
 
 ---
+
+<a id="5-torch"></a>
 
 ## 🔥 5. `torch/` — the ML model framework
 
@@ -226,6 +236,8 @@ extension, never a plugin one.
 
 ---
 
+<a id="6-mlflowmanager-py"></a>
+
 ## 🗃️ 6. `mlflow_manager.py`
 
 `MLflowRunLoader(run_id)` — the **single, storage-agnostic API for
@@ -246,6 +258,8 @@ on top of it), plus the backend's artifact proxy
 access. If you change how artifacts are read, change it here.
 
 ---
+
+<a id="7-pluginlogger-py-pluginnotifier"></a>
 
 ## 🪵 7. `plugin_logger.py` & `plugin_notifier.py`
 
@@ -283,6 +297,8 @@ other side in [`../app/README.md`](../app/README.md) and
 
 ---
 
+<a id="8-gotchas"></a>
+
 ## ⚠️ 8. Gotchas
 
 - **`OPENAI_API_KEY` is mandatory for embedder/LLM features.** OpenAI
@@ -300,6 +316,8 @@ other side in [`../app/README.md`](../app/README.md) and
   loaders there, not by re-implementing MLflow access.
 
 ---
+
+<a id="9-where-to-go"></a>
 
 ## ➡️ 9. Where to go next
 

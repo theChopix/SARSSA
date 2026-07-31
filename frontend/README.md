@@ -16,15 +16,17 @@
 
 ## 📑 Table of Contents
 
-1. [🧰 Tech stack](#-1-tech-stack)
-2. [🚀 Run & build](#-2-run--build)
-3. [🗂️ Folder & file map](#-3-folder--file-map)
-4. [🔄 How it talks to the backend](#-4-how-it-talks-to-the-backend)
-5. [🧭 "I want to change X — where?"](#-5-i-want-to-change-x--where)
-6. [⚠️ Gotchas](#-6-gotchas)
-7. [➡️ Where to go next](#-7-where-to-go-next)
+1. [🧰 Tech stack](#1-tech-stack)
+2. [🚀 Run & build](#2-run-build)
+3. [🗂️ Folder & file map](#3-folder-file-map)
+4. [🔄 How it talks to the backend](#4-how-it-talks)
+5. [🧭 "I want to change X — where?"](#5-i-want)
+6. [⚠️ Gotchas](#6-gotchas)
+7. [➡️ Where to go next](#7-where-to-go)
 
 ---
+
+<a id="1-tech-stack"></a>
 
 ## 🧰 1. Tech stack
 
@@ -48,6 +50,8 @@ Tailwind** — state is one Zustand store and HTTP is hand-rolled `fetch`
 wrappers. Keep it that way unless there's a strong reason.
 
 ---
+
+<a id="2-run-build"></a>
 
 ## 🚀 2. Run & build
 
@@ -77,6 +81,8 @@ port 5173).
 > exactly the same inside the compose network.
 
 ---
+
+<a id="3-folder-file-map"></a>
 
 ## 🗂️ 3. Folder & file map
 
@@ -117,6 +123,8 @@ boundary mirroring the backend; the *only* genuinely complex files are
 (the configurable card UI).
 
 ---
+
+<a id="4-how-it-talks"></a>
 
 ## 🔄 4. How it talks to the backend
 
@@ -178,6 +186,8 @@ builds MLflow *deep links* from `/pipelines/mlflow-info`.
 
 ---
 
+<a id="5-i-want"></a>
+
 ## 🧭 5. "I want to change X — where?"
 
 | Goal | Where |
@@ -196,6 +206,8 @@ changes when the *shape* of the contract changes** (a new widget or
 display kind), or for pure UI/UX work.
 
 ---
+
+<a id="6-gotchas"></a>
 
 ## ⚠️ 6. Gotchas
 
@@ -227,6 +239,8 @@ display kind), or for pure UI/UX work.
   running-tasks menu (§4) uses to reattach to a run.
 
 ---
+
+<a id="7-where-to-go"></a>
 
 ## ➡️ 7. Where to go next
 
