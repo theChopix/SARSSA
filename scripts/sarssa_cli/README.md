@@ -32,7 +32,8 @@ uv run python scripts/sarssa_cli/sarssa_cli.py plugins list training_sae --param
 
 ## Pipeline definitions
 
-YAML/JSON files mirroring the `POST /pipelines/run-async` body — see
+You describe a pipeline in a YAML or JSON file that mirrors the
+`POST /pipelines/run-async` body — see
 the commented [`pipeline.example.yaml`](pipeline.example.yaml)
 (including how to inherit steps from a past run via `context`).
 
