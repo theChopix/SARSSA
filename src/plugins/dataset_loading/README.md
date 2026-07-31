@@ -16,16 +16,18 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture](#-1-big-picture)
-2. [🔄 The `prepare()` pipeline](#-2-the-prepare-pipeline)
-3. [📤 The output contract (what every loader must produce)](#-3-the-output-contract-what-every-loader-must-produce)
-4. [📚 The two reference loaders](#-4-the-two-reference-loaders)
-5. [🛠️ **Tutorial: implement your own data loader**](#-5-tutorial-implement-your-own-data-loader)
-6. [🗂️ The `data/` folder](#-6-the-data-folder)
-7. [⚠️ Operational notes & gotchas](#-7-operational-notes--gotchas)
-8. [➡️ Where to go next](#-8-where-to-go-next)
+1. [🗺️ Big picture](#1-big-picture)
+2. [🔄 The `prepare()` pipeline](#2-prepare-pipeline)
+3. [📤 The output contract (what every loader must produce)](#3-output-contract)
+4. [📚 The two reference loaders](#4-two-reference-loaders)
+5. [🛠️ **Tutorial: implement your own data loader**](#5-tutorial)
+6. [🗂️ The `data/` folder](#6-data-folder)
+7. [⚠️ Operational notes & gotchas](#7-operational-notes-gotchas)
+8. [➡️ Where to go next](#8-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. Big picture
 
@@ -68,6 +70,8 @@ interactions + curated item-level tags + item metadata).
 
 ---
 
+<a id="2-prepare-pipeline"></a>
+
 ## 🔄 2. The `prepare()` pipeline
 
 `DatasetLoader.prepare(val_ratio, test_ratio, seed)` runs a fixed
@@ -105,6 +109,8 @@ they are tunable per run from the UI without editing the subclass (see
 §5 Step 3).
 
 ---
+
+<a id="3-output-contract"></a>
 
 ## 📤 3. The output contract (what every loader must produce)
 
@@ -192,6 +198,8 @@ This matters enormously for "bring your own dataset":
 
 ---
 
+<a id="4-two-reference-loaders"></a>
+
 ## 📚 4. The two reference loaders
 
 **`movieLens_loader` — the template to follow (the default).**
@@ -219,6 +227,8 @@ whose `run(seed, val_ratio, test_ratio)` calls `prepare()` and copies
 the results onto `self.*` matching the `io_spec`.
 
 ---
+
+<a id="5-tutorial"></a>
 
 ## 🛠️ 5. Tutorial: implement your own data loader
 
@@ -545,6 +555,8 @@ it doesn't — but never deviate from the §3 output contract.**
 
 ---
 
+<a id="6-data-folder"></a>
+
 ## 🗂️ 6. The `data/` folder
 
 Loaders read from `data/<dataset>/` at the **repo root** (resolved as
@@ -681,6 +693,8 @@ single OSF bundle with the complete, ready-to-use artifact set:
 
 ---
 
+<a id="7-operational-notes-gotchas"></a>
+
 ## ⚠️ 7. Operational notes & gotchas
 
 Real, code-traced sharp edges — especially relevant when adding a
@@ -719,6 +733,8 @@ dataset.
   exactly one of train/valid/test. Same `seed` → same partition.
 
 ---
+
+<a id="8-where-to-go"></a>
 
 ## ➡️ 8. Where to go next
 

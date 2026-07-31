@@ -17,17 +17,19 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture & module organization](#-1-big-picture--module-organization)
-2. [🧮 The SAE model family](#-2-the-sae-model-family)
-3. [🎯 The loss](#-3-the-loss)
-4. [🔁 The training loop](#-4-the-training-loop)
-5. [📥 Inputs · 📤 Outputs](#-5-inputs--outputs)
-6. [🎛️ `run()` parameters](#-6-run-parameters)
-7. [🛠️ Adding your own SAE variant](#-7-adding-your-own-sae-variant)
-8. [⚠️ Operational notes & gotchas](#-8-operational-notes--gotchas)
-9. [➡️ Where to go next](#-9-where-to-go-next)
+1. [🗺️ Big picture & module organization](#1-big-picture-module)
+2. [🧮 The SAE model family](#2-sae-model-family)
+3. [🎯 The loss](#3-loss)
+4. [🔁 The training loop](#4-training-loop)
+5. [📥 Inputs · 📤 Outputs](#5-inputs-outputs)
+6. [🎛️ `run()` parameters](#6-run-parameters)
+7. [🛠️ Adding your own SAE variant](#7-adding-your-own)
+8. [⚠️ Operational notes & gotchas](#8-operational-notes-gotchas)
+9. [➡️ Where to go next](#9-where-to-go)
 
 ---
+
+<a id="1-big-picture-module"></a>
 
 ## 🗺️ 1. Big picture & module organization
 
@@ -68,6 +70,8 @@ build, `basic` additionally drops the contrastive plumbing.
 
 ---
 
+<a id="2-sae-model-family"></a>
+
 ## 🧮 2. The SAE model family
 
 **Shared architecture** (`sae_model.py :: SAE`) — an untied one-layer
@@ -99,6 +103,8 @@ autoencoder over dense embeddings `x` of dim `input_dim`:
 
 ---
 
+<a id="3-loss"></a>
+
 ## 🎯 3. The loss
 
 All terms are computed in the base class for every variant
@@ -124,6 +130,8 @@ auxiliary term.
 | `L0` | mean active-neuron count — **logged as a diagnostic only**, never part of `Loss`. |
 
 ---
+
+<a id="4-training-loop"></a>
 
 ## 🔁 4. The training loop
 
@@ -160,6 +168,8 @@ is checked every batch.
 
 ---
 
+<a id="5-inputs-outputs"></a>
+
 ## 📥 5. Inputs · 📤 Outputs
 
 **Inputs** — requires `dataset_loading` **and** `training_cfm`:
@@ -187,6 +197,8 @@ neuron, decode back).
 
 ---
 
+<a id="6-run-parameters"></a>
+
 ## 🎛️ 6. `run()` parameters
 
 All three trainers share this surface; `top_k` is absent in Basic,
@@ -213,6 +225,8 @@ UI (note the nested groups under *Training Loop → Loss*):
 
 ---
 
+<a id="7-adding-your-own"></a>
+
 ## 🛠️ 7. Adding your own SAE variant
 
 Usually **no new trainer is needed** — a new sparsity mechanism is a
@@ -233,6 +247,8 @@ and `encode`/`decode`, so they work unchanged.
 
 ---
 
+<a id="8-operational-notes-gotchas"></a>
+
 ## ⚠️ 8. Operational notes & gotchas
 
 - **This is the expensive stage without a GPU.** The default 250
@@ -248,6 +264,8 @@ and `encode`/`decode`, so they work unchanged.
   batches and its threshold (hence inference sparsity) is unreliable.
 
 ---
+
+<a id="9-where-to-go"></a>
 
 ## ➡️ 9. Where to go next
 

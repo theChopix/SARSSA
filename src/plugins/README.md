@@ -15,17 +15,19 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Philosophy](#-1-philosophy)
-2. [🧱 Class hierarchy](#-2-class-hierarchy)
-3. [📋 The `PluginIOSpec` reference](#-3-the-pluginiospec-reference)
-4. [🔄 Context flow](#-4-context-flow)
-5. [🧭 Discovery & directory contract](#-5-discovery--directory-contract)
-6. [🛠️ Tutorial: write your own plugin](#-6-tutorial-write-your-own-plugin)
-7. [🔭 Per‑category contracts](#-7-percategory-contracts)
-8. [⚠️ Operational notes & gotchas](#-8-operational-notes--gotchas)
-9. [➡️ Where to go next](#-9-where-to-go-next)
+1. [🗺️ Philosophy](#1-philosophy)
+2. [🧱 Class hierarchy](#2-class-hierarchy)
+3. [📋 The `PluginIOSpec` reference](#3-pluginiospec-reference)
+4. [🔄 Context flow](#4-context-flow)
+5. [🧭 Discovery & directory contract](#5-discovery-directory-contract)
+6. [🛠️ Tutorial: write your own plugin](#6-tutorial)
+7. [🔭 Per‑category contracts](#7-per-category-contracts)
+8. [⚠️ Operational notes & gotchas](#8-operational-notes-gotchas)
+9. [➡️ Where to go next](#9-where-to-go)
 
 ---
+
+<a id="1-philosophy"></a>
 
 ## 🗺️ 1. Philosophy
 
@@ -50,6 +52,8 @@ This is why a plugin's own code is short and testable: the I/O is data
 (`io_spec`), not control flow.
 
 ---
+
+<a id="2-class-hierarchy"></a>
 
 ## 🧱 2. Class hierarchy
 
@@ -168,6 +172,8 @@ The current side is loaded exactly like a normal plugin (via
 
 ---
 
+<a id="3-pluginiospec-reference"></a>
+
 ## 📋 3. The `PluginIOSpec` reference
 
 `PluginIOSpec` (`plugin_interface.py`) — all fields optional,
@@ -278,6 +284,8 @@ a trailing "Other" section.
 
 ---
 
+<a id="4-context-flow"></a>
+
 ## 🔄 4. Context flow
 
 ```
@@ -318,6 +326,8 @@ to populate `self.past_context` before your body; you then call
 
 ---
 
+<a id="5-discovery-directory-contract"></a>
+
 ## 🧭 5. Discovery & directory contract
 
 No manual registration. `plugin_registry.py` finds plugins by
@@ -347,6 +357,8 @@ the signature, its **description** from the first string in a
 widget from any matching `param_ui_hints` entry (`_resolve_widget`).
 
 ---
+
+<a id="6-tutorial"></a>
 
 ## 🛠️ 6. Tutorial: write your own plugin
 
@@ -448,6 +460,8 @@ class Plugin(BaseComparePlugin):
 
 ---
 
+<a id="7-per-category-contracts"></a>
+
 ## 🔭 7. Per‑category contracts
 
 SARSSA currently has **seven plugin categories**, run in this pipeline
@@ -477,6 +491,8 @@ This document is the **cross‑category contract**; those are the
 [`../../frontend/README.md`](../../frontend/README.md).
 
 ---
+
+<a id="8-operational-notes-gotchas"></a>
 
 ## ⚠️ 8. Operational notes & gotchas
 
@@ -517,6 +533,8 @@ These are real, code‑traced sharp edges — read before authoring.
   label.
 
 ---
+
+<a id="9-where-to-go"></a>
 
 ## ➡️ 9. Where to go next
 

@@ -16,17 +16,19 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture](#-1-big-picture)
-2. [🧮 The ELSA model](#-2-the-elsa-model)
-3. [🔁 The training loop](#-3-the-training-loop)
-4. [📥 Inputs · 📤 Outputs](#-4-inputs--outputs)
-5. [🎛️ `run()` parameters](#-5-run-parameters)
-6. [💾 Model persistence & the model registry](#-6-model-persistence--the-model-registry)
-7. [🛠️ Adding your own CFM trainer](#-7-adding-your-own-cfm-trainer)
-8. [⚠️ Operational notes & gotchas](#-8-operational-notes--gotchas)
-9. [➡️ Where to go next](#-9-where-to-go-next)
+1. [🗺️ Big picture](#1-big-picture)
+2. [🧮 The ELSA model](#2-elsa-model)
+3. [🔁 The training loop](#3-training-loop)
+4. [📥 Inputs · 📤 Outputs](#4-inputs-outputs)
+5. [🎛️ `run()` parameters](#5-run-parameters)
+6. [💾 Model persistence & the model registry](#6-model-persistence)
+7. [🛠️ Adding your own CFM trainer](#7-adding-your-own)
+8. [⚠️ Operational notes & gotchas](#8-operational-notes-gotchas)
+9. [➡️ Where to go next](#9-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. Big picture
 
@@ -52,6 +54,8 @@ dataset_loading artifacts          elsa_trainer plugin
 ```
 
 ---
+
+<a id="2-elsa-model"></a>
 
 ## 🧮 2. The ELSA model
 
@@ -92,6 +96,8 @@ and inspection stages.
 
 ---
 
+<a id="3-training-loop"></a>
+
 ## 🔁 3. The training loop
 
 `elsa_trainer.py :: train()` is a standard early-stopping loop with a
@@ -115,6 +121,8 @@ metrics are there so you can *see* whether loss improvements still
 translate into recommendation quality.
 
 ---
+
+<a id="4-inputs-outputs"></a>
 
 ## 📥 4. Inputs · 📤 Outputs
 
@@ -143,6 +151,8 @@ load it to encode users and score items.
 
 ---
 
+<a id="5-run-parameters"></a>
+
 ## 🎛️ 5. `run()` parameters
 
 Grouped in the UI exactly as declared in `param_groups`:
@@ -159,6 +169,8 @@ Grouped in the UI exactly as declared in `param_groups`:
 | Evaluation | `target_ratio` | 0.2 | fraction of interactions hidden as ranking targets in val/test scoring — affects the logged metrics only, **not** model selection |
 
 ---
+
+<a id="6-model-persistence"></a>
 
 ## 💾 6. Model persistence & the model registry
 
@@ -188,6 +200,8 @@ constructor signature holds.
 > `Unknown base model type` even though its decorator looks right.
 
 ---
+
+<a id="7-adding-your-own"></a>
 
 ## 🛠️ 7. Adding your own CFM trainer
 
@@ -219,6 +233,8 @@ steering/inspection stages only ever touch the checkpoint through
 
 ---
 
+<a id="8-operational-notes-gotchas"></a>
+
 ## ⚠️ 8. Operational notes & gotchas
 
 - **Device is auto-detected** (`set_device`): CUDA → MPS → CPU. There
@@ -231,6 +247,8 @@ steering/inspection stages only ever touch the checkpoint through
   it expecting a different model.
 
 ---
+
+<a id="9-where-to-go"></a>
 
 ## ➡️ 9. Where to go next
 

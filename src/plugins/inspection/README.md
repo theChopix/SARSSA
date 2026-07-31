@@ -16,16 +16,18 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture: the category contract](#-1-big-picture-the-category-contract)
-2. [🔀 `single/` vs `compare/`](#-2-single-vs-compare)
-3. [📊 The plugins](#-3-the-plugins)
-4. [📥 Inputs · 📤 Outputs](#-4-inputs--outputs)
-5. [🎛️ `run()` parameters](#-5-run-parameters)
-6. [🛠️ Adding your own inspection plugin](#-6-adding-your-own-inspection-plugin)
-7. [⚠️ Operational notes & gotchas](#-7-operational-notes--gotchas)
-8. [➡️ Where to go next](#-8-where-to-go-next)
+1. [🗺️ Big picture: the category contract](#1-big-picture)
+2. [🔀 `single/` vs `compare/`](#2-single-vs-compare)
+3. [📊 The plugins](#3-plugins)
+4. [📥 Inputs · 📤 Outputs](#4-inputs-outputs)
+5. [🎛️ `run()` parameters](#5-run-parameters)
+6. [🛠️ Adding your own inspection plugin](#6-adding-your-own)
+7. [⚠️ Operational notes & gotchas](#7-operational-notes-gotchas)
+8. [➡️ Where to go next](#8-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. Big picture: the category contract
 
@@ -78,6 +80,8 @@ nothing.
 
 ---
 
+<a id="2-single-vs-compare"></a>
+
 ## 🔀 2. `single/` vs `compare/`
 
 Like the other `multi_run` categories
@@ -111,6 +115,8 @@ The past-side dropdown cascades off `past_run_id`: choose a run
 first, and the second dropdown fills with **that run's** labels.
 
 ---
+
+<a id="3-plugins"></a>
 
 ## 📊 3. The plugins
 
@@ -159,6 +165,8 @@ the same label — do their "sci-fi" neurons pick out the same films?
 
 ---
 
+<a id="4-inputs-outputs"></a>
+
 ## 📥 4. Inputs · 📤 Outputs
 
 **Inputs** — identical for both plugins:
@@ -185,6 +193,8 @@ a run that asked for more items than exist stays self-documenting.
 
 ---
 
+<a id="5-run-parameters"></a>
+
 ## 🎛️ 5. `run()` parameters
 
 | Plugin | Param | Default | Meaning |
@@ -200,6 +210,8 @@ when `k` exceeds one of them, and `k_used` records the current side's
 value.
 
 ---
+
+<a id="6-adding-your-own"></a>
 
 ## 🛠️ 6. Adding your own inspection plugin
 
@@ -233,6 +245,8 @@ Keep the category's shape:
 
 ---
 
+<a id="7-operational-notes-gotchas"></a>
+
 ## ⚠️ 7. Operational notes & gotchas
 
 - **Dead neurons are in the dropdown too.** Neurons the labeling step
@@ -246,6 +260,8 @@ Keep the category's shape:
   renders, with the raw item id as the card title.
 
 ---
+
+<a id="8-where-to-go"></a>
 
 ## ➡️ 8. Where to go next
 

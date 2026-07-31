@@ -17,16 +17,18 @@
 
 ## 📑 Table of Contents
 
-1. [🗺️ Big picture: the category contract](#-1-big-picture-the-category-contract)
-2. [🏷️ Today's plugins: the tag-based family](#-2-todays-plugins-the-tag-based-family)
-3. [🔬 The two tag-based methods in detail](#-3-the-two-tag-based-methods-in-detail)
-4. [📥 Inputs · 📤 Outputs](#-4-inputs--outputs)
-5. [🎛️ `run()` parameters](#-5-run-parameters)
-6. [🛠️ Adding your own labeling method](#-6-adding-your-own-labeling-method)
-7. [⚠️ Operational notes & gotchas](#-7-operational-notes--gotchas)
-8. [➡️ Where to go next](#-8-where-to-go-next)
+1. [🗺️ Big picture: the category contract](#1-big-picture)
+2. [🏷️ Today's plugins: the tag-based family](#2-today-s-plugins)
+3. [🔬 The two tag-based methods in detail](#3-two-tag-based)
+4. [📥 Inputs · 📤 Outputs](#4-inputs-outputs)
+5. [🎛️ `run()` parameters](#5-run-parameters)
+6. [🛠️ Adding your own labeling method](#6-adding-your-own)
+7. [⚠️ Operational notes & gotchas](#7-operational-notes-gotchas)
+8. [➡️ Where to go next](#8-where-to-go)
 
 ---
+
+<a id="1-big-picture"></a>
 
 ## 🗺️ 1. Big picture: the category contract
 
@@ -52,6 +54,8 @@ tint), and the `labeling_evaluation` stage analyses the label set as
 a whole.
 
 ---
+
+<a id="2-today-s-plugins"></a>
 
 ## 🏷️ 2. Today's plugins: the tag-based family
 
@@ -90,6 +94,8 @@ The shared pieces live next to the plugins:
 
 ---
 
+<a id="3-two-tag-based"></a>
+
 ## 🔬 3. The two tag-based methods in detail
 
 **`tag_correlation` — label = the most-correlated tag.** Computes the
@@ -116,6 +122,8 @@ confidences (still point-biserial, §2) can be lower or even negative
 than `tag_correlation`'s.
 
 ---
+
+<a id="4-inputs-outputs"></a>
 
 ## 📥 4. Inputs · 📤 Outputs
 
@@ -145,6 +153,8 @@ embedding maps) analyse the label set as a whole.
 
 ---
 
+<a id="5-run-parameters"></a>
+
 ## 🎛️ 5. `run()` parameters
 
 | Plugin | Param | Default | Meaning |
@@ -155,6 +165,8 @@ embedding maps) analyse the label set as a whole.
 | `tf_idf` | `orientation` | `tag_as_document` | which entity is the TF-IDF document (§3) |
 
 ---
+
+<a id="6-adding-your-own"></a>
 
 ## 🛠️ 6. Adding your own labeling method
 
@@ -176,6 +188,8 @@ if your labels are tag-based — `_confidence.py` for scoring.
 
 ---
 
+<a id="7-operational-notes-gotchas"></a>
+
 ## ⚠️ 7. Operational notes & gotchas
 
 - **🔴 The current plugins require tags.** Both declare
@@ -195,6 +209,8 @@ if your labels are tag-based — `_confidence.py` for scoring.
   maximise correlation (§3).
 
 ---
+
+<a id="8-where-to-go"></a>
 
 ## ➡️ 8. Where to go next
 
