@@ -400,6 +400,41 @@ artifacts through the MLflow server, so `just mlflow` must be up
 before `just run`. A pipeline that starts with a dataset-loading step
 needs step 3 done first, or it fails with `FileNotFoundError`.
 
+**GPU acceleration (local).** There is nothing extra to configure.
+`uv sync --frozen` installs the **CUDA build** of PyTorch and the CUDA runtime
+ships inside that wheel — so on a host with an **NVIDIA driver**,
+training uses the GPU automatically.
+
+Check what the local install sees:
+
+```bash
+uv run python -c "import torch; print('cuda:', torch.cuda.is_available(), '| mps:', torch.backends.mps.is_available())"
+```
+
+Either one `True` means training runs on the GPU. Both `False` —
+everything still works, just on CPU; on an NVIDIA host the usual cause
+is a missing or outdated driver, as nothing else has to be installed.
+On Apple `cuda` is always `False` and `mps` is the one that
+matters.
+
+Not every stage uses it:
+
+| Stage | Device | Why |
+|---|---|---|
+| `dataset_loading` | CPU | matrix building, no torch involved |
+| `training_cfm` | GPU | training loop |
+| `training_sae` | GPU | **the stage that gains most** |
+| `neuron_labeling` | CPU *by design* | its catalogue-wide passes exhaust small GPUs |
+| `inspection` | CPU | reads precomputed activations, runs no model |
+| `steering` | GPU | a single forward pass — fast either way |
+| `labeling_evaluation` | CPU / network | embeddings come from the provider (§5) |
+
+The device is picked automatically (CUDA → MPS → CPU); there is no
+device parameter to set.
+
+> **Small VRAM (≤ 4 GB):** SAE training is the memory-hungry stage. If a
+> run fails with `CUDA out of memory`, lower that step's `batch_size`.
+
 ### Run with Docker
 
 The whole stack is containerised with Docker Compose:
@@ -428,7 +463,7 @@ Then build and start the stack:
 docker compose up --build -d          # or: just docker-up
 ```
 
-**GPU acceleration (optional).** The command above is **CPU-only** and
+**GPU acceleration (docker).** The command above is **CPU-only** and
 starts on any host. The backend trains models on a GPU when one is
 available; to hand it the host's NVIDIA GPU, install the **NVIDIA driver**
 and the **NVIDIA Container Toolkit**, then add the GPU overlay:
@@ -484,10 +519,9 @@ Notes:
   running `just mlflow` + `just run` locally.
 - Other commands: `just docker-build` / `docker-down` / `docker-logs`.
 
-> **Image size:** `pyproject.toml` pins `torch==2.7.1`, which the
-> lockfile resolves to the CUDA build, so the backend image is several
-> GB. It runs fine CPU-only; switch `torch` to a CPU wheel index for a
-> smaller image.
+> **Image size:** the backend image is several GB because
+> `pyproject.toml` pins `torch==2.7.1`, which the lockfile resolves to
+> the **CUDA build**.
 
 ### Common commands
 
