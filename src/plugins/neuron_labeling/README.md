@@ -18,7 +18,7 @@
 ## 📑 Table of Contents
 
 1. [🗺️ Big picture: the category contract](#1-big-picture)
-2. [🏷️ Today's plugins: the tag-based family](#2-today-s-plugins)
+2. [🏷️ The shipped plugins: the tag-based family](#2-shipped-plugins)
 3. [🔬 The two tag-based methods in detail](#3-two-tag-based)
 4. [📥 Inputs · 📤 Outputs](#4-inputs-outputs)
 5. [🎛️ `run()` parameters](#5-run-parameters)
@@ -55,9 +55,9 @@ a whole.
 
 ---
 
-<a id="2-today-s-plugins"></a>
+<a id="2-shipped-plugins"></a>
 
-## 🏷️ 2. Today's plugins: the tag-based family
+## 🏷️ 2. The shipped plugins: the tag-based family
 
 Both current plugins label neurons **with tags from the dataset**
 (`neuron → dataset tag`), and share one recipe:
