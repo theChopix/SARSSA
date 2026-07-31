@@ -81,7 +81,7 @@ training/eval inner loop.
 
 ## 🔤 3. `embedder/`
 
-Text-embedding behind a provider abstraction:
+`embedder/` turns text into vectors behind a provider abstraction:
 
 | File | Role |
 |------|------|
@@ -109,7 +109,8 @@ this README only flags that this is an extension point.
 
 ## 💬 4. `llm/`
 
-Structurally a mirror of `embedder/`, for chat completions:
+`llm/` mirrors `embedder/` file for file, but for chat completions
+instead of embeddings:
 
 | File | Role |
 |------|------|

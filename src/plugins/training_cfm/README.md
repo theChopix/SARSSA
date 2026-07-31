@@ -205,7 +205,8 @@ constructor signature holds.
 
 ## 🛠️ 7. Adding your own CFM trainer
 
-Two pieces: a **model class** and a **trainer plugin**.
+To add your own trainer you write two files: a **model class** and a
+**trainer plugin**.
 
 1. **Model** — `utils/torch/models/base_model/<name>/<name>.py`,
    subclassing `BaseModel` and implementing the four-method

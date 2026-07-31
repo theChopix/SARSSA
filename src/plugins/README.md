@@ -40,8 +40,9 @@ and never wires itself into the registry. Three rules:
   `update_context()` (`plugin_interface.py`). You implement
   `run()`; the base class implements the other two.
 - **`io_spec` is the contract.** A `PluginIOSpec` class attribute
-  declares what to pull from upstream runs (`self.*` is hydrated for
-  you) and what to log afterwards (read back from `self.*`). The base
+  declares what to pull from upstream runs (the base class loads each
+  one onto `self` before `run()`) and what to log afterwards (read
+  back from `self.*`). The base
   class does every MLflow read/write from that spec.
 - **`run()` is pure.** When `run()` is called, every declared input is
   already an attribute on `self`. `run()` computes results and assigns
@@ -155,7 +156,7 @@ labeling) are always plain `BasePlugin`.
    signature (`__signature__`) so registry introspection still sees
    your real parameters.
 
-Subclass requirements:
+**What you must provide:**
 
 - Set `past_run_required_steps` (class attr) — step keys an eligible
   past run's `context.json` must contain.
