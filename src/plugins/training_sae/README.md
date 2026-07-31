@@ -202,8 +202,11 @@ neuron, decode back).
 ## 🎛️ 6. `run()` parameters
 
 All three trainers share this surface; `top_k` is absent in Basic,
-and the Contrastive group is TopK/BatchTopK-only. Grouped as in the
-UI (note the nested groups under *Training Loop → Loss*):
+and the Contrastive group is TopK/BatchTopK-only. The **Group** column
+gives each parameter's path through the collapsible sections of the UI
+form, so `Training Loop → Loss` means the *Loss* section sits inside
+*Training Loop*. An empty Group cell means the row belongs to the same
+group as the row above it.
 
 | Group | Param | Default | Meaning |
 |---|---|---|---|
@@ -212,12 +215,12 @@ UI (note the nested groups under *Training Loop → Loss*):
 | | `normalize` | off | L2-normalize the codes |
 | Training Loop | `epochs` / `batch_size` / `early_stop` / `seed` | 250 / 512 / 50 / 42 | as in CFM training; `early_stop` counts evaluations |
 | | `sample_interactions` | off | anchor augmentation (§4) |
-| ⤷ Loss | `reconstruction_loss` | Cosine | `Cosine` or `L2` |
+| Training Loop → Loss | `reconstruction_loss` | Cosine | `Cosine` or `L2` |
 | | `l1_coef` | 3e-4 | L1 penalty strength |
-| ⤷⤷ Dead Neurons Auxiliary | `auxiliary_coef` | 0.0 | weight of the aux loss (0 = off) |
+| Training Loop → Loss → Dead Neurons Auxiliary | `auxiliary_coef` | 0.0 | weight of the aux loss (0 = off) |
 | | `topk_aux` | 512 | dead neurons revived per step |
 | | `n_batches_to_dead` | 5 | silent batches before "dead" |
-| ⤷⤷ Contrastive | `contrastive_coef` | 0.0 | weight of InfoNCE (0 = off) |
+| Training Loop → Loss → Contrastive | `contrastive_coef` | 0.0 | weight of InfoNCE (0 = off) |
 | | `temperature` | 0.2 | softmax sharpening (§3) |
 | Optimizer | `lr` / `beta1` / `beta2` | 3e-4 / 0.9 / 0.99 | Adam |
 | Evaluation | `evaluate_every` | 10 | validation cadence (epochs) |
