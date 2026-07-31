@@ -178,7 +178,7 @@ containing `.`/`/`. For **cascading** dropdowns the hint sets
 |---------------|---------|------|
 | `GET /items/artifact?run_id=…&filename=…` | Proxy a **JSON** artifact from any run (parsed) | `get_step_artifact` |
 | `GET /items/artifact-raw?run_id=…&filename=…` | Serve a **raw** artifact file with a guessed MIME type (SVG/HTML/PDF visualisations) | `get_raw_artifact` |
-| `GET /items/enrich?run_id=…&ids=a,b,c` | Join item IDs with `item_metadata.json` from a dataset‑loading run; missing items fall back to `{"id", "title": id}` | `get_enriched_items` |
+| `POST /items/enrich` | Join item IDs with `item_metadata.json` from a dataset‑loading run; missing items fall back to `{"id", "title": id}`. Body: `{"run_id", "ids"}` — see §10 | `post_enriched_items` |
 
 The proxy endpoints exist so the browser never needs direct MLflow
 access or credentials.
@@ -349,9 +349,9 @@ dict:
 
 ## 🔌 7. Engine ↔ plugin contract
 
-The engine treats every plugin as a `BasePlugin`
-(`src/plugins/plugin_interface.py`). For each step it does, in
-order:
+The engine runs plugins without knowing anything about what they do —
+the entire boundary is three lifecycle methods on a `BasePlugin`
+(`src/plugins/plugin_interface.py`). For each step it does, in order:
 
 1. `plugin = PluginManager.load(plugin_name)` — `importlib` imports
    `plugins.<dotted path>` and instantiates its `Plugin` class
@@ -374,8 +374,8 @@ order:
    (params + artifacts) to the active nested run
    (`plugin_interface.py`).
 
-The engine only knows these three lifecycle methods plus the
-`name`, `io_spec`, `notifier`, and `cancellation` attributes
+Besides those methods the engine only touches the `name`, `io_spec`,
+`notifier`, and `cancellation` attributes
 (`plugin_interface.py`). **Everything about how a plugin
 declares inputs/outputs, the `PluginIOSpec`, single vs compare
 plugins, and how to author one is documented in
@@ -388,8 +388,10 @@ the orchestration‑side view of that boundary.
 
 ## 🧭 8. Plugin discovery & the registry
 
-`core/plugin_discovery` builds the catalogue the UI renders, with **no
-manual registration** — plugins are found by directory convention.
+`core/plugin_discovery` builds the **registry** — the catalogue of
+plugins and their parameters that the UI renders itself from — with
+**no manual registration**: plugins are found by directory convention.
+The stages, in order:
 
 - **Walk** (`_find_plugin_modules`, `plugin_registry.py`): under
   `src/plugins/<category>/`, a directory is a plugin when it contains a
@@ -484,8 +486,11 @@ How that maps onto SARSSA:
 
 ### `config/config.yaml`
 
-A top‑level `timezone` key (→ `TIMEZONE`, used for run‑name timestamps)
-plus two sections, loaded and typed in `config/config.py`:
+`config.yaml` holds the app's **structure**: which plugin categories
+exist, in what order, and where MLflow lives. Per-machine values and
+secrets are not here — those are in `.env`
+([root README §5](../../README.md#5-configuration-env)). Two sections,
+loaded and typed in `config/config.py`:
 
 - **`mlflow`** → `SHARED_EXPERIMENT_NAME`, `TRACKING_URI`
   (`sqlite:///mlflow-data/mlflow.db` — a fallback for tests/scripts; `just run`
@@ -506,6 +511,9 @@ plus two sections, loaded and typed in `config/config.py`:
 the first four stages build a pipeline once; the last three can be run
 repeatedly against a finished pipeline (the `execute-step(-async)`
 endpoints).
+
+Plus a top‑level `timezone` key (→ `TIMEZONE`), used for the
+timestamps in run names.
 
 ### Experiment bootstrap
 
@@ -538,6 +546,11 @@ use it under the hood of `load_context`.
 
 ## 🧱 10. Data models
 
+Three files, split by what they serve: `pipeline.py` is what the API
+accepts and returns while a pipeline runs; `plugin.py` is what the
+registry hands the UI so it can render itself; `items.py` is the
+request body for item enrichment.
+
 ### `models/pipeline.py`
 
 | Model | Kind | Role |
@@ -561,6 +574,11 @@ discriminated `DisplaySpec`), `ImplementationInfo` (carrying
 `CategoryRegistryEntry` (with its `load_errors`). These are the exact
 shapes the frontend consumes from `/plugins/registry`, so the
 [frontend types](../../frontend/README.md) mirror them.
+
+### `models/items.py`
+
+`EnrichItemsRequest` — the body of `POST /items/enrich` (§4): a
+`run_id` plus the `ids` to enrich.
 
 ---
 
