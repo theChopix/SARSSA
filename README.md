@@ -578,6 +578,12 @@ Notes:
   its journal files) are bind-mounted; the `mlflow` service owns the
   MLflow state and the backend talks to it over HTTP, exactly like
   running `just mlflow` + `just run` locally.
+- **Docker writes those mounts as root.** Because both paths use the
+  same directories, an experiment directory first created from a
+  container is owned by root on the host, and a later local
+  `just mlflow` cannot write runs into it (`PermissionError` on
+  `./mlartifacts/<exp_id>/<run_id>`). One-time fix:
+  `sudo chown -R "$(id -u):$(id -g)" src/mlartifacts src/mlflow-data`.
 - Other commands: `just docker-build` / `docker-down` / `docker-logs`.
 
 > **Image size:** the backend image is several GB because
