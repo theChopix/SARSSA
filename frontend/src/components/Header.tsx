@@ -6,7 +6,7 @@
  * across all pages via the Layout component.
  *
  * ┌────────────────────────────────────────────────────────────────┐
- * │  SARSSAe     ⓘ guide | ⌥ github |   mlflow … Results (link)   │
+ * │  SARSSA      ⓘ guide | ⌥ github |   mlflow … Results (link)   │
  * └────────────────────────────────────────────────────────────────┘
  */
 
@@ -32,7 +32,7 @@ export function Header() {
             href="/"
             className="text-lg font-bold tracking-wide text-gray-900 hover:text-gray-700"
           >
-            SARSSAe
+            SARSSA
           </a>
         </h1>
         <RunningTasksMenu />

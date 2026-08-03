@@ -45,7 +45,7 @@ const SECTIONS: GuideSection[] = [
     body: (
       <>
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
-          <strong>SARSSAe</strong> is a research platform for designing,
+          <strong>SARSSA</strong> is a research platform for designing,
           running, and inspecting recommender-system experiments built
           around <strong>Sparse Autoencoders (SAEs)</strong> — an
           interpretability technique applied to collaborative filtering.
@@ -348,7 +348,7 @@ const SECTIONS: GuideSection[] = [
           >
             MLflow
           </a>{" "}
-          is the experiment-tracking system SARSSAe writes everything
+          is the experiment-tracking system SARSSA writes everything
           to. Two terms matter:
         </p>
         <ul className="list-disc pl-5 space-y-1 mb-3 text-sm text-gray-700 leading-relaxed">
@@ -363,7 +363,7 @@ const SECTIONS: GuideSection[] = [
           </li>
         </ul>
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
-          Every pipeline launch in SARSSAe maps to{" "}
+          Every pipeline launch in SARSSA maps to{" "}
           <strong>one parent MLflow run</strong> with{" "}
           <strong>one child run per step</strong>. The parent stores a
           small{" "}
@@ -386,7 +386,7 @@ const SECTIONS: GuideSection[] = [
               Experiments
             </a>
             ) in a new tab. Use it to browse the full history, filter by
-            tags, or grab artifacts you don't see in the SARSSAe UI.
+            tags, or grab artifacts you don't see in the SARSSA UI.
           </li>
           <li>
             <strong>Per-card</strong> — completed cards expose{" "}
@@ -438,7 +438,7 @@ const SECTIONS: GuideSection[] = [
         <p className="text-sm text-gray-700 leading-relaxed mt-3 mb-3">
           This is how you audit exactly what a previous run produced and
           with which configuration, even for runs you never opened in the
-          SARSSAe UI.
+          SARSSA UI.
         </p>
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
           <strong>Building on a past run — extending vs. deriving.</strong>{" "}
@@ -485,7 +485,7 @@ const SECTIONS: GuideSection[] = [
       <>
         <p className="text-sm text-gray-700 leading-relaxed mb-3">
           MLflow groups runs into <strong>experiments</strong> — separate
-          spaces for separate lines of work. SARSSAe works with two kinds
+          spaces for separate lines of work. SARSSA works with two kinds
           of them:
         </p>
         <ul className="list-disc pl-5 space-y-1 mb-3 text-sm text-gray-700 leading-relaxed">
@@ -632,7 +632,7 @@ const SECTIONS: GuideSection[] = [
             automatically as soon as the previous one finishes. This
             keeps runs reproducible and prevents two trainings from
             fighting over GPU memory. Each tab tracks one active run, so
-            to <em>launch</em> a second pipeline open SARSSAe in{" "}
+            to <em>launch</em> a second pipeline open SARSSA in{" "}
             <strong>another browser tab</strong> and start it there; the{" "}
             <em>Running</em> menu then lists both — the executing one and
             the queued one.
@@ -712,7 +712,7 @@ export function GuidePage() {
       <main className="flex-1 px-8 py-8 max-w-3xl">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Guide</h1>
         <p className="text-sm text-gray-500 mb-8">
-          How to use the SARSSAe web UI.
+          How to use the SARSSA web UI.
         </p>
 
         {SECTIONS.map((section) => (
