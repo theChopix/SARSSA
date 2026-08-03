@@ -163,6 +163,10 @@ experiment's runs (marked `(shared)`) alongside the selected
 experiment's own; building on a shared prefix creates the derived run
 in the selected experiment, leaving the base one untouched.
 
+The picker itself lists **every** experiment, whoever created it. The
+shared-plus-selected rule decides which runs load into your dropdowns
+— it does not keep anyone out of anyone else's experiment.
+
 For the deeper mental models see the
 [backend](src/app/README.md), [plugin-system](src/plugins/README.md),
 and [frontend](frontend/README.md) docs (indexed in [§4](#4-documentation)).

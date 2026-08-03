@@ -512,9 +512,13 @@ const SECTIONS: GuideSection[] = [
           <em>Load from previous run</em> dropdowns and the header's
           results link follow the selection. Pick{" "}
           <em>Create new experiment…</em> at the bottom of the dropdown
-          to add your own. The choice is remembered per browser, is
-          locked while a pipeline is running, and switches automatically
-          when you adopt a run from the <em>Running</em> menu.
+          to add your own. The dropdown lists <strong>every</strong>{" "}
+          experiment on the deployment, whoever created it, so you can
+          switch to any of them. The selection decides which runs load
+          — it does not keep anyone out of anyone else's experiment.
+          The choice is remembered per browser, is locked while a
+          pipeline is running, and switches automatically when you
+          adopt a run from the <em>Running</em> menu.
         </p>
         <p className="text-sm text-gray-700 leading-relaxed">
           <strong>Shared runs are always at hand.</strong> Whichever
