@@ -9,6 +9,14 @@
 > ([arXiv:2601.11182](https://arxiv.org/abs/2601.11182)), developed
 > within the research initiative at Charles University.
 
+![The SARSSA pipeline composer](assets/pipeline-composer.png)
+
+> *The screen you land on.* Each card is one pipeline stage offering a
+> choice of interchangeable plugins: the **top row** builds a pipeline
+> once (dataset → CF model → SAE → neuron labels), the **bottom row**
+> holds analyses you re-run over it as often as you like. Any step can
+> be **loaded from a previous run** instead of recomputed.
+
 ---
 
 ## 📑 Table of Contents
